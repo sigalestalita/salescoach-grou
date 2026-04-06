@@ -43,27 +43,44 @@ async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
   throw new Error("Não foi possível baixar o arquivo do Google Drive. Verifique se está compartilhado como 'Qualquer pessoa com o link'.");
 }
 
-async function transcribeWithWhisper(fileData: Blob, fileName: string, openaiKey: string): Promise<string> {
+async function transcribeAudio(fileData: Blob, fileName: string): Promise<string> {
+  const groqKey = Deno.env.get("GROQ_API_KEY");
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+
+  // Prefer Groq (faster & cheaper), fallback to OpenAI
+  const useGroq = !!groqKey;
+  const apiUrl = useGroq
+    ? "https://api.groq.com/openai/v1/audio/transcriptions"
+    : "https://api.openai.com/v1/audio/transcriptions";
+  const apiKey = useGroq ? groqKey : openaiKey;
+  const model = useGroq ? "whisper-large-v3-turbo" : "whisper-1";
+
+  if (!apiKey) {
+    throw new Error("No transcription API key configured (GROQ_API_KEY or OPENAI_API_KEY)");
+  }
+
+  console.log(`Transcribing with ${useGroq ? "Groq" : "OpenAI"} (${model})`);
+
   const formData = new FormData();
   formData.append("file", new File([fileData], fileName));
-  formData.append("model", "whisper-1");
+  formData.append("model", model);
   formData.append("language", "pt");
   formData.append("response_format", "verbose_json");
 
-  const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const res = await fetch(apiUrl, {
     method: "POST",
-    headers: { Authorization: `Bearer ${openaiKey}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
   });
 
-  if (!whisperRes.ok) {
-    const errText = await whisperRes.text();
-    console.error("Whisper error:", errText);
-    throw new Error(`Transcription failed: ${errText}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Transcription error:", errText);
+    throw new Error(`Transcription failed (${useGroq ? "Groq" : "OpenAI"}): ${errText}`);
   }
 
-  const whisperResult = await whisperRes.json();
-  return whisperResult.text;
+  const result = await res.json();
+  return result.text;
 }
 
 /**
