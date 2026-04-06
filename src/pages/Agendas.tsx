@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -24,10 +32,12 @@ import {
   Thermometer,
   Clock,
   Target,
+  Link,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
+type Profile = Tables<"profiles">;
 
 const statusLabels: Record<string, string> = {
   enviado: "Enviado",
@@ -53,16 +63,21 @@ const tempLabels: Record<string, string> = {
 
 const Agendas = () => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sourceTab, setSourceTab] = useState("file");
   const [newMeeting, setNewMeeting] = useState({
     title: "",
     lead_name: "",
     lead_company: "",
     lead_email: "",
     meeting_date: "",
+    youtube_url: "",
+    meeting_type: "empresa",
+    seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
   const { user } = useAuth();
@@ -71,6 +86,7 @@ const Agendas = () => {
 
   useEffect(() => {
     fetchMeetings();
+    fetchProfiles();
   }, []);
 
   const fetchMeetings = async () => {
@@ -86,6 +102,20 @@ const Agendas = () => {
     setLoading(false);
   };
 
+  const fetchProfiles = async () => {
+    const { data } = await supabase.from("profiles").select("*");
+    if (data) setProfiles(data);
+  };
+
+  const resetForm = () => {
+    setNewMeeting({
+      title: "", lead_name: "", lead_company: "", lead_email: "",
+      meeting_date: "", youtube_url: "", meeting_type: "empresa", seller_id: "",
+    });
+    setFile(null);
+    setSourceTab("file");
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newMeeting.title) return;
@@ -95,7 +125,7 @@ const Agendas = () => {
       let fileUrl = null;
       let fileType = null;
 
-      if (file) {
+      if (sourceTab === "file" && file) {
         const filePath = `${user.id}/${Date.now()}-${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from("meeting-files")
@@ -105,22 +135,25 @@ const Agendas = () => {
         fileType = file.type;
       }
 
+      const sellerId = newMeeting.seller_id || user.id;
+
       const { error } = await supabase.from("meetings").insert({
         title: newMeeting.title,
-        seller_id: user.id,
+        seller_id: sellerId,
         lead_name: newMeeting.lead_name || null,
         lead_company: newMeeting.lead_company || null,
         lead_email: newMeeting.lead_email || null,
         meeting_date: newMeeting.meeting_date || null,
         file_url: fileUrl,
         file_type: fileType,
+        youtube_url: (sourceTab === "link" && newMeeting.youtube_url) ? newMeeting.youtube_url : null,
+        meeting_type: newMeeting.meeting_type,
       });
 
       if (error) throw error;
       toast({ title: "Sucesso!", description: "Agenda criada com sucesso." });
       setDialogOpen(false);
-      setNewMeeting({ title: "", lead_name: "", lead_company: "", lead_email: "", meeting_date: "" });
-      setFile(null);
+      resetForm();
       fetchMeetings();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -150,10 +183,10 @@ const Agendas = () => {
               Nova Agenda
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Nova Agenda</DialogTitle>
-              <DialogDescription>Envie um arquivo de áudio/vídeo para análise</DialogDescription>
+              <DialogDescription>Envie um arquivo ou cole um link para análise</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleUpload} className="space-y-4">
               <div className="space-y-2">
@@ -165,6 +198,43 @@ const Agendas = () => {
                   required
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select
+                    value={newMeeting.meeting_type}
+                    onValueChange={(v) => setNewMeeting({ ...newMeeting, meeting_type: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="empresa">Empresa</SelectItem>
+                      <SelectItem value="consultoria">Consultoria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Executivo</Label>
+                  <Select
+                    value={newMeeting.seller_id}
+                    onValueChange={(v) => setNewMeeting({ ...newMeeting, seller_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {profiles.map((p) => (
+                        <SelectItem key={p.user_id} value={p.user_id}>
+                          {p.full_name || p.user_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nome do Lead</Label>
@@ -202,19 +272,43 @@ const Agendas = () => {
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label>Arquivo de Áudio/Vídeo</Label>
-                <div className="border-2 border-dashed rounded-lg p-6 text-center">
-                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                  <Input
-                    type="file"
-                    accept=".mp3,.wav,.m4a,.mp4"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="mx-auto"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">MP3, WAV, M4A, MP4 — máx 20MB</p>
-                </div>
+                <Label>Fonte do Áudio/Vídeo</Label>
+                <Tabs value={sourceTab} onValueChange={setSourceTab}>
+                  <TabsList className="w-full">
+                    <TabsTrigger value="file" className="flex-1">
+                      <Upload className="h-3 w-3 mr-1" />
+                      Upload
+                    </TabsTrigger>
+                    <TabsTrigger value="link" className="flex-1">
+                      <Link className="h-3 w-3 mr-1" />
+                      Link (Drive / YouTube)
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="file">
+                    <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                      <Input
+                        type="file"
+                        accept=".mp3,.wav,.m4a,.mp4"
+                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        className="mx-auto"
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">MP3, WAV, M4A, MP4 — máx 20MB</p>
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="link">
+                    <Input
+                      value={newMeeting.youtube_url}
+                      onChange={(e) => setNewMeeting({ ...newMeeting, youtube_url: e.target.value })}
+                      placeholder="https://drive.google.com/... ou https://youtube.com/..."
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">Cole o link do Google Drive ou YouTube</p>
+                  </TabsContent>
+                </Tabs>
               </div>
+
               <Button type="submit" className="w-full" disabled={uploading}>
                 {uploading ? "Enviando..." : "Criar Agenda"}
               </Button>

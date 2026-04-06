@@ -241,6 +241,7 @@ export type Database = {
           lead_email: string | null
           lead_name: string | null
           meeting_date: string | null
+          meeting_type: string | null
           overall_score: number | null
           seller_id: string
           status: string
@@ -260,6 +261,7 @@ export type Database = {
           lead_email?: string | null
           lead_name?: string | null
           meeting_date?: string | null
+          meeting_type?: string | null
           overall_score?: number | null
           seller_id: string
           status?: string
@@ -279,6 +281,7 @@ export type Database = {
           lead_email?: string | null
           lead_name?: string | null
           meeting_date?: string | null
+          meeting_type?: string | null
           overall_score?: number | null
           seller_id?: string
           status?: string
