@@ -30,12 +30,16 @@ const MeetingDetail = () => {
   }, [id]);
 
   const fetchData = async () => {
-    const [meetingRes, analysisRes] = await Promise.all([
+    const [meetingRes, analysisRes, transcriptionRes, highlightsRes] = await Promise.all([
       supabase.from("meetings").select("*").eq("id", id!).single(),
       supabase.from("analysis_results").select("*").eq("meeting_id", id!).single(),
+      supabase.from("transcriptions").select("*").eq("meeting_id", id!).single(),
+      supabase.from("highlights").select("*").eq("meeting_id", id!),
     ]);
     if (meetingRes.data) setMeeting(meetingRes.data);
     if (analysisRes.data) setAnalysis(analysisRes.data);
+    if (transcriptionRes.data) setTranscription(transcriptionRes.data);
+    if (highlightsRes.data) setHighlights(highlightsRes.data);
     setLoading(false);
   };
 
