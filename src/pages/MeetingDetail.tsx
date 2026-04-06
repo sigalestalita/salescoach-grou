@@ -337,6 +337,44 @@ const MeetingDetail = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Highlights */}
+          {highlights.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">🎯 Highlights</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {highlights.map((h) => (
+                  <div key={h.id} className="flex items-start gap-2 text-sm border-l-2 border-primary/30 pl-3 py-1">
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {h.highlight_type === "objecao" ? "Objeção" :
+                       h.highlight_type === "sinal_compra" ? "Sinal de Compra" :
+                       h.highlight_type === "momento_chave" ? "Momento-Chave" :
+                       h.highlight_type === "dor" ? "Dor" :
+                       h.highlight_type === "necessidade" ? "Necessidade" : h.highlight_type}
+                    </Badge>
+                    <span>{h.text}</span>
+                    {h.speaker && <span className="text-muted-foreground text-xs">({h.speaker})</span>}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Transcription */}
+          {transcription && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">📝 Transcrição</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                  {transcription.full_text}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>
