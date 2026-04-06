@@ -24,51 +24,50 @@ function extractGoogleDriveFileId(url: string): string | null {
  * Download file from Google Drive (public/shared files)
  */
 async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
-  // Strategy 1: Direct download with confirm=t (bypasses virus scan warning)
-  const downloadUrl = `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`;
-  console.log("Attempting Google Drive download with confirm=t for fileId:", fileId);
-  
-  let res = await fetch(downloadUrl, { redirect: "follow" });
-  
-  if (!res.ok) {
-    // Strategy 2: Try the Google Drive API export endpoint
-    console.log("Direct download failed, trying alternative URL...");
-    const altUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
-    res = await fetch(altUrl, { redirect: "follow" });
-    
+  const candidates = [
+    `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`,
+    `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`,
+    `https://drive.google.com/uc?export=download&id=${fileId}`,
+  ];
+
+  let lastHtml = "";
+
+  for (const url of candidates) {
+    console.log("Trying Google Drive download URL:", url);
+    const res = await fetch(url, { redirect: "follow" });
+
     if (!res.ok) {
-      const errText = await res.text();
-      console.error("Google Drive download error:", res.status, errText.substring(0, 500));
-      throw new Error(`Failed to download from Google Drive (status ${res.status}). Verifique se o arquivo está compartilhado como "Qualquer pessoa com o link".`);
+      console.error("Google Drive candidate failed:", res.status, res.statusText);
+      continue;
     }
-  }
 
-  const contentType = res.headers.get("content-type") || "";
-  console.log("Google Drive response content-type:", contentType, "size:", res.headers.get("content-length"));
+    const contentType = res.headers.get("content-type") || "";
+    console.log("Google Drive response content-type:", contentType);
 
-  // If we still got HTML, the file isn't accessible
-  if (contentType.includes("text/html")) {
+    if (!contentType.includes("text/html")) {
+      return await res.blob();
+    }
+
     const html = await res.text();
-    console.error("Got HTML response (first 500 chars):", html.substring(0, 500));
-    
-    // Try to extract a download link from the HTML page
+    lastHtml = html;
+
     const actionMatch = html.match(/action="(https:\/\/drive\.usercontent\.google\.com\/download[^"]+)"/);
     if (actionMatch) {
       const directUrl = actionMatch[1].replace(/&amp;/g, "&");
-      console.log("Found direct download URL from HTML, retrying...");
+      console.log("Found direct Google Drive download URL, retrying...");
       const directRes = await fetch(directUrl, { redirect: "follow" });
+
       if (directRes.ok) {
-        const directCt = directRes.headers.get("content-type") || "";
-        if (!directCt.includes("text/html")) {
+        const directContentType = directRes.headers.get("content-type") || "";
+        if (!directContentType.includes("text/html")) {
           return await directRes.blob();
         }
       }
     }
-    
-    throw new Error("Não foi possível baixar o arquivo do Google Drive. Verifique se o arquivo está compartilhado como 'Qualquer pessoa com o link pode ver'.");
   }
 
-  return await res.blob();
+  console.error("Google Drive HTML response (first 500 chars):", lastHtml.substring(0, 500));
+  throw new Error("Não foi possível baixar o arquivo do Google Drive. Verifique se o arquivo está compartilhado como 'Qualquer pessoa com o link pode ver'.");
 }
 
 /**
