@@ -6,6 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Google Drive helpers ──
+
 function extractGoogleDriveFileId(url: string): string | null {
   const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if (match1) return match1[1];
@@ -14,40 +16,67 @@ function extractGoogleDriveFileId(url: string): string | null {
   return null;
 }
 
-async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
-  const candidates = [
-    `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`,
-    `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`,
-  ];
+function getGoogleDriveDirectUrl(fileId: string): string {
+  return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+}
 
-  for (const url of candidates) {
-    console.log("Trying Google Drive URL:", url);
-    const res = await fetch(url, { redirect: "follow" });
-    if (!res.ok) continue;
+// ── Transcription providers ──
 
-    const ct = res.headers.get("content-type") || "";
-    if (!ct.includes("text/html")) return await res.blob();
+async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: string; speakers: any[] | null }> {
+  const apiKey = Deno.env.get("ASSEMBLYAI_API_KEY")!;
+  const headers = { Authorization: apiKey, "Content-Type": "application/json" };
 
-    const html = await res.text();
-    const actionMatch = html.match(/action="(https:\/\/drive\.usercontent\.google\.com\/download[^"]+)"/);
-    if (actionMatch) {
-      const directUrl = actionMatch[1].replace(/&amp;/g, "&");
-      const directRes = await fetch(directUrl, { redirect: "follow" });
-      if (directRes.ok) {
-        const directCt = directRes.headers.get("content-type") || "";
-        if (!directCt.includes("text/html")) return await directRes.blob();
-      }
+  console.log("AssemblyAI: submitting URL for transcription:", audioUrl);
+
+  const startRes = await fetch("https://api.assemblyai.com/v2/transcript", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      audio_url: audioUrl,
+      language_code: "pt",
+      speaker_labels: true,
+    }),
+  });
+
+  if (!startRes.ok) {
+    const err = await startRes.text();
+    throw new Error(`AssemblyAI start failed: ${err}`);
+  }
+
+  const { id: transcriptId } = await startRes.json();
+  console.log("AssemblyAI: transcript ID", transcriptId, "— polling...");
+
+  // Poll every 5s, max 30 min
+  const maxAttempts = 360;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+
+    const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers });
+    const data = await pollRes.json();
+
+    if (data.status === "completed") {
+      console.log("AssemblyAI: transcription complete");
+      const speakers = data.utterances?.map((u: any) => ({
+        speaker: u.speaker,
+        text: u.text,
+        start: u.start,
+        end: u.end,
+      })) || null;
+      return { text: data.text, speakers };
+    }
+
+    if (data.status === "error") {
+      throw new Error(`AssemblyAI error: ${data.error}`);
     }
   }
 
-  throw new Error("Não foi possível baixar o arquivo do Google Drive. Verifique se está compartilhado como 'Qualquer pessoa com o link'.");
+  throw new Error("AssemblyAI: transcription timed out after 30 minutes");
 }
 
-async function transcribeAudio(fileData: Blob, fileName: string): Promise<string> {
+async function transcribeWithGroq(fileData: Blob, fileName: string): Promise<string> {
   const groqKey = Deno.env.get("GROQ_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
 
-  // Prefer Groq (faster & cheaper), fallback to OpenAI
   const useGroq = !!groqKey;
   const apiUrl = useGroq
     ? "https://api.groq.com/openai/v1/audio/transcriptions"
@@ -75,7 +104,6 @@ async function transcribeAudio(fileData: Blob, fileName: string): Promise<string
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Transcription error:", errText);
     throw new Error(`Transcription failed (${useGroq ? "Groq" : "OpenAI"}): ${errText}`);
   }
 
@@ -83,9 +111,8 @@ async function transcribeAudio(fileData: Blob, fileName: string): Promise<string
   return result.text;
 }
 
-/**
- * Main processing logic — runs in background via EdgeRuntime.waitUntil
- */
+// ── Main processing ──
+
 async function processeMeeting(meetingId: string, manualTranscript: string | null) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -101,11 +128,33 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
   }
 
   let transcript = "";
+  let speakers: any[] | null = null;
 
   try {
     if (manualTranscript && manualTranscript.trim().length > 0) {
+      // Manual transcript
       transcript = manualTranscript.trim();
+    } else if (meeting.youtube_url) {
+      // External URL (Google Drive or direct link) → AssemblyAI (no download needed)
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
+
+      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
+      const audioUrl = driveFileId
+        ? getGoogleDriveDirectUrl(driveFileId)
+        : meeting.youtube_url;
+
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+
+      const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
+      if (!assemblyKey) {
+        throw new Error("ASSEMBLYAI_API_KEY não configurada. Necessária para transcrever arquivos externos.");
+      }
+
+      const result = await transcribeWithAssemblyAI(audioUrl);
+      transcript = result.text;
+      speakers = result.speakers;
     } else if (meeting.file_url) {
+      // File in Supabase Storage → Groq/OpenAI (small files only)
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const { data: fileData, error: fileError } = await supabase.storage
@@ -118,26 +167,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
       const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-      transcript = await transcribeAudio(fileData, fileName);
-    } else if (meeting.youtube_url) {
-      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
-
-      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
-      let fileBlob: Blob;
-      let fileName: string;
-
-      if (driveFileId) {
-        fileBlob = await downloadFromGoogleDrive(driveFileId);
-        fileName = "audio_drive.mp4";
-      } else {
-        const res = await fetch(meeting.youtube_url, { redirect: "follow" });
-        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-        fileBlob = await res.blob();
-        fileName = "audio.mp4";
-      }
-
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-      transcript = await transcribeAudio(fileBlob, fileName);
+      transcript = await transcribeWithGroq(fileData, fileName);
     } else {
       await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
       return;
@@ -145,7 +175,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
     // Save transcription
     await supabase.from("transcriptions").insert({
-      meeting_id: meetingId, full_text: transcript, language: "pt-BR",
+      meeting_id: meetingId,
+      full_text: transcript,
+      language: "pt-BR",
+      speakers: speakers,
     });
 
     await supabase.from("meetings").update({ status: "analisando" }).eq("id", meetingId);
@@ -248,7 +281,7 @@ Analise com profundidade. Seja específico nas sugestões.`;
   }
 }
 
-// ---- Handler: validate input, return immediately, process in background ----
+// ── Handler ──
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -268,7 +301,6 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Quick validation
     const { data: meeting } = await supabase
       .from("meetings").select("id, status").eq("id", meetingId).single();
 
@@ -279,10 +311,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update status to processing
     await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
 
-    // Process in background — does NOT block the response
     EdgeRuntime.waitUntil(
       processeMeeting(meetingId, manualTranscript || null).catch((err) => {
         console.error("Background processing failed:", err);
