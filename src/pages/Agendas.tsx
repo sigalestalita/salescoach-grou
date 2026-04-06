@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus,
@@ -24,10 +32,12 @@ import {
   Thermometer,
   Clock,
   Target,
+  Link,
 } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
+type Profile = Tables<"profiles">;
 
 const statusLabels: Record<string, string> = {
   enviado: "Enviado",
