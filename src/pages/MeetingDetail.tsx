@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
