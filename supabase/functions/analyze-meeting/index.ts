@@ -90,7 +90,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
     if (manualTranscript && manualTranscript.trim().length > 0) {
       transcript = manualTranscript.trim();
     } else if (meeting.file_url) {
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const { data: fileData, error: fileError } = await supabase.storage
         .from("meeting-files").download(meeting.file_url);
@@ -101,9 +101,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       }
 
       const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
       transcript = await transcribeWithWhisper(fileData, fileName, openaiKey);
     } else if (meeting.youtube_url) {
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
       let fileBlob: Blob;
@@ -119,6 +120,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
         fileName = "audio.mp4";
       }
 
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
       transcript = await transcribeWithWhisper(fileBlob, fileName, openaiKey);
     } else {
       await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
