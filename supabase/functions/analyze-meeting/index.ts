@@ -20,7 +20,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    const { meetingId } = await req.json();
+    const { meetingId, manualTranscript } = await req.json();
     if (!meetingId) {
       return new Response(JSON.stringify({ error: "meetingId is required" }), {
         status: 400,
@@ -42,56 +42,63 @@ serve(async (req) => {
       });
     }
 
-    if (!meeting.file_url) {
-      return new Response(JSON.stringify({ error: "No audio file attached" }), {
+    let transcript = "";
+    let durationSeconds = 0;
+
+    // If manual transcript provided (for link-based meetings), use it directly
+    if (manualTranscript && typeof manualTranscript === "string" && manualTranscript.trim().length > 0) {
+      transcript = manualTranscript.trim();
+    } else if (meeting.file_url) {
+      // Has uploaded file — transcribe with Whisper
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+
+      const { data: fileData, error: fileError } = await supabase.storage
+        .from("meeting-files")
+        .download(meeting.file_url);
+
+      if (fileError || !fileData) {
+        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        return new Response(JSON.stringify({ error: "Failed to download file" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
+      const formData = new FormData();
+      formData.append("file", new File([fileData], fileName));
+      formData.append("model", "whisper-1");
+      formData.append("language", "pt");
+      formData.append("response_format", "verbose_json");
+
+      const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${openaiKey}` },
+        body: formData,
+      });
+
+      if (!whisperRes.ok) {
+        const errText = await whisperRes.text();
+        console.error("Whisper error:", errText);
+        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        return new Response(JSON.stringify({ error: "Transcription failed", details: errText }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const whisperResult = await whisperRes.json();
+      transcript = whisperResult.text;
+      durationSeconds = Math.round(whisperResult.duration || 0);
+    } else {
+      // No file and no manual transcript
+      return new Response(JSON.stringify({ 
+        error: "Esta reunião não possui arquivo de áudio. Para reuniões com link externo, cole a transcrição manualmente para análise." 
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Update status to transcrevendo
-    await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-
-    // Download audio from storage
-    const { data: fileData, error: fileError } = await supabase.storage
-      .from("meeting-files")
-      .download(meeting.file_url);
-
-    if (fileError || !fileData) {
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-      return new Response(JSON.stringify({ error: "Failed to download file" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Transcribe with Whisper
-    const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
-    const formData = new FormData();
-    formData.append("file", new File([fileData], fileName));
-    formData.append("model", "whisper-1");
-    formData.append("language", "pt");
-    formData.append("response_format", "verbose_json");
-
-    const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiKey}` },
-      body: formData,
-    });
-
-    if (!whisperRes.ok) {
-      const errText = await whisperRes.text();
-      console.error("Whisper error:", errText);
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-      return new Response(JSON.stringify({ error: "Transcription failed", details: errText }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const whisperResult = await whisperRes.json();
-    const transcript = whisperResult.text;
-    const durationSeconds = Math.round(whisperResult.duration || 0);
 
     // Save transcription
     await supabase.from("transcriptions").insert({
@@ -100,10 +107,10 @@ serve(async (req) => {
       language: "pt-BR",
     });
 
-    // Update duration
+    // Update status
     await supabase.from("meetings").update({
       status: "analisando",
-      duration_seconds: durationSeconds,
+      ...(durationSeconds > 0 ? { duration_seconds: durationSeconds } : {}),
     }).eq("id", meetingId);
 
     // Analyze with Lovable AI
@@ -212,7 +219,7 @@ Analise com profundidade. Seja específico nas sugestões. Scores devem refletir
     const aiResult = await aiRes.json();
     const rawContent = aiResult.choices?.[0]?.message?.content || "";
 
-    // Parse JSON from response (strip markdown fences if present)
+    // Parse JSON from response
     let analysisData;
     try {
       const jsonStr = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();

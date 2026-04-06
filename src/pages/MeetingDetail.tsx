@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
@@ -24,6 +25,10 @@ const MeetingDetail = () => {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [manualTranscript, setManualTranscript] = useState("");
+  const [showTranscriptInput, setShowTranscriptInput] = useState(false);
+
+  const isLinkBased = meeting && !meeting.file_url && (meeting.youtube_url || meeting.meeting_type);
 
   useEffect(() => {
     if (id) fetchData();
@@ -47,8 +52,12 @@ const MeetingDetail = () => {
     if (!meeting) return;
     setProcessing(true);
     try {
+      const body: any = { meetingId: meeting.id };
+      if (manualTranscript.trim()) {
+        body.manualTranscript = manualTranscript.trim();
+      }
       const { data, error } = await supabase.functions.invoke("analyze-meeting", {
-        body: { meetingId: meeting.id },
+        body,
       });
       if (error) throw error;
       toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
@@ -100,15 +109,57 @@ const MeetingDetail = () => {
             )}
           </div>
         </div>
-        {meeting.status === "enviado" && (
+        {meeting.status === "enviado" && !isLinkBased && (
           <Button onClick={handleAnalyze} disabled={processing}>
             <Play className="h-4 w-4 mr-2" />
             {processing ? "Processando..." : "Analisar"}
           </Button>
         )}
+        {meeting.status === "enviado" && isLinkBased && !showTranscriptInput && (
+          <Button onClick={() => setShowTranscriptInput(true)}>
+            <Play className="h-4 w-4 mr-2" />
+            Analisar (colar transcrição)
+          </Button>
+        )}
       </div>
 
-      {/* Status */}
+      {/* Link info */}
+      {meeting.youtube_url && (
+        <Card>
+          <CardContent className="py-4 flex items-center gap-3">
+            <Link className="h-5 w-5 text-muted-foreground" />
+            <a href={meeting.youtube_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline truncate">
+              {meeting.youtube_url}
+            </a>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Manual transcript input for link-based meetings */}
+      {showTranscriptInput && meeting.status === "enviado" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">📝 Cole a transcrição da reunião</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              placeholder="Cole aqui a transcrição completa da reunião para análise com IA..."
+              value={manualTranscript}
+              onChange={(e) => setManualTranscript(e.target.value)}
+              rows={10}
+            />
+            <div className="flex gap-2">
+              <Button onClick={handleAnalyze} disabled={processing || !manualTranscript.trim()}>
+                <Play className="h-4 w-4 mr-2" />
+                {processing ? "Processando..." : "Iniciar Análise"}
+              </Button>
+              <Button variant="outline" onClick={() => setShowTranscriptInput(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {meeting.status !== "completo" && (
         <Card>
           <CardContent className="py-8 text-center">
