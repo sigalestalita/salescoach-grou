@@ -62,6 +62,7 @@ const MeetingDetail = () => {
         const msg = data?.error || data?.message || error.message || "Erro desconhecido";
         throw new Error(msg);
       }
+      toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
       // Poll for completion
       const interval = setInterval(async () => {
         const { data: updated } = await supabase.from("meetings").select("status").eq("id", meeting.id).single();
