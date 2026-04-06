@@ -89,7 +89,6 @@ async function transcribeAudio(fileData: Blob, fileName: string): Promise<string
 async function processeMeeting(meetingId: string, manualTranscript: string | null) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const openaiKey = Deno.env.get("OPENAI_API_KEY")!;
   const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
