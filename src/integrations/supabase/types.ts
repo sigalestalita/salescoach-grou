@@ -14,16 +14,421 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      analysis_results: {
+        Row: {
+          bant_score: Json | null
+          conversation_metrics: Json | null
+          created_at: string
+          id: string
+          insights: Json | null
+          meddic_score: Json | null
+          meeting_id: string
+          model_used: string | null
+          overall_score: number | null
+          rag_results: Json | null
+          raw_analysis: Json | null
+          sales_coach: Json | null
+          spin_score: Json | null
+          talk_ratio: Json | null
+          temperature: string | null
+        }
+        Insert: {
+          bant_score?: Json | null
+          conversation_metrics?: Json | null
+          created_at?: string
+          id?: string
+          insights?: Json | null
+          meddic_score?: Json | null
+          meeting_id: string
+          model_used?: string | null
+          overall_score?: number | null
+          rag_results?: Json | null
+          raw_analysis?: Json | null
+          sales_coach?: Json | null
+          spin_score?: Json | null
+          talk_ratio?: Json | null
+          temperature?: string | null
+        }
+        Update: {
+          bant_score?: Json | null
+          conversation_metrics?: Json | null
+          created_at?: string
+          id?: string
+          insights?: Json | null
+          meddic_score?: Json | null
+          meeting_id?: string
+          model_used?: string | null
+          overall_score?: number | null
+          rag_results?: Json | null
+          raw_analysis?: Json | null
+          sales_coach?: Json | null
+          spin_score?: Json | null
+          talk_ratio?: Json | null
+          temperature?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analysis_results_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_usage_logs: {
+        Row: {
+          created_at: string
+          estimated_cost: number | null
+          id: string
+          input_tokens: number | null
+          meeting_id: string | null
+          model_used: string
+          operation_type: string
+          output_tokens: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          estimated_cost?: number | null
+          id?: string
+          input_tokens?: number | null
+          meeting_id?: string | null
+          model_used: string
+          operation_type: string
+          output_tokens?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          estimated_cost?: number | null
+          id?: string
+          input_tokens?: number | null
+          meeting_id?: string | null
+          model_used?: string
+          operation_type?: string
+          output_tokens?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_usage_logs_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      highlights: {
+        Row: {
+          created_at: string
+          highlight_type: string
+          id: string
+          meeting_id: string
+          speaker: string | null
+          text: string
+          timestamp_end: number | null
+          timestamp_start: number | null
+        }
+        Insert: {
+          created_at?: string
+          highlight_type: string
+          id?: string
+          meeting_id: string
+          speaker?: string | null
+          text: string
+          timestamp_end?: number | null
+          timestamp_start?: number | null
+        }
+        Update: {
+          created_at?: string
+          highlight_type?: string
+          id?: string
+          meeting_id?: string
+          speaker?: string | null
+          text?: string
+          timestamp_end?: number | null
+          timestamp_start?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "highlights_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_documents: {
+        Row: {
+          category: string | null
+          created_at: string
+          doc_type: string
+          extracted_content: string | null
+          file_url: string | null
+          id: string
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          doc_type: string
+          extracted_content?: string | null
+          file_url?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          doc_type?: string
+          extracted_content?: string | null
+          file_url?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
+      knowledge_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          item_type: string
+          metadata: Json | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          item_type: string
+          metadata?: Json | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          item_type?: string
+          metadata?: Json | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      meetings: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          lead_company: string | null
+          lead_email: string | null
+          lead_name: string | null
+          meeting_date: string | null
+          overall_score: number | null
+          seller_id: string
+          status: string
+          team_id: string | null
+          temperature: string | null
+          title: string
+          updated_at: string
+          youtube_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          lead_company?: string | null
+          lead_email?: string | null
+          lead_name?: string | null
+          meeting_date?: string | null
+          overall_score?: number | null
+          seller_id: string
+          status?: string
+          team_id?: string | null
+          temperature?: string | null
+          title: string
+          updated_at?: string
+          youtube_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          lead_company?: string | null
+          lead_email?: string | null
+          lead_name?: string | null
+          meeting_date?: string | null
+          overall_score?: number | null
+          seller_id?: string
+          status?: string
+          team_id?: string | null
+          temperature?: string | null
+          title?: string
+          updated_at?: string
+          youtube_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meetings_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          team_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          team_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          team_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transcriptions: {
+        Row: {
+          created_at: string
+          full_text: string
+          id: string
+          language: string | null
+          meeting_id: string
+          speakers: Json | null
+        }
+        Insert: {
+          created_at?: string
+          full_text: string
+          id?: string
+          language?: string | null
+          meeting_id: string
+          speakers?: Json | null
+        }
+        Update: {
+          created_at?: string
+          full_text?: string
+          id?: string
+          language?: string | null
+          meeting_id?: string
+          speakers?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transcriptions_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_team_id: { Args: { _user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "gestor" | "vendedor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +555,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "gestor", "vendedor"],
+    },
   },
 } as const
