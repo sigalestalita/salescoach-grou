@@ -63,16 +63,21 @@ const tempLabels: Record<string, string> = {
 
 const Agendas = () => {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sourceTab, setSourceTab] = useState("file");
   const [newMeeting, setNewMeeting] = useState({
     title: "",
     lead_name: "",
     lead_company: "",
     lead_email: "",
     meeting_date: "",
+    youtube_url: "",
+    meeting_type: "empresa",
+    seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
   const { user } = useAuth();
