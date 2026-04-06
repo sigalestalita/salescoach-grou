@@ -90,7 +90,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
     if (manualTranscript && manualTranscript.trim().length > 0) {
       transcript = manualTranscript.trim();
     } else if (meeting.file_url) {
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const { data: fileData, error: fileError } = await supabase.storage
         .from("meeting-files").download(meeting.file_url);
