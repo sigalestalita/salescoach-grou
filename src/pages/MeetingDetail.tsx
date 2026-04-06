@@ -11,6 +11,8 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
+type Transcription = Tables<"transcriptions">;
+type Highlight = Tables<"highlights">;
 
 const MeetingDetail = () => {
   const { id } = useParams<{ id: string }>();
