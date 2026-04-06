@@ -20,6 +20,8 @@ const MeetingDetail = () => {
   const { toast } = useToast();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [transcription, setTranscription] = useState<Transcription | null>(null);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
