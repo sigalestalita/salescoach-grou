@@ -1,30 +1,42 @@
 
 
-## Diagnóstico
+## Plano: Migrar transcrição para Groq Whisper API
 
-Existem dois problemas identificados:
+### Contexto
+Atualmente a edge function `analyze-meeting` usa a API da OpenAI Whisper (`api.openai.com`) para transcrição. A Groq oferece o mesmo modelo Whisper com velocidade ~10x superior e custo ~9x menor, com tier gratuito.
 
-1. **Bug na detecção de link**: A variável `isLinkBased` usa `meeting.meeting_type` que sempre tem valor (default 'empresa'), fazendo com que QUALQUER meeting sem arquivo seja tratado como "link-based", mesmo que não tenha link
-2. **Fluxo confuso para reuniões com link**: O usuário precisa colar manualmente a transcrição, mas a UX não deixa claro o que fazer. O botão "Analisar" no header fica escondido e substituído por "Analisar (colar transcrição)"
-3. **Erro potencial no invoke**: A resposta de erro da edge function pode não estar sendo tratada corretamente (o `error` do `invoke` pode não conter a mensagem real)
+### Alterações
 
-## Plano de Correção
+#### 1. Adicionar secret GROQ_API_KEY
+- Usar a ferramenta `add_secret` para solicitar a chave da API Groq ao usuário
+- Chave obtida em: https://console.groq.com/keys (gratuito)
 
-### 1. Corrigir detecção `isLinkBased` (MeetingDetail.tsx)
-- Mudar de `(meeting.youtube_url || meeting.meeting_type)` para apenas `!!meeting.youtube_url`
+#### 2. Atualizar `supabase/functions/analyze-meeting/index.ts`
+- Modificar a função `transcribeWithWhisper` para usar a API da Groq:
+  - Endpoint: `https://api.groq.com/openai/v1/audio/transcriptions`
+  - Modelo: `whisper-large-v3-turbo` (mais rápido, mesma qualidade)
+  - Header: `Authorization: Bearer ${GROQ_API_KEY}`
+- Renomear a função para `transcribeAudio` para refletir a mudança
+- Remover dependência de `OPENAI_API_KEY` para transcrição (manter apenas se usado em outro lugar)
+- Fallback: se `GROQ_API_KEY` não estiver configurada, usar `OPENAI_API_KEY` como fallback
 
-### 2. Melhorar UX da transcrição manual (MeetingDetail.tsx)
-- Para meetings com link, mostrar o input de transcrição SEMPRE (sem precisar clicar num botão separado)
-- Remover o estado `showTranscriptInput` e exibir diretamente quando `isLinkBased && status === 'enviado'`
-- Manter um único botão "Iniciar Análise" junto ao textarea
+#### 3. Formato da chamada (compatível com OpenAI)
+A API da Groq é compatível com o formato OpenAI, então a mudança é mínima:
+```typescript
+// Antes
+const url = "https://api.openai.com/v1/audio/transcriptions";
+const key = openaiKey;
+const model = "whisper-1";
 
-### 3. Melhorar tratamento de erro no handleAnalyze
-- Extrair a mensagem de erro do body da resposta quando a edge function retorna erro HTTP
-- Mostrar toast com mensagem descritiva
+// Depois  
+const url = "https://api.groq.com/openai/v1/audio/transcriptions";
+const key = groqKey;
+const model = "whisper-large-v3-turbo";
+```
 
-### 4. Exibir a transcrição após análise completa
-- Garantir que a seção de transcrição aparece também para meetings com link após processamento
-
-### Arquivos modificados
-- `src/pages/MeetingDetail.tsx` — corrigir `isLinkBased`, simplificar fluxo do textarea, melhorar error handling
+### Resultado esperado
+- Transcrições ~10x mais rápidas
+- Custo ~9x menor
+- Mesma qualidade (mesmo modelo Whisper)
+- Fallback para OpenAI se Groq não configurada
 
