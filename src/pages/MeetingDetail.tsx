@@ -160,29 +160,62 @@ const MeetingDetail = () => {
       )}
       {meeting.status !== "completo" && (
         <Card>
-          <CardContent className="py-8 text-center">
+          <CardContent className="py-8">
             {meeting.status === "enviado" && (
-              <>
+              <div className="text-center">
                 <Mic className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-medium">Aguardando análise</h3>
                 <p className="text-sm text-muted-foreground">Clique em "Analisar" para iniciar o processamento com IA</p>
-              </>
+              </div>
             )}
-            {(meeting.status === "transcrevendo" || meeting.status === "analisando") && (
-              <>
-                <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-                <h3 className="text-lg font-medium">
-                  {meeting.status === "transcrevendo" ? "Transcrevendo áudio..." : "Analisando com IA..."}
-                </h3>
-                <p className="text-sm text-muted-foreground">Isso pode levar alguns minutos</p>
-              </>
-            )}
+            {(meeting.status === "baixando" || meeting.status === "transcrevendo" || meeting.status === "analisando") && (() => {
+              const steps = [
+                { key: "baixando", label: "Baixando arquivo", icon: Download },
+                { key: "transcrevendo", label: "Transcrevendo áudio", icon: Mic },
+                { key: "analisando", label: "Analisando com IA", icon: BrainCircuit },
+              ];
+              const currentIdx = steps.findIndex(s => s.key === meeting.status);
+              const progressValue = ((currentIdx + 1) / steps.length) * 100;
+
+              return (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Progresso</span>
+                      <span>{Math.round(progressValue)}%</span>
+                    </div>
+                    <Progress value={progressValue} className="h-2" />
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    {steps.map((step, idx) => {
+                      const isCompleted = idx < currentIdx;
+                      const isCurrent = idx === currentIdx;
+                      const Icon = isCompleted ? CheckCircle2 : step.icon;
+                      return (
+                        <div key={step.key} className="flex items-center gap-2">
+                          {idx > 0 && (
+                            <div className={`w-8 h-0.5 ${isCompleted ? "bg-primary" : "bg-muted"}`} />
+                          )}
+                          <div className={`flex flex-col items-center gap-1 ${isCurrent ? "text-primary" : isCompleted ? "text-primary/70" : "text-muted-foreground"}`}>
+                            <div className={`p-2 rounded-full ${isCurrent ? "bg-primary/10 animate-pulse" : isCompleted ? "bg-primary/10" : "bg-muted"}`}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <span className="text-xs font-medium">{step.label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center">Isso pode levar alguns minutos</p>
+                </div>
+              );
+            })()}
             {meeting.status === "erro" && (
-              <>
+              <div className="text-center">
                 <div className="text-destructive text-4xl mb-4">⚠️</div>
                 <h3 className="text-lg font-medium text-destructive">Erro no processamento</h3>
                 <p className="text-sm text-muted-foreground">Tente novamente ou entre em contato com o suporte</p>
-              </>
+              </div>
             )}
           </CardContent>
         </Card>
