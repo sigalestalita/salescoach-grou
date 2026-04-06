@@ -395,6 +395,9 @@ const Agendas = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="text-xs">
+                      {meeting.meeting_type === "consultoria" ? "Consultoria" : "Empresa"}
+                    </Badge>
                     {meeting.overall_score !== null && (
                       <div className="flex items-center gap-1">
                         <Target className="h-4 w-4 text-primary" />
