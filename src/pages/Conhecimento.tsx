@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen } from "lucide-react";
+import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type KnowledgeDoc = Tables<"knowledge_documents">;
@@ -35,17 +35,27 @@ const typeIcons: Record<string, any> = {
   case: Award,
 };
 
+const docTypeLabels: Record<string, string> = {
+  pdf: "PDF",
+  doc: "DOC",
+  link: "Link",
+  texto: "Texto",
+};
+
 const Conhecimento = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [search, setSearch] = useState("");
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const { role } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const { user, role } = useAuth();
   const { toast } = useToast();
   const isAdmin = role === "admin";
 
-  const [newDoc, setNewDoc] = useState({ title: "", doc_type: "pdf" as string, category: "" });
+  const [sourceTab, setSourceTab] = useState("file");
+  const [newDoc, setNewDoc] = useState({ title: "", category: "", link_url: "", text_content: "" });
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [newItem, setNewItem] = useState({ name: "", item_type: "produto" as string, description: "", category: "" });
 
   useEffect(() => {
@@ -61,20 +71,56 @@ const Conhecimento = () => {
     if (itemsRes.data) setItems(itemsRes.data);
   };
 
+  const resetDocForm = () => {
+    setNewDoc({ title: "", category: "", link_url: "", text_content: "" });
+    setDocFile(null);
+    setSourceTab("file");
+  };
+
   const handleAddDoc = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.from("knowledge_documents").insert({
-      title: newDoc.title,
-      doc_type: newDoc.doc_type,
-      category: newDoc.category || null,
-    });
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    if (!user) return;
+    setUploading(true);
+
+    try {
+      let fileUrl: string | null = null;
+      let docType = "texto";
+      let extractedContent: string | null = null;
+
+      if (sourceTab === "file" && docFile) {
+        const filePath = `${user.id}/${Date.now()}-${docFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("knowledge-files")
+          .upload(filePath, docFile);
+        if (uploadError) throw uploadError;
+        fileUrl = filePath;
+        docType = docFile.name.toLowerCase().endsWith(".pdf") ? "pdf" : "doc";
+      } else if (sourceTab === "link") {
+        fileUrl = newDoc.link_url;
+        docType = "link";
+      } else if (sourceTab === "text") {
+        extractedContent = newDoc.text_content;
+        docType = "texto";
+      }
+
+      const { error } = await supabase.from("knowledge_documents").insert({
+        title: newDoc.title,
+        doc_type: docType,
+        category: newDoc.category || null,
+        file_url: fileUrl,
+        extracted_content: extractedContent,
+        uploaded_by: user.id,
+      });
+
+      if (error) throw error;
       toast({ title: "Documento adicionado!" });
       setDocDialogOpen(false);
-      setNewDoc({ title: "", doc_type: "pdf", category: "" });
+      resetDocForm();
       fetchData();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -94,6 +140,12 @@ const Conhecimento = () => {
       setNewItem({ name: "", item_type: "produto", description: "", category: "" });
       fetchData();
     }
+  };
+
+  const getDocIcon = (docType: string) => {
+    if (docType === "link") return ExternalLink;
+    if (docType === "texto") return AlignLeft;
+    return FileText;
   };
 
   return (
@@ -122,29 +174,83 @@ const Conhecimento = () => {
               <DialogTrigger asChild>
                 <Button><Plus className="h-4 w-4 mr-2" />Adicionar Documento</Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Novo Documento</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddDoc} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Título</Label>
-                    <Input value={newDoc.title} onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tipo</Label>
-                    <Select value={newDoc.doc_type} onValueChange={(v) => setNewDoc({ ...newDoc, doc_type: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pdf">PDF</SelectItem>
-                        <SelectItem value="doc">DOC</SelectItem>
-                        <SelectItem value="link">Link</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Título *</Label>
+                    <Input
+                      value={newDoc.title}
+                      onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })}
+                      placeholder="Ex: Portfólio de Serviços 2025"
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Categoria</Label>
-                    <Input value={newDoc.category} onChange={(e) => setNewDoc({ ...newDoc, category: e.target.value })} placeholder="Ex: Portfólio" />
+                    <Input
+                      value={newDoc.category}
+                      onChange={(e) => setNewDoc({ ...newDoc, category: e.target.value })}
+                      placeholder="Ex: Portfólio, Proposta, Manual"
+                    />
                   </div>
-                  <Button type="submit" className="w-full">Salvar</Button>
+
+                  <div className="space-y-2">
+                    <Label>Conteúdo</Label>
+                    <Tabs value={sourceTab} onValueChange={setSourceTab}>
+                      <TabsList className="w-full">
+                        <TabsTrigger value="file" className="flex-1">
+                          <Upload className="h-3 w-3 mr-1" />
+                          Arquivo
+                        </TabsTrigger>
+                        <TabsTrigger value="link" className="flex-1">
+                          <Link className="h-3 w-3 mr-1" />
+                          Link
+                        </TabsTrigger>
+                        <TabsTrigger value="text" className="flex-1">
+                          <AlignLeft className="h-3 w-3 mr-1" />
+                          Texto
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="file">
+                        <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                          <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                          <Input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.txt"
+                            onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                            className="mx-auto"
+                          />
+                          <p className="text-xs text-muted-foreground mt-2">PDF, DOC, DOCX, TXT</p>
+                        </div>
+                      </TabsContent>
+                      <TabsContent value="link">
+                        <Input
+                          value={newDoc.link_url}
+                          onChange={(e) => setNewDoc({ ...newDoc, link_url: e.target.value })}
+                          placeholder="https://drive.google.com/... ou qualquer URL"
+                        />
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Link do Google Drive, site, ou qualquer URL relevante
+                        </p>
+                      </TabsContent>
+                      <TabsContent value="text">
+                        <Textarea
+                          value={newDoc.text_content}
+                          onChange={(e) => setNewDoc({ ...newDoc, text_content: e.target.value })}
+                          placeholder="Cole aqui informações sobre produtos, serviços, processos..."
+                          rows={6}
+                        />
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Texto livre sobre seus produtos, serviços ou processos
+                        </p>
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={uploading}>
+                    {uploading ? "Salvando..." : "Salvar Documento"}
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -159,20 +265,38 @@ const Conhecimento = () => {
             </Card>
           ) : (
             <div className="grid gap-3">
-              {docs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase())).map((doc) => (
-                <Card key={doc.id}>
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
-                      <div>
-                        <h4 className="font-medium">{doc.title}</h4>
-                        <p className="text-xs text-muted-foreground">{doc.doc_type.toUpperCase()}</p>
+              {docs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase())).map((doc) => {
+                const DocIcon = getDocIcon(doc.doc_type);
+                return (
+                  <Card key={doc.id}>
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <DocIcon className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <h4 className="font-medium">{doc.title}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {docTypeLabels[doc.doc_type] || doc.doc_type.toUpperCase()}
+                            {doc.doc_type === "link" && doc.file_url && (
+                              <a
+                                href={doc.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ml-2 text-primary hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                Abrir link ↗
+                              </a>
+                            )}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    {doc.category && <Badge variant="secondary">{doc.category}</Badge>}
-                  </CardContent>
-                </Card>
-              ))}
+                      <div className="flex items-center gap-2">
+                        {doc.category && <Badge variant="secondary">{doc.category}</Badge>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
