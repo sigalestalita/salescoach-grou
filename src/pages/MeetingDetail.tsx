@@ -25,6 +25,10 @@ const MeetingDetail = () => {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [manualTranscript, setManualTranscript] = useState("");
+  const [showTranscriptInput, setShowTranscriptInput] = useState(false);
+
+  const isLinkBased = meeting && !meeting.file_url && (meeting.youtube_url || meeting.meeting_type);
 
   useEffect(() => {
     if (id) fetchData();
