@@ -7,6 +7,63 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/**
+ * Extract Google Drive file ID from various URL formats
+ */
+function extractGoogleDriveFileId(url: string): string | null {
+  // Format: https://drive.google.com/file/d/FILE_ID/view...
+  const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match1) return match1[1];
+  // Format: https://drive.google.com/open?id=FILE_ID
+  const match2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (match2) return match2[1];
+  return null;
+}
+
+/**
+ * Download file from Google Drive (public/shared files)
+ */
+async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
+  // Use the export/download URL that works for publicly shared files
+  const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+  
+  const res = await fetch(downloadUrl, { redirect: "follow" });
+  
+  if (!res.ok) {
+    throw new Error(`Failed to download from Google Drive: ${res.status} ${res.statusText}`);
+  }
+
+  // Check for virus scan warning page (large files)
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    // Large file - need to confirm download
+    const html = await res.text();
+    const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
+    if (confirmMatch) {
+      const confirmUrl = `https://drive.google.com/uc?export=download&confirm=${confirmMatch[1]}&id=${fileId}`;
+      const confirmRes = await fetch(confirmUrl, { redirect: "follow" });
+      if (!confirmRes.ok) {
+        throw new Error(`Failed to download large file from Google Drive: ${confirmRes.status}`);
+      }
+      return await confirmRes.blob();
+    }
+    throw new Error("Google Drive file is not publicly accessible or requires authentication");
+  }
+
+  return await res.blob();
+}
+
+/**
+ * Download audio/video from a generic URL
+ */
+async function downloadFromUrl(url: string): Promise<Blob> {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) {
+    throw new Error(`Failed to download from URL: ${res.status} ${res.statusText}`);
+  }
+  return await res.blob();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -45,7 +102,7 @@ serve(async (req) => {
     let transcript = "";
     let durationSeconds = 0;
 
-    // If manual transcript provided (for link-based meetings), use it directly
+    // If manual transcript provided, use it directly
     if (manualTranscript && typeof manualTranscript === "string" && manualTranscript.trim().length > 0) {
       transcript = manualTranscript.trim();
     } else if (meeting.file_url) {
@@ -65,35 +122,63 @@ serve(async (req) => {
       }
 
       const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
-      const formData = new FormData();
-      formData.append("file", new File([fileData], fileName));
-      formData.append("model", "whisper-1");
-      formData.append("language", "pt");
-      formData.append("response_format", "verbose_json");
+      transcript = await transcribeWithWhisper(fileData, fileName, openaiKey);
+      durationSeconds = 0; // Will be set from whisper result
+    } else if (meeting.youtube_url) {
+      // Has external link — download and transcribe
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
 
-      const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${openaiKey}` },
-        body: formData,
-      });
+      const url = meeting.youtube_url;
+      let fileBlob: Blob;
+      let fileName = "audio_from_link";
 
-      if (!whisperRes.ok) {
-        const errText = await whisperRes.text();
-        console.error("Whisper error:", errText);
+      try {
+        const driveFileId = extractGoogleDriveFileId(url);
+        if (driveFileId) {
+          console.log("Downloading from Google Drive, fileId:", driveFileId);
+          fileBlob = await downloadFromGoogleDrive(driveFileId);
+          fileName = "audio_drive.mp4";
+        } else {
+          // Generic URL download (direct links to audio/video files)
+          console.log("Downloading from URL:", url);
+          fileBlob = await downloadFromUrl(url);
+          // Try to guess extension from URL
+          const urlPath = new URL(url).pathname;
+          const ext = urlPath.split(".").pop();
+          if (ext && ["mp3", "mp4", "wav", "m4a", "ogg", "webm"].includes(ext.toLowerCase())) {
+            fileName = `audio.${ext}`;
+          } else {
+            fileName = "audio.mp4";
+          }
+        }
+      } catch (downloadErr) {
+        console.error("Download error:", downloadErr);
         await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-        return new Response(JSON.stringify({ error: "Transcription failed", details: errText }), {
-          status: 500,
+        return new Response(JSON.stringify({ 
+          error: `Falha ao baixar o arquivo do link. Verifique se o arquivo está compartilhado publicamente. Detalhes: ${downloadErr instanceof Error ? downloadErr.message : "Erro desconhecido"}` 
+        }), {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const whisperResult = await whisperRes.json();
-      transcript = whisperResult.text;
-      durationSeconds = Math.round(whisperResult.duration || 0);
+      // Transcribe downloaded file
+      try {
+        transcript = await transcribeWithWhisper(fileBlob, fileName, openaiKey);
+      } catch (transcribeErr) {
+        console.error("Transcription error:", transcribeErr);
+        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        return new Response(JSON.stringify({ 
+          error: `Falha na transcrição do áudio. ${transcribeErr instanceof Error ? transcribeErr.message : "Erro desconhecido"}` 
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     } else {
-      // No file and no manual transcript
+      // No file and no link and no manual transcript
       return new Response(JSON.stringify({ 
-        error: "Esta reunião não possui arquivo de áudio. Para reuniões com link externo, cole a transcrição manualmente para análise." 
+        error: "Esta reunião não possui arquivo de áudio nem link externo." 
       }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -280,3 +365,29 @@ Analise com profundidade. Seja específico nas sugestões. Scores devem refletir
     });
   }
 });
+
+/**
+ * Transcribe audio/video file using OpenAI Whisper API
+ */
+async function transcribeWithWhisper(fileData: Blob, fileName: string, openaiKey: string): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", new File([fileData], fileName));
+  formData.append("model", "whisper-1");
+  formData.append("language", "pt");
+  formData.append("response_format", "verbose_json");
+
+  const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openaiKey}` },
+    body: formData,
+  });
+
+  if (!whisperRes.ok) {
+    const errText = await whisperRes.text();
+    console.error("Whisper error:", errText);
+    throw new Error(`Transcription failed: ${errText}`);
+  }
+
+  const whisperResult = await whisperRes.json();
+  return whisperResult.text;
+}

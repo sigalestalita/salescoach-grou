@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link } from "lucide-react";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
@@ -111,8 +112,8 @@ const MeetingDetail = () => {
             )}
           </div>
         </div>
-        {meeting.status === "enviado" && !isLinkBased && (
-          <Button onClick={handleAnalyze} disabled={processing}>
+        {meeting.status === "enviado" && (
+          <Button onClick={handleAnalyze} disabled={processing || (isLinkBased && !meeting.youtube_url && !manualTranscript.trim())}>
             <Play className="h-4 w-4 mr-2" />
             {processing ? "Processando..." : "Analisar"}
           </Button>
@@ -131,25 +132,31 @@ const MeetingDetail = () => {
         </Card>
       )}
 
-      {/* Manual transcript input for link-based meetings */}
+      {/* Optional manual transcript for link-based meetings */}
       {isLinkBased && meeting.status === "enviado" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">📝 Cole a transcrição da reunião</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Textarea
-              placeholder="Cole aqui a transcrição completa da reunião para análise com IA..."
-              value={manualTranscript}
-              onChange={(e) => setManualTranscript(e.target.value)}
-              rows={10}
-            />
-            <Button onClick={handleAnalyze} disabled={processing || !manualTranscript.trim()}>
-              <Play className="h-4 w-4 mr-2" />
-              {processing ? "Processando..." : "Iniciar Análise"}
-            </Button>
-          </CardContent>
-        </Card>
+        <Collapsible>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="flex flex-row items-center justify-between py-3">
+                <CardTitle className="text-sm">📝 Já tem a transcrição? Cole aqui (opcional)</CardTitle>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-3 pt-0">
+                <p className="text-xs text-muted-foreground">
+                  Se não colar, o sistema tentará baixar o áudio do link e transcrever automaticamente.
+                </p>
+                <Textarea
+                  placeholder="Cole aqui a transcrição completa da reunião..."
+                  value={manualTranscript}
+                  onChange={(e) => setManualTranscript(e.target.value)}
+                  rows={8}
+                />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
       {meeting.status !== "completo" && (
         <Card>
