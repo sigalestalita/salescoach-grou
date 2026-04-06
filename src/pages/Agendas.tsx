@@ -33,7 +33,27 @@ import {
   Clock,
   Target,
   Link,
+  Pencil,
+  Trash2,
+  RotateCcw,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
@@ -69,6 +89,9 @@ const Agendas = () => {
   const [filterType, setFilterType] = useState("todos");
   const [filterSeller, setFilterSeller] = useState("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sourceTab, setSourceTab] = useState("file");
   const [newMeeting, setNewMeeting] = useState({
@@ -80,6 +103,13 @@ const Agendas = () => {
     youtube_url: "",
     meeting_type: "empresa",
     seller_id: "",
+  });
+  const [editForm, setEditForm] = useState({
+    title: "",
+    lead_name: "",
+    lead_company: "",
+    lead_email: "",
+    meeting_type: "empresa",
   });
   const [file, setFile] = useState<File | null>(null);
   const { user } = useAuth();
@@ -161,6 +191,81 @@ const Agendas = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleEdit = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    setEditForm({
+      title: meeting.title,
+      lead_name: meeting.lead_name || "",
+      lead_company: meeting.lead_company || "",
+      lead_email: meeting.lead_email || "",
+      meeting_type: meeting.meeting_type || "empresa",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMeeting) return;
+    try {
+      const { error } = await supabase.from("meetings").update({
+        title: editForm.title,
+        lead_name: editForm.lead_name || null,
+        lead_company: editForm.lead_company || null,
+        lead_email: editForm.lead_email || null,
+        meeting_type: editForm.meeting_type,
+      }).eq("id", selectedMeeting.id);
+      if (error) throw error;
+      toast({ title: "Sucesso!", description: "Agenda atualizada." });
+      setEditDialogOpen(false);
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedMeeting) return;
+    try {
+      const { error } = await supabase.from("meetings").delete().eq("id", selectedMeeting.id);
+      if (error) throw error;
+      toast({ title: "Agenda apagada", description: "A agenda foi removida com sucesso." });
+      setDeleteDialogOpen(false);
+      setSelectedMeeting(null);
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleReanalyze = async (meeting: Meeting) => {
+    try {
+      // Clear previous analysis data
+      await Promise.all([
+        supabase.from("analysis_results").delete().eq("meeting_id", meeting.id),
+        supabase.from("transcriptions").delete().eq("meeting_id", meeting.id),
+        supabase.from("highlights").delete().eq("meeting_id", meeting.id),
+      ]);
+
+      // Reset meeting status
+      await supabase.from("meetings").update({
+        status: "enviado",
+        overall_score: null,
+        temperature: null,
+      }).eq("id", meeting.id);
+
+      // Start new analysis
+      const { error } = await supabase.functions.invoke("analyze-meeting", {
+        body: { meetingId: meeting.id },
+      });
+      if (error) throw error;
+
+      toast({ title: "Re-análise iniciada!", description: "O processamento pode levar alguns minutos." });
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
     }
   };
 
@@ -410,6 +515,33 @@ const Agendas = () => {
                     <Badge className={statusColors[meeting.status]}>
                       {statusLabels[meeting.status]}
                     </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => handleEdit(meeting)}>
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleReanalyze(meeting)}>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Refazer análise
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => {
+                            setSelectedMeeting(meeting);
+                            setDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Apagar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </CardContent>
@@ -417,6 +549,86 @@ const Agendas = () => {
           ))}
         </div>
       )}
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Agenda</DialogTitle>
+            <DialogDescription>Atualize os dados da agenda</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Título *</Label>
+              <Input
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nome do Lead</Label>
+                <Input
+                  value={editForm.lead_name}
+                  onChange={(e) => setEditForm({ ...editForm, lead_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Empresa</Label>
+                <Input
+                  value={editForm.lead_company}
+                  onChange={(e) => setEditForm({ ...editForm, lead_company: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email do Lead</Label>
+                <Input
+                  type="email"
+                  value={editForm.lead_email}
+                  onChange={(e) => setEditForm({ ...editForm, lead_email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select
+                  value={editForm.meeting_type}
+                  onValueChange={(v) => setEditForm({ ...editForm, meeting_type: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="empresa">Empresa</SelectItem>
+                    <SelectItem value="consultoria">Consultoria</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button type="submit" className="w-full">Salvar</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar agenda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação é irreversível. A agenda "{selectedMeeting?.title}" e todos os dados de análise serão removidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
