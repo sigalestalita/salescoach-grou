@@ -194,6 +194,81 @@ const Agendas = () => {
     }
   };
 
+  const handleEdit = (meeting: Meeting) => {
+    setSelectedMeeting(meeting);
+    setEditForm({
+      title: meeting.title,
+      lead_name: meeting.lead_name || "",
+      lead_company: meeting.lead_company || "",
+      lead_email: meeting.lead_email || "",
+      meeting_type: meeting.meeting_type || "empresa",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedMeeting) return;
+    try {
+      const { error } = await supabase.from("meetings").update({
+        title: editForm.title,
+        lead_name: editForm.lead_name || null,
+        lead_company: editForm.lead_company || null,
+        lead_email: editForm.lead_email || null,
+        meeting_type: editForm.meeting_type,
+      }).eq("id", selectedMeeting.id);
+      if (error) throw error;
+      toast({ title: "Sucesso!", description: "Agenda atualizada." });
+      setEditDialogOpen(false);
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedMeeting) return;
+    try {
+      const { error } = await supabase.from("meetings").delete().eq("id", selectedMeeting.id);
+      if (error) throw error;
+      toast({ title: "Agenda apagada", description: "A agenda foi removida com sucesso." });
+      setDeleteDialogOpen(false);
+      setSelectedMeeting(null);
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleReanalyze = async (meeting: Meeting) => {
+    try {
+      // Clear previous analysis data
+      await Promise.all([
+        supabase.from("analysis_results").delete().eq("meeting_id", meeting.id),
+        supabase.from("transcriptions").delete().eq("meeting_id", meeting.id),
+        supabase.from("highlights").delete().eq("meeting_id", meeting.id),
+      ]);
+
+      // Reset meeting status
+      await supabase.from("meetings").update({
+        status: "enviado",
+        overall_score: null,
+        temperature: null,
+      }).eq("id", meeting.id);
+
+      // Start new analysis
+      const { error } = await supabase.functions.invoke("analyze-meeting", {
+        body: { meetingId: meeting.id },
+      });
+      if (error) throw error;
+
+      toast({ title: "Re-análise iniciada!", description: "O processamento pode levar alguns minutos." });
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
   const filtered = meetings.filter((m) => {
     const matchesSearch =
       m.title.toLowerCase().includes(search.toLowerCase()) ||
