@@ -322,15 +322,40 @@ const Agendas = () => {
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar agendas..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar agendas..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            <SelectItem value="empresa">Empresa</SelectItem>
+            <SelectItem value="consultoria">Consultoria</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterSeller} onValueChange={setFilterSeller}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Executivo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos executivos</SelectItem>
+            {profiles.map((p) => (
+              <SelectItem key={p.user_id} value={p.user_id}>
+                {p.full_name || p.user_id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Meeting list */}
