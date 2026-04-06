@@ -120,6 +120,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
         fileName = "audio.mp4";
       }
 
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
       transcript = await transcribeWithWhisper(fileBlob, fileName, openaiKey);
     } else {
       await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
