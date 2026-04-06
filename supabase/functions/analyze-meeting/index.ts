@@ -101,9 +101,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       }
 
       const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
       transcript = await transcribeWithWhisper(fileData, fileName, openaiKey);
     } else if (meeting.youtube_url) {
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
       let fileBlob: Blob;
