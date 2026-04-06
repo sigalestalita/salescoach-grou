@@ -24,30 +24,48 @@ function extractGoogleDriveFileId(url: string): string | null {
  * Download file from Google Drive (public/shared files)
  */
 async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
-  // Use the export/download URL that works for publicly shared files
-  const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+  // Strategy 1: Direct download with confirm=t (bypasses virus scan warning)
+  const downloadUrl = `https://drive.google.com/uc?export=download&confirm=t&id=${fileId}`;
+  console.log("Attempting Google Drive download with confirm=t for fileId:", fileId);
   
-  const res = await fetch(downloadUrl, { redirect: "follow" });
+  let res = await fetch(downloadUrl, { redirect: "follow" });
   
   if (!res.ok) {
-    throw new Error(`Failed to download from Google Drive: ${res.status} ${res.statusText}`);
+    // Strategy 2: Try the Google Drive API export endpoint
+    console.log("Direct download failed, trying alternative URL...");
+    const altUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+    res = await fetch(altUrl, { redirect: "follow" });
+    
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("Google Drive download error:", res.status, errText.substring(0, 500));
+      throw new Error(`Failed to download from Google Drive (status ${res.status}). Verifique se o arquivo está compartilhado como "Qualquer pessoa com o link".`);
+    }
   }
 
-  // Check for virus scan warning page (large files)
   const contentType = res.headers.get("content-type") || "";
+  console.log("Google Drive response content-type:", contentType, "size:", res.headers.get("content-length"));
+
+  // If we still got HTML, the file isn't accessible
   if (contentType.includes("text/html")) {
-    // Large file - need to confirm download
     const html = await res.text();
-    const confirmMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
-    if (confirmMatch) {
-      const confirmUrl = `https://drive.google.com/uc?export=download&confirm=${confirmMatch[1]}&id=${fileId}`;
-      const confirmRes = await fetch(confirmUrl, { redirect: "follow" });
-      if (!confirmRes.ok) {
-        throw new Error(`Failed to download large file from Google Drive: ${confirmRes.status}`);
+    console.error("Got HTML response (first 500 chars):", html.substring(0, 500));
+    
+    // Try to extract a download link from the HTML page
+    const actionMatch = html.match(/action="(https:\/\/drive\.usercontent\.google\.com\/download[^"]+)"/);
+    if (actionMatch) {
+      const directUrl = actionMatch[1].replace(/&amp;/g, "&");
+      console.log("Found direct download URL from HTML, retrying...");
+      const directRes = await fetch(directUrl, { redirect: "follow" });
+      if (directRes.ok) {
+        const directCt = directRes.headers.get("content-type") || "";
+        if (!directCt.includes("text/html")) {
+          return await directRes.blob();
+        }
       }
-      return await confirmRes.blob();
     }
-    throw new Error("Google Drive file is not publicly accessible or requires authentication");
+    
+    throw new Error("Não foi possível baixar o arquivo do Google Drive. Verifique se o arquivo está compartilhado como 'Qualquer pessoa com o link pode ver'.");
   }
 
   return await res.blob();
