@@ -11,6 +11,8 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
+type Transcription = Tables<"transcriptions">;
+type Highlight = Tables<"highlights">;
 
 const MeetingDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +20,8 @@ const MeetingDetail = () => {
   const { toast } = useToast();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [transcription, setTranscription] = useState<Transcription | null>(null);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -26,12 +30,16 @@ const MeetingDetail = () => {
   }, [id]);
 
   const fetchData = async () => {
-    const [meetingRes, analysisRes] = await Promise.all([
+    const [meetingRes, analysisRes, transcriptionRes, highlightsRes] = await Promise.all([
       supabase.from("meetings").select("*").eq("id", id!).single(),
       supabase.from("analysis_results").select("*").eq("meeting_id", id!).single(),
+      supabase.from("transcriptions").select("*").eq("meeting_id", id!).single(),
+      supabase.from("highlights").select("*").eq("meeting_id", id!),
     ]);
     if (meetingRes.data) setMeeting(meetingRes.data);
     if (analysisRes.data) setAnalysis(analysisRes.data);
+    if (transcriptionRes.data) setTranscription(transcriptionRes.data);
+    if (highlightsRes.data) setHighlights(highlightsRes.data);
     setLoading(false);
   };
 
@@ -329,6 +337,44 @@ const MeetingDetail = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Highlights */}
+          {highlights.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">🎯 Highlights</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {highlights.map((h) => (
+                  <div key={h.id} className="flex items-start gap-2 text-sm border-l-2 border-primary/30 pl-3 py-1">
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {h.highlight_type === "objecao" ? "Objeção" :
+                       h.highlight_type === "sinal_compra" ? "Sinal de Compra" :
+                       h.highlight_type === "momento_chave" ? "Momento-Chave" :
+                       h.highlight_type === "dor" ? "Dor" :
+                       h.highlight_type === "necessidade" ? "Necessidade" : h.highlight_type}
+                    </Badge>
+                    <span>{h.text}</span>
+                    {h.speaker && <span className="text-muted-foreground text-xs">({h.speaker})</span>}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Transcription */}
+          {transcription && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">📝 Transcrição</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                  {transcription.full_text}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>
