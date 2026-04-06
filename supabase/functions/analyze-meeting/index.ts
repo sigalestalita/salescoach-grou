@@ -43,27 +43,44 @@ async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
   throw new Error("Não foi possível baixar o arquivo do Google Drive. Verifique se está compartilhado como 'Qualquer pessoa com o link'.");
 }
 
-async function transcribeWithWhisper(fileData: Blob, fileName: string, openaiKey: string): Promise<string> {
+async function transcribeAudio(fileData: Blob, fileName: string): Promise<string> {
+  const groqKey = Deno.env.get("GROQ_API_KEY");
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+
+  // Prefer Groq (faster & cheaper), fallback to OpenAI
+  const useGroq = !!groqKey;
+  const apiUrl = useGroq
+    ? "https://api.groq.com/openai/v1/audio/transcriptions"
+    : "https://api.openai.com/v1/audio/transcriptions";
+  const apiKey = useGroq ? groqKey : openaiKey;
+  const model = useGroq ? "whisper-large-v3-turbo" : "whisper-1";
+
+  if (!apiKey) {
+    throw new Error("No transcription API key configured (GROQ_API_KEY or OPENAI_API_KEY)");
+  }
+
+  console.log(`Transcribing with ${useGroq ? "Groq" : "OpenAI"} (${model})`);
+
   const formData = new FormData();
   formData.append("file", new File([fileData], fileName));
-  formData.append("model", "whisper-1");
+  formData.append("model", model);
   formData.append("language", "pt");
   formData.append("response_format", "verbose_json");
 
-  const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const res = await fetch(apiUrl, {
     method: "POST",
-    headers: { Authorization: `Bearer ${openaiKey}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
   });
 
-  if (!whisperRes.ok) {
-    const errText = await whisperRes.text();
-    console.error("Whisper error:", errText);
-    throw new Error(`Transcription failed: ${errText}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Transcription error:", errText);
+    throw new Error(`Transcription failed (${useGroq ? "Groq" : "OpenAI"}): ${errText}`);
   }
 
-  const whisperResult = await whisperRes.json();
-  return whisperResult.text;
+  const result = await res.json();
+  return result.text;
 }
 
 /**
@@ -72,7 +89,6 @@ async function transcribeWithWhisper(fileData: Blob, fileName: string, openaiKey
 async function processeMeeting(meetingId: string, manualTranscript: string | null) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const openaiKey = Deno.env.get("OPENAI_API_KEY")!;
   const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -102,7 +118,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
       const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-      transcript = await transcribeWithWhisper(fileData, fileName, openaiKey);
+      transcript = await transcribeAudio(fileData, fileName);
     } else if (meeting.youtube_url) {
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
@@ -121,7 +137,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       }
 
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-      transcript = await transcribeWithWhisper(fileBlob, fileName, openaiKey);
+      transcript = await transcribeAudio(fileBlob, fileName);
     } else {
       await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
       return;
