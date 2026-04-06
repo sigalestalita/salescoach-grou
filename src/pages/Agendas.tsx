@@ -66,6 +66,8 @@ const Agendas = () => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("todos");
+  const [filterSeller, setFilterSeller] = useState("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sourceTab, setSourceTab] = useState("file");
