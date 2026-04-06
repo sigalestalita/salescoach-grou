@@ -86,6 +86,7 @@ const Agendas = () => {
 
   useEffect(() => {
     fetchMeetings();
+    fetchProfiles();
   }, []);
 
   const fetchMeetings = async () => {
@@ -101,6 +102,20 @@ const Agendas = () => {
     setLoading(false);
   };
 
+  const fetchProfiles = async () => {
+    const { data } = await supabase.from("profiles").select("*");
+    if (data) setProfiles(data);
+  };
+
+  const resetForm = () => {
+    setNewMeeting({
+      title: "", lead_name: "", lead_company: "", lead_email: "",
+      meeting_date: "", youtube_url: "", meeting_type: "empresa", seller_id: "",
+    });
+    setFile(null);
+    setSourceTab("file");
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newMeeting.title) return;
@@ -110,7 +125,7 @@ const Agendas = () => {
       let fileUrl = null;
       let fileType = null;
 
-      if (file) {
+      if (sourceTab === "file" && file) {
         const filePath = `${user.id}/${Date.now()}-${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from("meeting-files")
@@ -120,22 +135,25 @@ const Agendas = () => {
         fileType = file.type;
       }
 
+      const sellerId = newMeeting.seller_id || user.id;
+
       const { error } = await supabase.from("meetings").insert({
         title: newMeeting.title,
-        seller_id: user.id,
+        seller_id: sellerId,
         lead_name: newMeeting.lead_name || null,
         lead_company: newMeeting.lead_company || null,
         lead_email: newMeeting.lead_email || null,
         meeting_date: newMeeting.meeting_date || null,
         file_url: fileUrl,
         file_type: fileType,
+        youtube_url: (sourceTab === "link" && newMeeting.youtube_url) ? newMeeting.youtube_url : null,
+        meeting_type: newMeeting.meeting_type,
       });
 
       if (error) throw error;
       toast({ title: "Sucesso!", description: "Agenda criada com sucesso." });
       setDialogOpen(false);
-      setNewMeeting({ title: "", lead_name: "", lead_company: "", lead_email: "", meeting_date: "" });
-      setFile(null);
+      resetForm();
       fetchMeetings();
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
