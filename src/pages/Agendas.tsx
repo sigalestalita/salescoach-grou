@@ -164,12 +164,15 @@ const Agendas = () => {
     }
   };
 
-  const filtered = meetings.filter(
-    (m) =>
+  const filtered = meetings.filter((m) => {
+    const matchesSearch =
       m.title.toLowerCase().includes(search.toLowerCase()) ||
       m.lead_name?.toLowerCase().includes(search.toLowerCase()) ||
-      m.lead_company?.toLowerCase().includes(search.toLowerCase())
-  );
+      m.lead_company?.toLowerCase().includes(search.toLowerCase());
+    const matchesType = filterType === "todos" || m.meeting_type === filterType;
+    const matchesSeller = filterSeller === "todos" || m.seller_id === filterSeller;
+    return matchesSearch && matchesType && matchesSeller;
+  });
 
   return (
     <div className="space-y-6">
