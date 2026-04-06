@@ -114,12 +114,6 @@ const MeetingDetail = () => {
             {processing ? "Processando..." : "Analisar"}
           </Button>
         )}
-        {meeting.status === "enviado" && isLinkBased && !showTranscriptInput && (
-          <Button onClick={() => setShowTranscriptInput(true)}>
-            <Play className="h-4 w-4 mr-2" />
-            Analisar (colar transcrição)
-          </Button>
-        )}
       </div>
 
       {/* Link info */}
@@ -135,7 +129,7 @@ const MeetingDetail = () => {
       )}
 
       {/* Manual transcript input for link-based meetings */}
-      {showTranscriptInput && meeting.status === "enviado" && (
+      {isLinkBased && meeting.status === "enviado" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">📝 Cole a transcrição da reunião</CardTitle>
@@ -147,15 +141,10 @@ const MeetingDetail = () => {
               onChange={(e) => setManualTranscript(e.target.value)}
               rows={10}
             />
-            <div className="flex gap-2">
-              <Button onClick={handleAnalyze} disabled={processing || !manualTranscript.trim()}>
-                <Play className="h-4 w-4 mr-2" />
-                {processing ? "Processando..." : "Iniciar Análise"}
-              </Button>
-              <Button variant="outline" onClick={() => setShowTranscriptInput(false)}>
-                Cancelar
-              </Button>
-            </div>
+            <Button onClick={handleAnalyze} disabled={processing || !manualTranscript.trim()}>
+              <Play className="h-4 w-4 mr-2" />
+              {processing ? "Processando..." : "Iniciar Análise"}
+            </Button>
           </CardContent>
         </Card>
       )}
