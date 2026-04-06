@@ -137,7 +137,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       }
 
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-      transcript = await transcribeWithWhisper(fileBlob, fileName, openaiKey);
+      transcript = await transcribeAudio(fileBlob, fileName);
     } else {
       await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
       return;
