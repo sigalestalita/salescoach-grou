@@ -58,8 +58,10 @@ const MeetingDetail = () => {
       const { data, error } = await supabase.functions.invoke("analyze-meeting", {
         body,
       });
-      if (error) throw error;
-      toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
+      if (error) {
+        const msg = data?.error || data?.message || error.message || "Erro desconhecido";
+        throw new Error(msg);
+      }
       // Poll for completion
       const interval = setInterval(async () => {
         const { data: updated } = await supabase.from("meetings").select("status").eq("id", meeting.id).single();
