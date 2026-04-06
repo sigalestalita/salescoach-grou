@@ -89,6 +89,9 @@ const Agendas = () => {
   const [filterType, setFilterType] = useState("todos");
   const [filterSeller, setFilterSeller] = useState("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
   const [uploading, setUploading] = useState(false);
   const [sourceTab, setSourceTab] = useState("file");
   const [newMeeting, setNewMeeting] = useState({
@@ -100,6 +103,13 @@ const Agendas = () => {
     youtube_url: "",
     meeting_type: "empresa",
     seller_id: "",
+  });
+  const [editForm, setEditForm] = useState({
+    title: "",
+    lead_name: "",
+    lead_company: "",
+    lead_email: "",
+    meeting_type: "empresa",
   });
   const [file, setFile] = useState<File | null>(null);
   const { user } = useAuth();
