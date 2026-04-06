@@ -52,8 +52,12 @@ const MeetingDetail = () => {
     if (!meeting) return;
     setProcessing(true);
     try {
+      const body: any = { meetingId: meeting.id };
+      if (manualTranscript.trim()) {
+        body.manualTranscript = manualTranscript.trim();
+      }
       const { data, error } = await supabase.functions.invoke("analyze-meeting", {
-        body: { meetingId: meeting.id },
+        body,
       });
       if (error) throw error;
       toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
