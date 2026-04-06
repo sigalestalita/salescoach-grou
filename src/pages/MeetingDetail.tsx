@@ -26,9 +26,8 @@ const MeetingDetail = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [manualTranscript, setManualTranscript] = useState("");
-  const [showTranscriptInput, setShowTranscriptInput] = useState(false);
 
-  const isLinkBased = meeting && !meeting.file_url && (meeting.youtube_url || meeting.meeting_type);
+  const isLinkBased = meeting && !meeting.file_url && !!meeting.youtube_url;
 
   useEffect(() => {
     if (id) fetchData();
@@ -59,7 +58,10 @@ const MeetingDetail = () => {
       const { data, error } = await supabase.functions.invoke("analyze-meeting", {
         body,
       });
-      if (error) throw error;
+      if (error) {
+        const msg = data?.error || data?.message || error.message || "Erro desconhecido";
+        throw new Error(msg);
+      }
       toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
       // Poll for completion
       const interval = setInterval(async () => {
@@ -115,12 +117,6 @@ const MeetingDetail = () => {
             {processing ? "Processando..." : "Analisar"}
           </Button>
         )}
-        {meeting.status === "enviado" && isLinkBased && !showTranscriptInput && (
-          <Button onClick={() => setShowTranscriptInput(true)}>
-            <Play className="h-4 w-4 mr-2" />
-            Analisar (colar transcrição)
-          </Button>
-        )}
       </div>
 
       {/* Link info */}
@@ -136,7 +132,7 @@ const MeetingDetail = () => {
       )}
 
       {/* Manual transcript input for link-based meetings */}
-      {showTranscriptInput && meeting.status === "enviado" && (
+      {isLinkBased && meeting.status === "enviado" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">📝 Cole a transcrição da reunião</CardTitle>
@@ -148,15 +144,10 @@ const MeetingDetail = () => {
               onChange={(e) => setManualTranscript(e.target.value)}
               rows={10}
             />
-            <div className="flex gap-2">
-              <Button onClick={handleAnalyze} disabled={processing || !manualTranscript.trim()}>
-                <Play className="h-4 w-4 mr-2" />
-                {processing ? "Processando..." : "Iniciar Análise"}
-              </Button>
-              <Button variant="outline" onClick={() => setShowTranscriptInput(false)}>
-                Cancelar
-              </Button>
-            </div>
+            <Button onClick={handleAnalyze} disabled={processing || !manualTranscript.trim()}>
+              <Play className="h-4 w-4 mr-2" />
+              {processing ? "Processando..." : "Iniciar Análise"}
+            </Button>
           </CardContent>
         </Card>
       )}
