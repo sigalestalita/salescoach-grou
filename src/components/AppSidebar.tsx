@@ -5,8 +5,8 @@ import {
   Users,
   Settings,
   LogOut,
-  Brain,
 } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,14 +55,9 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-            <Brain className="h-5 w-5" />
-          </div>
+          <img src={logo} alt="Sales Coach" className="h-9 w-9 shrink-0 object-contain" />
           {!collapsed && (
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-sidebar-foreground">SalesAI</span>
-              <span className="text-xs text-sidebar-foreground/60">Analyzer</span>
-            </div>
+            <span className="text-sm font-bold text-sidebar-foreground">Sales Coach</span>
           )}
         </div>
       </SidebarHeader>
