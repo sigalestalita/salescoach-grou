@@ -104,6 +104,36 @@ const Conhecimento = () => {
         else if (ext.endsWith(".csv") || ext.endsWith(".xls") || ext.endsWith(".xlsx")) docType = "planilha";
         else docType = "doc";
       } else if (sourceTab === "link") {
+        if (!newDoc.link_url.trim()) {
+          toast({ title: "Erro", description: "Informe a URL do link.", variant: "destructive" });
+          setUploading(false);
+          return;
+        }
+        fileUrl = newDoc.link_url.trim();
+        docType = "link";
+      } else if (sourceTab === "text") {
+        if (!newDoc.text_content.trim()) {
+          toast({ title: "Erro", description: "Informe o conteúdo de texto.", variant: "destructive" });
+          setUploading(false);
+          return;
+        }
+        extractedContent = newDoc.text_content;
+        docType = "texto";
+      }
+        const sanitizedName = docFile.name
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${user.id}/${Date.now()}-${sanitizedName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("knowledge-files")
+          .upload(filePath, docFile);
+        if (uploadError) throw uploadError;
+        fileUrl = filePath;
+        const ext = docFile.name.toLowerCase();
+        if (ext.endsWith(".pdf")) docType = "pdf";
+        else if (ext.endsWith(".csv") || ext.endsWith(".xls") || ext.endsWith(".xlsx")) docType = "planilha";
+        else docType = "doc";
+      } else if (sourceTab === "link") {
         fileUrl = newDoc.link_url;
         docType = "link";
       } else if (sourceTab === "text") {
