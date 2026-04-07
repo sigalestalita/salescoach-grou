@@ -88,7 +88,10 @@ const Conhecimento = () => {
       let extractedContent: string | null = null;
 
       if (sourceTab === "file" && docFile) {
-        const filePath = `${user.id}/${Date.now()}-${docFile.name}`;
+        const sanitizedName = docFile.name
+          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+        const filePath = `${user.id}/${Date.now()}-${sanitizedName}`;
         const { error: uploadError } = await supabase.storage
           .from("knowledge-files")
           .upload(filePath, docFile);
