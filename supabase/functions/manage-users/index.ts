@@ -71,15 +71,18 @@ Deno.serve(async (req) => {
       // Get auth users for emails
       const { data: { users: authUsers } } = await adminClient.auth.admin.listUsers();
 
-      const enriched = (profiles || []).map((p: any) => {
-        const userRole = roles?.find((r: any) => r.user_id === p.user_id);
-        const authUser = authUsers?.find((u: any) => u.id === p.user_id);
-        return {
-          ...p,
-          role: userRole?.role || "vendedor",
-          email: authUser?.email || "",
-        };
-      });
+      // Only return profiles that still exist in auth (filter orphans)
+      const enriched = (profiles || [])
+        .filter((p: any) => authUsers?.some((u: any) => u.id === p.user_id))
+        .map((p: any) => {
+          const userRole = roles?.find((r: any) => r.user_id === p.user_id);
+          const authUser = authUsers?.find((u: any) => u.id === p.user_id);
+          return {
+            ...p,
+            role: userRole?.role || "vendedor",
+            email: authUser?.email || "",
+          };
+        });
 
       return new Response(JSON.stringify({ users: enriched }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
