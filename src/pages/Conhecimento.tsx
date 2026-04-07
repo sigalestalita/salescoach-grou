@@ -97,7 +97,10 @@ const Conhecimento = () => {
           .upload(filePath, docFile);
         if (uploadError) throw uploadError;
         fileUrl = filePath;
-        docType = docFile.name.toLowerCase().endsWith(".pdf") ? "pdf" : "doc";
+        const ext = docFile.name.toLowerCase();
+        if (ext.endsWith(".pdf")) docType = "pdf";
+        else if (ext.endsWith(".csv") || ext.endsWith(".xls") || ext.endsWith(".xlsx")) docType = "planilha";
+        else docType = "doc";
       } else if (sourceTab === "link") {
         fileUrl = newDoc.link_url;
         docType = "link";
