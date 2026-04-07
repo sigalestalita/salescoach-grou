@@ -214,7 +214,6 @@ const Configuracoes = () => {
                     <Select value={newRole} onValueChange={setNewRole}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="vendedor">Vendedor</SelectItem>
                         <SelectItem value="gestor">Gestor</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>

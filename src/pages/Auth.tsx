@@ -6,14 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { BarChart3, Mic } from "lucide-react";
 import logo from "@/assets/logo.png";
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -22,19 +19,27 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        navigate("/");
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: fullName }, emailRedirectTo: window.location.origin },
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+
+      // Check role — only admin and gestor can access
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .single();
+
+      if (!roleData || roleData.role === "vendedor") {
+        await supabase.auth.signOut();
+        toast({
+          title: "Acesso negado",
+          description: "Apenas gestores e administradores têm acesso à plataforma.",
+          variant: "destructive",
         });
-        if (error) throw error;
-        toast({ title: "Conta criada!", description: "Verifique seu email para confirmar o cadastro." });
+        return;
       }
+
+      navigate("/");
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
@@ -75,19 +80,13 @@ const Auth = () => {
       <div className="flex-1 flex items-center justify-center p-8">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">{isLogin ? "Entrar" : "Criar conta"}</CardTitle>
+            <CardTitle className="text-2xl">Entrar</CardTitle>
             <CardDescription>
-              {isLogin ? "Acesse sua conta para analisar reuniões" : "Crie sua conta para começar"}
+              Acesse sua conta para analisar reuniões
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome completo</Label>
-                  <Input id="name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Seu nome" required />
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" required />
@@ -97,15 +96,9 @@ const Auth = () => {
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Carregando..." : isLogin ? "Entrar" : "Criar conta"}
+                {loading ? "Carregando..." : "Entrar"}
               </Button>
             </form>
-            <div className="mt-4 text-center text-sm text-muted-foreground">
-              {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
-              <button onClick={() => setIsLogin(!isLogin)} className="text-primary hover:underline font-medium">
-                {isLogin ? "Criar conta" : "Entrar"}
-              </button>
-            </div>
           </CardContent>
         </Card>
       </div>
