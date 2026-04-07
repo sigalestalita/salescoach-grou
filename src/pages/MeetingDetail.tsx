@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -89,6 +89,7 @@ const MeetingDetail = () => {
   const salesCoach = analysis?.sales_coach as any;
   const talkRatio = analysis?.talk_ratio as any;
   const metrics = analysis?.conversation_metrics as any;
+  const ragResults = analysis?.rag_results as any;
 
   const tempColors: Record<string, string> = {
     frio: "bg-info/10 text-info border-info/20",
@@ -419,6 +420,84 @@ const MeetingDetail = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* RAG Results - Base de Conhecimento */}
+          {ragResults && (
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  📚 Aderência à Base de Conhecimento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Score de Aderência */}
+                {ragResults.knowledge_adherence_score != null && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Score de Aderência</span>
+                      <span className="font-bold text-primary">{ragResults.knowledge_adherence_score}/100</span>
+                    </div>
+                    <Progress value={ragResults.knowledge_adherence_score} className="h-2" />
+                  </div>
+                )}
+
+                {/* Alinhamento do discurso */}
+                {ragResults.discourse_alignment && (
+                  <div>
+                    <h4 className="text-xs font-semibold mb-1 flex items-center gap-1">
+                      <Target className="h-3 w-3" /> Alinhamento do Discurso
+                    </h4>
+                    <p className="text-sm text-muted-foreground">{ragResults.discourse_alignment}</p>
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  {/* Produtos mencionados */}
+                  {ragResults.products_mentioned && ragResults.products_mentioned.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
+                        <ShoppingCart className="h-3 w-3 text-primary" /> Produtos Mencionados
+                      </h4>
+                      <div className="flex flex-wrap gap-1">
+                        {(ragResults.products_mentioned as string[]).map((p: string, i: number) => (
+                          <Badge key={i} variant="secondary" className="text-xs">{p}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Oportunidades perdidas */}
+                  {ragResults.missed_opportunities && ragResults.missed_opportunities.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3 text-warning" /> Oportunidades Perdidas
+                      </h4>
+                      <ul className="text-sm space-y-1">
+                        {(ragResults.missed_opportunities as string[]).map((o: string, i: number) => (
+                          <li key={i} className="text-muted-foreground">• {o}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Sugestões de Cross-sell */}
+                  {ragResults.cross_sell_suggestions && ragResults.cross_sell_suggestions.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3 text-success" /> Sugestões Cross-sell / Upsell
+                      </h4>
+                      <ul className="text-sm space-y-1">
+                        {(ragResults.cross_sell_suggestions as string[]).map((s: string, i: number) => (
+                          <li key={i} className="text-muted-foreground">• {s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Highlights */}
           {highlights.length > 0 && (
