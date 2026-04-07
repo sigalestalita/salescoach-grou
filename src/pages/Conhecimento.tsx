@@ -237,6 +237,27 @@ const Conhecimento = () => {
           <h1 className="text-3xl font-bold">Base de Conhecimento</h1>
           <p className="text-muted-foreground">Documentos, produtos, serviços e cases da empresa</p>
         </div>
+        {isAdmin && (
+          <div className="flex items-center gap-3">
+            <div className="text-right text-xs text-muted-foreground hidden sm:block">
+              <p>{extractedDocsCount} doc(s) processado(s)</p>
+              {pendingDocsCount > 0 && <p className="text-warning">{pendingDocsCount} pendente(s)</p>}
+            </div>
+            <Button
+              onClick={handleTrainAI}
+              disabled={training}
+              variant={pendingDocsCount > 0 ? "default" : "outline"}
+              className="gap-2"
+            >
+              {training ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <BrainCircuit className="h-4 w-4" />
+              )}
+              {training ? "Treinando..." : "Treinar IA"}
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="relative max-w-md">
