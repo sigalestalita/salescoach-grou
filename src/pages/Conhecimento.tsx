@@ -104,12 +104,24 @@ const Conhecimento = () => {
         else if (ext.endsWith(".csv") || ext.endsWith(".xls") || ext.endsWith(".xlsx")) docType = "planilha";
         else docType = "doc";
       } else if (sourceTab === "link") {
-        fileUrl = newDoc.link_url;
+        if (!newDoc.link_url.trim()) {
+          toast({ title: "Erro", description: "Informe a URL do link.", variant: "destructive" });
+          setUploading(false);
+          return;
+        }
+        fileUrl = newDoc.link_url.trim();
         docType = "link";
       } else if (sourceTab === "text") {
+        if (!newDoc.text_content.trim()) {
+          toast({ title: "Erro", description: "Informe o conteúdo de texto.", variant: "destructive" });
+          setUploading(false);
+          return;
+        }
         extractedContent = newDoc.text_content;
         docType = "texto";
       }
+
+
 
       const { data: insertData, error } = await supabase.from("knowledge_documents").insert({
         title: newDoc.title,

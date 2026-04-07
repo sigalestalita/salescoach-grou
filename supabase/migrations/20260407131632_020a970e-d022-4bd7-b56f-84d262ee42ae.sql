@@ -1,0 +1,1 @@
+DELETE FROM knowledge_documents WHERE id = 'a76447a4-20ec-4759-9a2e-037de32ba829';
