@@ -59,20 +59,6 @@ const Auth = () => {
           <p className="text-lg text-primary-foreground/80">
             Análise inteligente de reuniões comerciais com IA avançada. Transcrição, frameworks de vendas e coaching automatizado.
           </p>
-          <div className="grid grid-cols-3 gap-4 pt-8">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary-foreground">BANT</div>
-              <div className="text-sm text-primary-foreground/60">Framework</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary-foreground">MEDDIC</div>
-              <div className="text-sm text-primary-foreground/60">Framework</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-primary-foreground">SPIN</div>
-              <div className="text-sm text-primary-foreground/60">Framework</div>
-            </div>
-          </div>
         </div>
       </div>
 
