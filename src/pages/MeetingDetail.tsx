@@ -89,6 +89,7 @@ const MeetingDetail = () => {
   const salesCoach = analysis?.sales_coach as any;
   const talkRatio = analysis?.talk_ratio as any;
   const metrics = analysis?.conversation_metrics as any;
+  const ragResults = analysis?.rag_results as any;
 
   const tempColors: Record<string, string> = {
     frio: "bg-info/10 text-info border-info/20",
