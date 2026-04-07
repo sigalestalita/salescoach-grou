@@ -62,7 +62,7 @@ const Dashboard = () => {
       const uniqueSellers = new Map<string, string>();
       for (const m of allMeetings) {
         if (!uniqueSellers.has(m.seller_id)) {
-          uniqueSellers.set(m.seller_id, profileMap.get(m.seller_id) || m.seller_id.slice(0, 8));
+          uniqueSellers.set(m.seller_id, profileMap.get(m.seller_id) || "Vendedor desconhecido");
         }
       }
       const sellerOptions = Array.from(uniqueSellers.entries())
