@@ -134,7 +134,6 @@ const MeetingDetail = () => {
 
         return embedUrl ? (
           <Collapsible defaultOpen>
-            {({ open }: any) => null}
             <Card>
               <CollapsibleTrigger className="w-full">
                 <CardHeader className="flex flex-row items-center justify-between py-3">
