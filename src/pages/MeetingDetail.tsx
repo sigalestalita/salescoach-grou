@@ -7,9 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp } from "lucide-react";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp, HelpCircle, Info } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
+
+const MetricTooltip = ({ text }: { text: string }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help shrink-0" />
+    </TooltipTrigger>
+    <TooltipContent side="top" className="max-w-xs text-xs">
+      <p>{text}</p>
+    </TooltipContent>
+  </Tooltip>
+);
 
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
