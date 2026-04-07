@@ -250,10 +250,10 @@ const Conhecimento = () => {
                         <Input
                           value={newDoc.link_url}
                           onChange={(e) => setNewDoc({ ...newDoc, link_url: e.target.value })}
-                          placeholder="https://drive.google.com/... ou qualquer URL"
+                          placeholder="https://site.com, Google Sheets, ou qualquer URL"
                         />
                         <p className="text-xs text-muted-foreground mt-2">
-                          Link do Google Drive, site, ou qualquer URL relevante
+                          Sites, Google Sheets, Google Drive ou qualquer URL — o conteúdo será lido e extraído automaticamente
                         </p>
                       </TabsContent>
                       <TabsContent value="text">
