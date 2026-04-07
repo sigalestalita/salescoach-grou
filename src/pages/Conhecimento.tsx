@@ -38,6 +38,7 @@ const typeIcons: Record<string, any> = {
 const docTypeLabels: Record<string, string> = {
   pdf: "PDF",
   doc: "DOC",
+  planilha: "Planilha",
   link: "Link",
   texto: "Texto",
 };
