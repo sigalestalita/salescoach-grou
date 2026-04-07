@@ -40,6 +40,8 @@ const getManagedAuthUser = async (adminClient: any, userId: string) => {
   return data.user;
 };
 
+const isProfileOnlySeller = (role?: string | null) => !role || role === "vendedor";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -102,8 +104,15 @@ Deno.serve(async (req) => {
 
       const authUsers = authUsersResponse?.users || [];
       const authUserMap = new Map(authUsers.map((user: any) => [user.id, user]));
+      const roleMap = new Map((roles || []).map((roleItem: any) => [roleItem.user_id, roleItem.role]));
       const orphanUserIds = (profiles || [])
-        .filter((profile: any) => !authUserMap.has(profile.user_id))
+        .filter((profile: any) => {
+          if (authUserMap.has(profile.user_id)) {
+            return false;
+          }
+
+          return !isProfileOnlySeller(roleMap.get(profile.user_id));
+        })
         .map((profile: any) => profile.user_id);
 
       if (orphanUserIds.length > 0) {
@@ -119,12 +128,12 @@ Deno.serve(async (req) => {
       const enriched = (profiles || [])
         .filter((profile: any) => authUserMap.has(profile.user_id))
         .map((profile: any) => {
-          const userRole = roles?.find((roleItem: any) => roleItem.user_id === profile.user_id);
+          const userRole = roleMap.get(profile.user_id);
           const authUser = authUserMap.get(profile.user_id);
 
           return {
             ...profile,
-            role: userRole?.role || "vendedor",
+            role: userRole || "vendedor",
             email: authUser?.email || "",
           };
         });
