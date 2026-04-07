@@ -294,7 +294,7 @@ const Dashboard = () => {
                   <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} className="text-xs" tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                  <Line type="monotone" dataKey="score" stroke="hsl(24, 95%, 53%)" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -426,7 +426,7 @@ const Dashboard = () => {
 
 function FrameworkCard({ title, items, maxValue }: { title: string; items: { key: string; label: string; avg: number }[]; maxValue: number }) {
   return (
-    <Card>
+    <Card className="glass-card card-hover-glow">
       <CardHeader>
         <CardTitle className="text-sm">{title}</CardTitle>
         <CardDescription>Média das reuniões</CardDescription>

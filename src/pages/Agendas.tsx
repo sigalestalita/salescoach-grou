@@ -480,11 +480,11 @@ const Agendas = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-4 animate-stagger">
           {filtered.map((meeting) => (
             <Card
               key={meeting.id}
-              className="cursor-pointer hover:shadow-md transition-shadow"
+              className="cursor-pointer glass-card card-hover-glow transition-all"
               onClick={() => navigate(`/agendas/${meeting.id}`)}
             >
               <CardContent className="p-4">
