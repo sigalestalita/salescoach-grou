@@ -23,6 +23,14 @@ const MetricTooltip = ({ text }: { text: string }) => (
   </Tooltip>
 );
 
+// Helper to extract score and reason from both old (number) and new ({score, reason}) formats
+const getMetricValue = (val: any): { score: number; reason?: string } => {
+  if (val === null || val === undefined) return { score: 0 };
+  if (typeof val === "number") return { score: val };
+  if (typeof val === "object" && "score" in val) return { score: val.score, reason: val.reason };
+  return { score: Number(val) || 0 };
+};
+
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
 type Transcription = Tables<"transcriptions">;
