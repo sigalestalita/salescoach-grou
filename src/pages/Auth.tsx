@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { BarChart3, Mic, Brain } from "lucide-react";
+import { BarChart3, Mic } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -46,18 +47,10 @@ const Auth = () => {
       {/* Left panel - branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary flex-col justify-center items-center p-12">
         <div className="max-w-md text-center space-y-8">
-          <div className="flex justify-center gap-4 mb-6">
-            <div className="p-3 rounded-xl bg-primary-foreground/10">
-              <Mic className="h-8 w-8 text-primary-foreground" />
-            </div>
-            <div className="p-3 rounded-xl bg-primary-foreground/10">
-              <Brain className="h-8 w-8 text-primary-foreground" />
-            </div>
-            <div className="p-3 rounded-xl bg-primary-foreground/10">
-              <BarChart3 className="h-8 w-8 text-primary-foreground" />
-            </div>
+          <div className="flex justify-center mb-6">
+            <img src={logo} alt="Sales Coach" className="h-16 object-contain" />
           </div>
-          <h1 className="text-4xl font-bold text-primary-foreground">SalesAI Analyzer</h1>
+          <h1 className="text-4xl font-bold text-primary-foreground">Sales Coach</h1>
           <p className="text-lg text-primary-foreground/80">
             Análise inteligente de reuniões comerciais com IA avançada. Transcrição, frameworks de vendas e coaching automatizado.
           </p>
