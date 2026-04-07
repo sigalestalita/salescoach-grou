@@ -38,6 +38,7 @@ const typeIcons: Record<string, any> = {
 const docTypeLabels: Record<string, string> = {
   pdf: "PDF",
   doc: "DOC",
+  planilha: "Planilha",
   link: "Link",
   texto: "Texto",
 };
@@ -97,7 +98,10 @@ const Conhecimento = () => {
           .upload(filePath, docFile);
         if (uploadError) throw uploadError;
         fileUrl = filePath;
-        docType = docFile.name.toLowerCase().endsWith(".pdf") ? "pdf" : "doc";
+        const ext = docFile.name.toLowerCase();
+        if (ext.endsWith(".pdf")) docType = "pdf";
+        else if (ext.endsWith(".csv") || ext.endsWith(".xls") || ext.endsWith(".xlsx")) docType = "planilha";
+        else docType = "doc";
       } else if (sourceTab === "link") {
         fileUrl = newDoc.link_url;
         docType = "link";
@@ -121,9 +125,9 @@ const Conhecimento = () => {
       resetDocForm();
       fetchData();
 
-      // Trigger automatic text extraction for file uploads
-      if (insertData && (sourceTab === "file") && docFile) {
-        toast({ title: "Extraindo conteúdo...", description: "O texto do documento está sendo extraído automaticamente." });
+      // Trigger automatic content extraction for files and links
+      if (insertData && (sourceTab === "file" || sourceTab === "link")) {
+        toast({ title: "Extraindo conteúdo...", description: "O conteúdo está sendo extraído e analisado automaticamente." });
         supabase.functions.invoke("extract-document", {
           body: { documentId: insertData.id },
         }).then(({ error: extractError }) => {
@@ -131,7 +135,7 @@ const Conhecimento = () => {
             console.error("Extraction error:", extractError);
             toast({ title: "Aviso", description: "Não foi possível extrair o conteúdo automaticamente.", variant: "destructive" });
           } else {
-            toast({ title: "Conteúdo extraído!", description: "O texto do documento foi extraído e salvo com sucesso." });
+            toast({ title: "Conteúdo extraído!", description: "O conteúdo foi extraído e salvo com sucesso." });
             fetchData();
           }
         });
@@ -236,21 +240,21 @@ const Conhecimento = () => {
                           <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                           <Input
                             type="file"
-                            accept=".pdf,.doc,.docx,.txt"
+                            accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
                             onChange={(e) => setDocFile(e.target.files?.[0] || null)}
                             className="mx-auto"
                           />
-                          <p className="text-xs text-muted-foreground mt-2">PDF, DOC, DOCX, TXT</p>
+                          <p className="text-xs text-muted-foreground mt-2">PDF, DOC, DOCX, TXT, CSV, XLS, XLSX</p>
                         </div>
                       </TabsContent>
                       <TabsContent value="link">
                         <Input
                           value={newDoc.link_url}
                           onChange={(e) => setNewDoc({ ...newDoc, link_url: e.target.value })}
-                          placeholder="https://drive.google.com/... ou qualquer URL"
+                          placeholder="https://site.com, Google Sheets, ou qualquer URL"
                         />
                         <p className="text-xs text-muted-foreground mt-2">
-                          Link do Google Drive, site, ou qualquer URL relevante
+                          Sites, Google Sheets, Google Drive ou qualquer URL — o conteúdo será lido e extraído automaticamente
                         </p>
                       </TabsContent>
                       <TabsContent value="text">
