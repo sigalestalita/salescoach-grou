@@ -232,53 +232,53 @@ const Dashboard = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger">
+        <Card className="glass-card card-hover-glow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Agendas</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Calendar className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.totalMeetings}</div>
+            <div className="text-2xl font-bold text-primary">{data.totalMeetings}</div>
             <p className="text-xs text-muted-foreground">{data.completedMeetings} analisadas</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Score Médio</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <Target className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.avgScore ?? "--"}</div>
+            <div className="text-2xl font-bold text-primary">{data.avgScore ?? "--"}</div>
             <p className="text-xs text-muted-foreground">de 100 pontos</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Reuniões Quentes</CardTitle>
-            <Thermometer className="h-4 w-4 text-muted-foreground" />
+            <Thermometer className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.hotRate}%</div>
+            <div className="text-2xl font-bold text-primary">{data.hotRate}%</div>
             <p className="text-xs text-muted-foreground">Taxa de agendas quentes</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{isFiltered ? "Agendas Analisadas" : "Vendedores Ativos"}</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isFiltered ? data.completedMeetings : data.activeSellers}</div>
+            <div className="text-2xl font-bold text-primary">{isFiltered ? data.completedMeetings : data.activeSellers}</div>
             <p className="text-xs text-muted-foreground">{isFiltered ? "deste vendedor" : "Com agendas analisadas"}</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Charts Row */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 animate-stagger">
         {/* Score Evolution */}
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <TrendingUp className="h-4 w-4" />
@@ -309,7 +309,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Temperature Distribution */}
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <Thermometer className="h-4 w-4" />
@@ -342,16 +342,16 @@ const Dashboard = () => {
       </div>
 
       {/* Framework Averages */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 animate-stagger">
         <FrameworkCard title={isFiltered ? "BANT Individual" : "BANT Médio"} items={data.avgBant} maxValue={25} />
         <FrameworkCard title={isFiltered ? "MEDDIC Individual" : "MEDDIC Médio"} items={data.avgMeddic} maxValue={17} />
         <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
       </div>
 
       {/* Talk Ratio + Ranking */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 animate-stagger">
         {/* Average Talk Ratio */}
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <MessageSquare className="h-4 w-4" />
@@ -384,7 +384,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Seller Ranking */}
-        <Card>
+        <Card className="glass-card card-hover-glow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <Users className="h-4 w-4" />
