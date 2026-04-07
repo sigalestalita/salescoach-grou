@@ -118,3 +118,56 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Auth page animations */
+@keyframes barGrow {
+  from { opacity: 0; transform: scaleY(0); transform-origin: bottom; }
+  to { opacity: 1; transform: scaleY(1); transform-origin: bottom; }
+}
+
+@keyframes barPulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.85); }
+}
+
+@keyframes floatUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floatBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes dotAppear {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.auth-line-draw {
+  stroke-dasharray: 300;
+  stroke-dashoffset: 300;
+  animation: lineDraw 1.5s ease-out 0.5s forwards;
+}
+
+@keyframes lineDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+.auth-area-fade {
+  opacity: 0;
+  animation: areaFade 0.8s ease-out 1.2s forwards;
+}
+
+@keyframes areaFade {
+  to { opacity: 1; }
+}
+
+.auth-ring-fill {
+  animation: ringFill 1.2s ease-out 0.8s forwards;
+}
+
+@keyframes ringFill {
+  to { stroke-dashoffset: 34; }
+}
