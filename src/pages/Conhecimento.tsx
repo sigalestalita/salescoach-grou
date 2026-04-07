@@ -120,26 +120,8 @@ const Conhecimento = () => {
         extractedContent = newDoc.text_content;
         docType = "texto";
       }
-        const sanitizedName = docFile.name
-          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-zA-Z0-9._-]/g, "_");
-        const filePath = `${user.id}/${Date.now()}-${sanitizedName}`;
-        const { error: uploadError } = await supabase.storage
-          .from("knowledge-files")
-          .upload(filePath, docFile);
-        if (uploadError) throw uploadError;
-        fileUrl = filePath;
-        const ext = docFile.name.toLowerCase();
-        if (ext.endsWith(".pdf")) docType = "pdf";
-        else if (ext.endsWith(".csv") || ext.endsWith(".xls") || ext.endsWith(".xlsx")) docType = "planilha";
-        else docType = "doc";
-      } else if (sourceTab === "link") {
-        fileUrl = newDoc.link_url;
-        docType = "link";
-      } else if (sourceTab === "text") {
-        extractedContent = newDoc.text_content;
-        docType = "texto";
-      }
+
+
 
       const { data: insertData, error } = await supabase.from("knowledge_documents").insert({
         title: newDoc.title,
