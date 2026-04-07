@@ -7,9 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp } from "lucide-react";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp, HelpCircle, Info } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
+
+const MetricTooltip = ({ text }: { text: string }) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help shrink-0" />
+    </TooltipTrigger>
+    <TooltipContent side="top" className="max-w-xs text-xs">
+      <p>{text}</p>
+    </TooltipContent>
+  </Tooltip>
+);
 
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
@@ -295,9 +307,10 @@ const MeetingDetail = () => {
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="md:col-span-1">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2">
                   <Target className="h-4 w-4" />
                   Score Geral
+                  <MetricTooltip text="Avaliação geral da qualidade da reunião comercial, de 0 a 100. Considera técnica de vendas, qualificação do lead, rapport, identificação de dores e condução do processo comercial." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -310,9 +323,10 @@ const MeetingDetail = () => {
 
             <Card className={meeting.temperature ? tempColors[meeting.temperature] : ""}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2">
                   <Thermometer className="h-4 w-4" />
                   Temperatura
+                  <MetricTooltip text="Indica a probabilidade de fechamento: Frio = lead não engajado ou sem interesse claro; Morno = interesse demonstrado mas sem urgência; Quente = lead com necessidade clara, urgência e autoridade para decidir." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -326,9 +340,10 @@ const MeetingDetail = () => {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2">
                   <MessageSquare className="h-4 w-4" />
                   Talk Ratio
+                  <MetricTooltip text="Proporção de tempo de fala entre vendedor e lead. O ideal é que o vendedor fale entre 30-50% do tempo, dando espaço para o lead expor suas necessidades. Vendedores que falam demais perdem oportunidades de entender o cliente." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -352,7 +367,10 @@ const MeetingDetail = () => {
             {/* BANT */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">BANT Score</CardTitle>
+               <CardTitle className="text-sm flex items-center gap-2">
+                  BANT Score
+                  <MetricTooltip text="Framework de qualificação de leads: Budget (orçamento disponível), Authority (poder de decisão do contato), Need (necessidade real do produto/serviço) e Timeline (prazo para decisão). Cada critério vale até 25 pontos." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {bant ? (
@@ -374,7 +392,10 @@ const MeetingDetail = () => {
             {/* MEDDIC */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">MEDDIC Score</CardTitle>
+               <CardTitle className="text-sm flex items-center gap-2">
+                  MEDDIC Score
+                  <MetricTooltip text="Framework avançado de vendas complexas: Metrics (métricas de sucesso), Economic Buyer (decisor econômico), Decision Criteria (critérios de decisão), Decision Process (processo decisório), Identify Pain (dores identificadas) e Champion (aliado interno). Cada item vale até 17 pontos." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {meddic ? (
@@ -396,7 +417,10 @@ const MeetingDetail = () => {
             {/* SPIN */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">SPIN Score</CardTitle>
+               <CardTitle className="text-sm flex items-center gap-2">
+                  SPIN Score
+                  <MetricTooltip text="Metodologia SPIN Selling: Situação (perguntas sobre contexto atual), Problema (identificação de dores), Implicação (consequências dos problemas) e Necessidade de Solução (como seu produto resolve). Cada dimensão vale até 25 pontos." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {spin ? (
@@ -420,7 +444,10 @@ const MeetingDetail = () => {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">💡 Insights</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  💡 Insights
+                  <MetricTooltip text="Análise qualitativa da reunião: o que o vendedor fez bem (técnicas eficazes, rapport, perguntas certas) e o que pode melhorar (oportunidades perdidas, técnicas não utilizadas, pontos fracos da abordagem)." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {insights ? (
@@ -454,7 +481,10 @@ const MeetingDetail = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">🤖 Sales Coach</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  🤖 Sales Coach
+                  <MetricTooltip text="Recomendações personalizadas de um coach de vendas IA: próximos passos ideais para avançar a negociação, sugestões de abordagem e scripts prontos para usar em follow-ups." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {salesCoach ? (
@@ -494,6 +524,7 @@ const MeetingDetail = () => {
                 <CardTitle className="text-sm flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-primary" />
                   📚 Aderência à Base de Conhecimento
+                  <MetricTooltip text="Avalia quanto o vendedor utilizou os materiais da base de conhecimento na conversa. Mostra produtos mencionados, oportunidades perdidas de cross-sell/upsell e o alinhamento do discurso com os argumentos cadastrados." />
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -569,7 +600,10 @@ const MeetingDetail = () => {
           {highlights.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">🎯 Highlights</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  🎯 Highlights
+                  <MetricTooltip text="Momentos-chave identificados na reunião: objeções levantadas pelo lead, sinais de compra, dores e necessidades expressas, e momentos decisivos da conversa." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {highlights.map((h) => (
