@@ -111,7 +111,7 @@ const Equipe = () => {
       const { error } = await supabase.from("profiles").insert({
         user_id: newUserId,
         full_name: form.full_name.trim(),
-        team_id: form.team_id || null,
+        team_id: form.team_id && form.team_id !== "none" ? form.team_id : null,
       });
       if (error) throw error;
 
@@ -139,7 +139,7 @@ const Equipe = () => {
         .from("profiles")
         .update({
           full_name: form.full_name.trim(),
-          team_id: form.team_id || null,
+          team_id: form.team_id && form.team_id !== "none" ? form.team_id : null,
         })
         .eq("user_id", selectedMember.user_id);
       if (error) throw error;
