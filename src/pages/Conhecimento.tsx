@@ -172,6 +172,64 @@ const Conhecimento = () => {
     return FileText;
   };
 
+  const handleTrainAI = async () => {
+    setTraining(true);
+    try {
+      // Find all docs without extracted content that have a file or link
+      const pendingDocs = docs.filter(
+        (d) => !d.extracted_content && (d.file_url || d.doc_type === "link")
+      );
+
+      if (pendingDocs.length === 0 && docs.length === 0 && items.length === 0) {
+        toast({ title: "Base vazia", description: "Adicione documentos ou itens antes de treinar a IA.", variant: "destructive" });
+        setTraining(false);
+        return;
+      }
+
+      if (pendingDocs.length === 0) {
+        toast({ title: "IA já treinada! ✅", description: `Todos os ${docs.length} documentos e ${items.length} itens já estão processados e prontos para uso nas análises.` });
+        setTraining(false);
+        return;
+      }
+
+      toast({ title: "Treinando IA...", description: `Processando ${pendingDocs.length} documento(s) pendente(s)...` });
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const doc of pendingDocs) {
+        try {
+          const { error } = await supabase.functions.invoke("extract-document", {
+            body: { documentId: doc.id },
+          });
+          if (error) {
+            errorCount++;
+            console.error(`Failed to extract doc ${doc.id}:`, error);
+          } else {
+            successCount++;
+          }
+        } catch {
+          errorCount++;
+        }
+      }
+
+      await fetchData();
+
+      if (errorCount === 0) {
+        toast({ title: "IA treinada com sucesso! 🎉", description: `${successCount} documento(s) processado(s). A IA usará esse conhecimento nas próximas análises.` });
+      } else {
+        toast({ title: "Treinamento parcial", description: `${successCount} extraído(s), ${errorCount} com erro.`, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Erro no treinamento", description: error.message, variant: "destructive" });
+    } finally {
+      setTraining(false);
+    }
+  };
+
+  const pendingDocsCount = docs.filter(d => !d.extracted_content && (d.file_url || d.doc_type === "link")).length;
+  const extractedDocsCount = docs.filter(d => !!d.extracted_content).length;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
