@@ -129,6 +129,7 @@ const Configuracoes = () => {
       setResetPassword("");
     } catch (err: any) {
       toast({ title: "Erro ao redefinir senha", description: err.message, variant: "destructive" });
+      fetchUsers();
     } finally {
       setResetting(false);
     }
@@ -147,6 +148,7 @@ const Configuracoes = () => {
       fetchUsers();
     } catch (err: any) {
       toast({ title: "Erro ao atualizar papel", description: err.message, variant: "destructive" });
+      fetchUsers();
     } finally {
       setChangingRole(false);
     }
@@ -160,6 +162,7 @@ const Configuracoes = () => {
       fetchUsers();
     } catch (err: any) {
       toast({ title: "Erro ao excluir usuário", description: err.message, variant: "destructive" });
+      fetchUsers();
     }
   };
 

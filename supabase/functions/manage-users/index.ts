@@ -1,7 +1,43 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const jsonResponse = (payload: unknown, status = 200) =>
+  new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const isMissingAuthUserError = (error: any) =>
+  error?.message?.includes("User not found") ||
+  error?.status === 404 ||
+  error?.code === "user_not_found";
+
+const cleanupOrphanUserRecords = async (adminClient: any, userId: string) => {
+  const [{ error: profileError }, { error: roleError }] = await Promise.all([
+    adminClient.from("profiles").delete().eq("user_id", userId),
+    adminClient.from("user_roles").delete().eq("user_id", userId),
+  ]);
+
+  if (profileError) throw profileError;
+  if (roleError) throw roleError;
+};
+
+const getManagedAuthUser = async (adminClient: any, userId: string) => {
+  const { data, error } = await adminClient.auth.admin.getUserById(userId);
+
+  if (error) {
+    if (isMissingAuthUserError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return data.user;
 };
 
 Deno.serve(async (req) => {
@@ -12,25 +48,21 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
-    // Verify caller is admin
     const anonClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user: caller } } = await anonClient.auth.getUser();
+    const {
+      data: { user: caller },
+    } = await anonClient.auth.getUser();
+
     if (!caller) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Não autorizado" }, 401);
     }
 
     const { data: roleData } = await anonClient
@@ -40,13 +72,9 @@ Deno.serve(async (req) => {
       .single();
 
     if (!roleData || roleData.role !== "admin") {
-      return new Response(JSON.stringify({ error: "Apenas administradores podem gerenciar usuários" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Apenas administradores podem gerenciar usuários" }, 403);
     }
 
-    // Admin client for privileged operations
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -56,50 +84,61 @@ Deno.serve(async (req) => {
     const { action } = body;
 
     if (action === "list_users") {
-      // List all profiles with their roles
-      const { data: profiles, error } = await adminClient
-        .from("profiles")
-        .select("id, user_id, full_name, avatar_url, team_id, created_at");
+      const [
+        { data: profiles, error: profilesError },
+        { data: roles, error: rolesError },
+        { data: authUsersResponse, error: authUsersError },
+      ] = await Promise.all([
+        adminClient
+          .from("profiles")
+          .select("id, user_id, full_name, avatar_url, team_id, created_at"),
+        adminClient.from("user_roles").select("user_id, role"),
+        adminClient.auth.admin.listUsers(),
+      ]);
 
-      if (error) throw error;
+      if (profilesError) throw profilesError;
+      if (rolesError) throw rolesError;
+      if (authUsersError) throw authUsersError;
 
-      // Get roles for all users
-      const { data: roles } = await adminClient
-        .from("user_roles")
-        .select("user_id, role");
+      const authUsers = authUsersResponse?.users || [];
+      const authUserMap = new Map(authUsers.map((user: any) => [user.id, user]));
+      const orphanUserIds = (profiles || [])
+        .filter((profile: any) => !authUserMap.has(profile.user_id))
+        .map((profile: any) => profile.user_id);
 
-      // Get auth users for emails
-      const { data: { users: authUsers } } = await adminClient.auth.admin.listUsers();
+      if (orphanUserIds.length > 0) {
+        const [{ error: profileCleanupError }, { error: roleCleanupError }] = await Promise.all([
+          adminClient.from("profiles").delete().in("user_id", orphanUserIds),
+          adminClient.from("user_roles").delete().in("user_id", orphanUserIds),
+        ]);
 
-      // Only return profiles that still exist in auth (filter orphans)
+        if (profileCleanupError) throw profileCleanupError;
+        if (roleCleanupError) throw roleCleanupError;
+      }
+
       const enriched = (profiles || [])
-        .filter((p: any) => authUsers?.some((u: any) => u.id === p.user_id))
-        .map((p: any) => {
-          const userRole = roles?.find((r: any) => r.user_id === p.user_id);
-          const authUser = authUsers?.find((u: any) => u.id === p.user_id);
+        .filter((profile: any) => authUserMap.has(profile.user_id))
+        .map((profile: any) => {
+          const userRole = roles?.find((roleItem: any) => roleItem.user_id === profile.user_id);
+          const authUser = authUserMap.get(profile.user_id);
+
           return {
-            ...p,
+            ...profile,
             role: userRole?.role || "vendedor",
             email: authUser?.email || "",
           };
         });
 
-      return new Response(JSON.stringify({ users: enriched }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ users: enriched });
     }
 
     if (action === "create_user") {
       const { email, password, full_name, role, team_id } = body;
 
       if (!email || !password || !full_name) {
-        return new Response(JSON.stringify({ error: "Email, senha e nome são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ error: "Email, senha e nome são obrigatórios" }, 400);
       }
 
-      // Create auth user
       const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
@@ -109,33 +148,40 @@ Deno.serve(async (req) => {
 
       if (createError) throw createError;
 
-      // Update profile with team_id if provided
       if (team_id) {
-        await adminClient
+        const { error: profileError } = await adminClient
           .from("profiles")
           .update({ team_id })
           .eq("user_id", newUser.user.id);
+
+        if (profileError) throw profileError;
       }
 
-      // Update role if not vendedor (default)
       if (role && role !== "vendedor") {
-        await adminClient
+        const { error: roleError } = await adminClient
           .from("user_roles")
           .update({ role })
           .eq("user_id", newUser.user.id);
+
+        if (roleError) throw roleError;
       }
 
-      return new Response(JSON.stringify({ success: true, user_id: newUser.user.id }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ success: true, user_id: newUser.user.id });
     }
 
     if (action === "update_role") {
       const { user_id, role } = body;
       if (!user_id || !role) {
-        return new Response(JSON.stringify({ error: "user_id e role são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return jsonResponse({ error: "user_id e role são obrigatórios" }, 400);
+      }
+
+      const managedUser = await getManagedAuthUser(adminClient, user_id);
+      if (!managedUser) {
+        await cleanupOrphanUserRecords(adminClient, user_id);
+        return jsonResponse({
+          error: "Este usuário não existe mais no sistema de login e foi removido da lista.",
+          code: "USER_NOT_FOUND",
+          orphan_cleaned: true,
         });
       }
 
@@ -146,17 +192,22 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ success: true });
     }
 
     if (action === "reset_password") {
       const { user_id, new_password } = body;
       if (!user_id || !new_password) {
-        return new Response(JSON.stringify({ error: "user_id e nova senha são obrigatórios" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return jsonResponse({ error: "user_id e nova senha são obrigatórios" }, 400);
+      }
+
+      const managedUser = await getManagedAuthUser(adminClient, user_id);
+      if (!managedUser) {
+        await cleanupOrphanUserRecords(adminClient, user_id);
+        return jsonResponse({
+          error: "Este usuário não existe mais no sistema de login e foi removido da lista.",
+          code: "USER_NOT_FOUND",
+          orphan_cleaned: true,
         });
       }
 
@@ -166,44 +217,33 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ success: true });
     }
 
     if (action === "delete_user") {
       const { user_id } = body;
       if (!user_id) {
-        return new Response(JSON.stringify({ error: "user_id é obrigatório" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ error: "user_id é obrigatório" }, 400);
       }
 
-      // Don't allow deleting yourself
       if (user_id === caller.id) {
-        return new Response(JSON.stringify({ error: "Você não pode deletar sua própria conta" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ error: "Você não pode deletar sua própria conta" }, 400);
       }
 
-      const { error } = await adminClient.auth.admin.deleteUser(user_id);
-      if (error) throw error;
+      const managedUser = await getManagedAuthUser(adminClient, user_id);
 
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (managedUser) {
+        const { error } = await adminClient.auth.admin.deleteUser(user_id);
+        if (error && !isMissingAuthUserError(error)) throw error;
+      }
+
+      await cleanupOrphanUserRecords(adminClient, user_id);
+
+      return jsonResponse({ success: true, orphan_cleaned: true });
     }
 
-    return new Response(JSON.stringify({ error: "Ação inválida" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Ação inválida" }, 400);
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: err.message }, 500);
   }
 });
