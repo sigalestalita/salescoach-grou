@@ -139,7 +139,30 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(parts.join(""));
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_BINARY_AI_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_PDF_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+async function extractTextFromPdf(fileData: Blob): Promise<string> {
+  const { extractText, getDocumentProxy } = await import("https://esm.sh/unpdf@1.4.0");
+  const arrayBuffer = await fileData.arrayBuffer();
+  const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
+
+  try {
+    const { text, totalPages } = await extractText(pdf, { mergePages: true });
+    const normalizedText = (Array.isArray(text) ? text.join("\n\n") : text)
+      .replace(/\u0000/g, " ")
+      .replace(/\s+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    console.log(`Extracted text from PDF (${totalPages} pages, ${normalizedText.length} chars)`);
+    return normalizedText;
+  } finally {
+    if (typeof pdf.destroy === "function") {
+      await pdf.destroy();
+    }
+  }
+}
 
 async function extractFromFile(
   fileData: Blob,
@@ -160,12 +183,35 @@ async function extractFromFile(
     return text;
   }
 
-  // Check file size before loading into memory
-  if (fileData.size > MAX_FILE_SIZE) {
+  // PDF → extract text directly to avoid large base64 payloads
+  if (lowerName.endsWith(".pdf")) {
+    if (fileData.size > MAX_PDF_FILE_SIZE) {
+      throw new Error(`PDF muito grande (${Math.round(fileData.size / 1024 / 1024)}MB). Limite: 50MB.`);
+    }
+
+    try {
+      const pdfText = await extractTextFromPdf(fileData);
+      if (pdfText.length >= 100) {
+        return pdfText;
+      }
+      console.warn("PDF extraction returned little/no text, trying AI fallback...");
+    } catch (error) {
+      console.warn("PDF text extraction failed, trying AI fallback:", error);
+    }
+
+    if (fileData.size > MAX_BINARY_AI_FILE_SIZE) {
+      throw new Error(
+        `Não foi possível extrair automaticamente este PDF de ${Math.round(fileData.size / 1024 / 1024)}MB. ` +
+        "Se ele for escaneado ou composto por imagens, divida em partes menores ou envie uma versão com texto pesquisável."
+      );
+    }
+  }
+
+  // DOC, DOCX, XLS, XLSX and PDF fallback → send to AI as base64
+  if (fileData.size > MAX_BINARY_AI_FILE_SIZE) {
     throw new Error(`Arquivo muito grande (${Math.round(fileData.size / 1024 / 1024)}MB). Limite: 10MB.`);
   }
 
-  // PDF, DOC, DOCX, XLS, XLSX → send to AI as base64
   const arrayBuffer = await fileData.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
   const base64 = uint8ToBase64(uint8Array);
