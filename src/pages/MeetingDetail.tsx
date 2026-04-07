@@ -585,8 +585,8 @@ const MeetingDetail = () => {
                         <TrendingUp className="h-3 w-3 text-success" /> Sugestões Cross-sell / Upsell
                       </h4>
                       <ul className="text-sm space-y-1">
-                        {(ragResults.cross_sell_suggestions as string[]).map((s: string, i: number) => (
-                          <li key={i} className="text-muted-foreground">• {s}</li>
+                        {(ragResults.cross_sell_suggestions as any[]).map((s: any, i: number) => (
+                          <li key={i} className="text-muted-foreground">• {typeof s === "string" ? s : s?.reason || s?.product || s?.suggestion || JSON.stringify(s)}</li>
                         ))}
                       </ul>
                     </div>
