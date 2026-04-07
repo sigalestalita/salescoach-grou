@@ -130,6 +130,17 @@ async function summarizeWithAI(content: string, lovableKey: string): Promise<str
   return result.choices?.[0]?.message?.content || "";
 }
 
+function uint8ToBase64(bytes: Uint8Array): string {
+  const CHUNK = 32768;
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + CHUNK)));
+  }
+  return btoa(parts.join(""));
+}
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 async function extractFromFile(
   fileData: Blob,
   fileName: string,
@@ -149,14 +160,15 @@ async function extractFromFile(
     return text;
   }
 
+  // Check file size before loading into memory
+  if (fileData.size > MAX_FILE_SIZE) {
+    throw new Error(`Arquivo muito grande (${Math.round(fileData.size / 1024 / 1024)}MB). Limite: 10MB.`);
+  }
+
   // PDF, DOC, DOCX, XLS, XLSX → send to AI as base64
   const arrayBuffer = await fileData.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
-  let binary = "";
-  for (let i = 0; i < uint8Array.length; i++) {
-    binary += String.fromCharCode(uint8Array[i]);
-  }
-  const base64 = btoa(binary);
+  const base64 = uint8ToBase64(uint8Array);
 
   let mimeType = "application/octet-stream";
   if (lowerName.endsWith(".pdf")) mimeType = "application/pdf";
