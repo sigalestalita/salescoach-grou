@@ -239,11 +239,11 @@ const Conhecimento = () => {
                           <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                           <Input
                             type="file"
-                            accept=".pdf,.doc,.docx,.txt"
+                            accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx"
                             onChange={(e) => setDocFile(e.target.files?.[0] || null)}
                             className="mx-auto"
                           />
-                          <p className="text-xs text-muted-foreground mt-2">PDF, DOC, DOCX, TXT</p>
+                          <p className="text-xs text-muted-foreground mt-2">PDF, DOC, DOCX, TXT, CSV, XLS, XLSX</p>
                         </div>
                       </TabsContent>
                       <TabsContent value="link">
