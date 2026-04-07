@@ -112,6 +112,39 @@ async function transcribeWithGroq(fileData: Blob, fileName: string): Promise<str
   return result.text;
 }
 
+// ── Knowledge base helpers ──
+
+async function fetchKnowledgeContext(supabase: any): Promise<string> {
+  const [docsRes, itemsRes] = await Promise.all([
+    supabase.from("knowledge_documents").select("title, category, extracted_content").not("extracted_content", "is", null),
+    supabase.from("knowledge_items").select("name, item_type, category, description, metadata"),
+  ]);
+
+  const parts: string[] = [];
+
+  if (docsRes.data && docsRes.data.length > 0) {
+    parts.push("=== DOCUMENTOS DA BASE DE CONHECIMENTO ===");
+    for (const doc of docsRes.data) {
+      parts.push(`\n--- ${doc.title} (${doc.category || "sem categoria"}) ---`);
+      // Limit each doc to ~2000 chars to avoid token overflow
+      const content = doc.extracted_content?.substring(0, 2000) || "";
+      parts.push(content);
+    }
+  }
+
+  if (itemsRes.data && itemsRes.data.length > 0) {
+    parts.push("\n=== ITENS DA BASE DE CONHECIMENTO ===");
+    for (const item of itemsRes.data) {
+      parts.push(`\n- ${item.name} (${item.item_type}/${item.category || "geral"}): ${item.description || ""}`);
+      if (item.metadata) {
+        parts.push(`  Metadata: ${JSON.stringify(item.metadata).substring(0, 500)}`);
+      }
+    }
+  }
+
+  return parts.join("\n");
+}
+
 // ── Main processing ──
 
 async function processeMeeting(meetingId: string, manualTranscript: string | null) {
@@ -133,10 +166,8 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
   try {
     if (manualTranscript && manualTranscript.trim().length > 0) {
-      // Manual transcript
       transcript = manualTranscript.trim();
     } else if (meeting.youtube_url) {
-      // External URL (Google Drive or direct link) → AssemblyAI (no download needed)
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
@@ -155,7 +186,6 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       transcript = result.text;
       speakers = result.speakers;
     } else if (meeting.file_url) {
-      // File in Supabase Storage → Groq/OpenAI (small files only)
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
       const { data: fileData, error: fileError } = await supabase.storage
@@ -184,7 +214,24 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
     await supabase.from("meetings").update({ status: "analisando" }).eq("id", meetingId);
 
-    // Analyze with AI
+    // Fetch knowledge base context
+    console.log("Fetching knowledge base context...");
+    const knowledgeContext = await fetchKnowledgeContext(supabase);
+    const hasKnowledge = knowledgeContext.trim().length > 0;
+    console.log(`Knowledge base: ${hasKnowledge ? "found content" : "empty"}`);
+
+    // Build analysis prompt with knowledge base
+    const knowledgeSection = hasKnowledge
+      ? `\nBASE DE CONHECIMENTO DA EMPRESA:
+${knowledgeContext}
+
+INSTRUÇÕES ADICIONAIS SOBRE A BASE DE CONHECIMENTO:
+- Use a base de conhecimento acima para validar se o vendedor mencionou corretamente os produtos, serviços e diferenciais da empresa.
+- Identifique oportunidades de cross-sell e upsell com base nos produtos/serviços disponíveis na base.
+- Avalie a aderência do discurso comercial aos materiais e argumentos da base de conhecimento.
+- No campo "rag_results" do JSON, inclua sua análise sobre o uso da base de conhecimento.\n`
+      : "";
+
     const analysisPrompt = `Você é um especialista em vendas B2B. Analise a transcrição abaixo de uma reunião comercial e retorne uma análise estruturada.
 
 TRANSCRIÇÃO:
@@ -193,7 +240,7 @@ ${transcript}
 CONTEXTO:
 - Vendedor está conversando com o lead: ${meeting.lead_name || "desconhecido"} da empresa ${meeting.lead_company || "desconhecida"}
 - Título da reunião: ${meeting.title}
-
+${knowledgeSection}
 RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
 {
   "overall_score": <número de 0 a 100>,
@@ -205,10 +252,11 @@ RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
   "conversation_metrics": { "total_questions": <número>, "open_questions": <número>, "objections_handled": <número> },
   "insights": { "positives": ["..."], "improvements": ["..."], "key_moments": ["..."] },
   "sales_coach": { "next_steps": ["..."], "suggestions": ["..."], "scripts": ["..."] },
-  "highlights": [{ "type": "<objecao|sinal_compra|momento_chave|dor|necessidade>", "text": "...", "speaker": "<vendedor|lead>" }]
+  "highlights": [{ "type": "<objecao|sinal_compra|momento_chave|dor|necessidade>", "text": "...", "speaker": "<vendedor|lead>" }],
+  "rag_results": { "knowledge_adherence_score": <0-100>, "products_mentioned": ["..."], "missed_opportunities": ["..."], "cross_sell_suggestions": ["..."], "discourse_alignment": "..." }
 }
 
-Analise com profundidade. Seja específico nas sugestões.`;
+Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use a base de conhecimento para enriquecer sua análise e preencher o campo rag_results com detalhes." : " Se não houver base de conhecimento disponível, preencha rag_results como null."}`;
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
