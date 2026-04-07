@@ -110,6 +110,7 @@ const Agendas = () => {
     lead_company: "",
     lead_email: "",
     meeting_type: "empresa",
+    seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
   const { user } = useAuth();
@@ -202,6 +203,7 @@ const Agendas = () => {
       lead_company: meeting.lead_company || "",
       lead_email: meeting.lead_email || "",
       meeting_type: meeting.meeting_type || "empresa",
+      seller_id: meeting.seller_id || "",
     });
     setEditDialogOpen(true);
   };
@@ -216,6 +218,7 @@ const Agendas = () => {
         lead_company: editForm.lead_company || null,
         lead_email: editForm.lead_email || null,
         meeting_type: editForm.meeting_type,
+        seller_id: editForm.seller_id || selectedMeeting.seller_id,
       }).eq("id", selectedMeeting.id);
       if (error) throw error;
       toast({ title: "Sucesso!", description: "Agenda atualizada." });
@@ -606,6 +609,24 @@ const Agendas = () => {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Executivo</Label>
+              <Select
+                value={editForm.seller_id}
+                onValueChange={(v) => setEditForm({ ...editForm, seller_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {profiles.map((p) => (
+                    <SelectItem key={p.user_id} value={p.user_id}>
+                      {p.full_name || p.user_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button type="submit" className="w-full">Salvar</Button>
           </form>
