@@ -21,7 +21,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-14 flex items-center justify-between border-b px-4">
+          <header className="h-14 flex items-center justify-between border-b border-border/50 px-4 bg-card/40 backdrop-blur-sm">
             <div className="flex items-center gap-2">
               <SidebarTrigger />
             </div>
@@ -36,7 +36,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </span>
             </div>
           </header>
-          <main className="flex-1 p-6 overflow-auto">{children}</main>
+          <main className="flex-1 p-6 overflow-auto bg-grid-subtle">{children}</main>
         </div>
       </div>
     </SidebarProvider>
