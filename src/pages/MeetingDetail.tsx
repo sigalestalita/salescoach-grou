@@ -135,6 +135,7 @@ const MeetingDetail = () => {
   const talkRatio = analysis?.talk_ratio as any;
   const metrics = analysis?.conversation_metrics as any;
   const ragResults = analysis?.rag_results as any;
+  const rawAnalysis = analysis?.raw_analysis as any;
 
   const tempColors: Record<string, string> = {
     frio: "bg-info/10 text-info border-info/20",
@@ -326,6 +327,9 @@ const MeetingDetail = () => {
                   {analysis.overall_score ?? "--"}
                 </div>
                 <p className="text-xs text-center text-muted-foreground mt-1">de 100</p>
+                {rawAnalysis?.overall_score_reason && (
+                  <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.overall_score_reason}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -343,6 +347,9 @@ const MeetingDetail = () => {
                     ? { frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente" }[meeting.temperature]
                     : "--"}
                 </div>
+                {rawAnalysis?.temperature_reason && (
+                  <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.temperature_reason}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -362,6 +369,9 @@ const MeetingDetail = () => {
                       <span>Lead: {talkRatio.lead}%</span>
                     </div>
                     <Progress value={talkRatio.seller} />
+                    {talkRatio.reason && (
+                      <p className="text-xs text-muted-foreground italic">{talkRatio.reason}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground">--</div>
