@@ -307,9 +307,10 @@ const MeetingDetail = () => {
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="md:col-span-1">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2">
                   <Target className="h-4 w-4" />
                   Score Geral
+                  <MetricTooltip text="Avaliação geral da qualidade da reunião comercial, de 0 a 100. Considera técnica de vendas, qualificação do lead, rapport, identificação de dores e condução do processo comercial." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -322,9 +323,10 @@ const MeetingDetail = () => {
 
             <Card className={meeting.temperature ? tempColors[meeting.temperature] : ""}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2">
                   <Thermometer className="h-4 w-4" />
                   Temperatura
+                  <MetricTooltip text="Indica a probabilidade de fechamento: Frio = lead não engajado ou sem interesse claro; Morno = interesse demonstrado mas sem urgência; Quente = lead com necessidade clara, urgência e autoridade para decidir." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -338,9 +340,10 @@ const MeetingDetail = () => {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2">
                   <MessageSquare className="h-4 w-4" />
                   Talk Ratio
+                  <MetricTooltip text="Proporção de tempo de fala entre vendedor e lead. O ideal é que o vendedor fale entre 30-50% do tempo, dando espaço para o lead expor suas necessidades. Vendedores que falam demais perdem oportunidades de entender o cliente." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -364,7 +367,10 @@ const MeetingDetail = () => {
             {/* BANT */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">BANT Score</CardTitle>
+               <CardTitle className="text-sm flex items-center gap-2">
+                  BANT Score
+                  <MetricTooltip text="Framework de qualificação de leads: Budget (orçamento disponível), Authority (poder de decisão do contato), Need (necessidade real do produto/serviço) e Timeline (prazo para decisão). Cada critério vale até 25 pontos." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {bant ? (
@@ -386,7 +392,10 @@ const MeetingDetail = () => {
             {/* MEDDIC */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">MEDDIC Score</CardTitle>
+               <CardTitle className="text-sm flex items-center gap-2">
+                  MEDDIC Score
+                  <MetricTooltip text="Framework avançado de vendas complexas: Metrics (métricas de sucesso), Economic Buyer (decisor econômico), Decision Criteria (critérios de decisão), Decision Process (processo decisório), Identify Pain (dores identificadas) e Champion (aliado interno). Cada item vale até 17 pontos." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {meddic ? (
@@ -408,7 +417,10 @@ const MeetingDetail = () => {
             {/* SPIN */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">SPIN Score</CardTitle>
+               <CardTitle className="text-sm flex items-center gap-2">
+                  SPIN Score
+                  <MetricTooltip text="Metodologia SPIN Selling: Situação (perguntas sobre contexto atual), Problema (identificação de dores), Implicação (consequências dos problemas) e Necessidade de Solução (como seu produto resolve). Cada dimensão vale até 25 pontos." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {spin ? (
