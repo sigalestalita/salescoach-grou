@@ -303,6 +303,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       conversation_metrics: analysisData.conversation_metrics,
       insights: analysisData.insights,
       sales_coach: analysisData.sales_coach,
+      rag_results: analysisData.rag_results || null,
       raw_analysis: analysisData,
       model_used: "google/gemini-2.5-flash",
     });
