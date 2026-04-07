@@ -557,8 +557,8 @@ const MeetingDetail = () => {
                         <ShoppingCart className="h-3 w-3 text-primary" /> Produtos Mencionados
                       </h4>
                       <div className="flex flex-wrap gap-1">
-                        {(ragResults.products_mentioned as string[]).map((p: string, i: number) => (
-                          <Badge key={i} variant="secondary" className="text-xs">{p}</Badge>
+                        {(ragResults.products_mentioned as any[]).map((p: any, i: number) => (
+                          <Badge key={i} variant="secondary" className="text-xs">{typeof p === "string" ? p : p?.name || p?.product || JSON.stringify(p)}</Badge>
                         ))}
                       </div>
                     </div>
@@ -571,8 +571,8 @@ const MeetingDetail = () => {
                         <AlertTriangle className="h-3 w-3 text-warning" /> Oportunidades Perdidas
                       </h4>
                       <ul className="text-sm space-y-1">
-                        {(ragResults.missed_opportunities as string[]).map((o: string, i: number) => (
-                          <li key={i} className="text-muted-foreground">• {o}</li>
+                        {(ragResults.missed_opportunities as any[]).map((o: any, i: number) => (
+                          <li key={i} className="text-muted-foreground">• {typeof o === "string" ? o : o?.reason || o?.description || JSON.stringify(o)}</li>
                         ))}
                       </ul>
                     </div>
