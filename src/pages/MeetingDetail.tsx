@@ -121,17 +121,59 @@ const MeetingDetail = () => {
         )}
       </div>
 
-      {/* Link info */}
-      {meeting.youtube_url && (
-        <Card>
-          <CardContent className="py-4 flex items-center gap-3">
-            <Link className="h-5 w-5 text-muted-foreground" />
-            <a href={meeting.youtube_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline truncate">
-              {meeting.youtube_url}
-            </a>
-          </CardContent>
-        </Card>
-      )}
+      {/* Video/Audio Player or Link */}
+      {meeting.youtube_url && (() => {
+        const getGoogleDriveEmbedUrl = (url: string): string | null => {
+          let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+          if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+          match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+          if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+          return null;
+        };
+        const embedUrl = getGoogleDriveEmbedUrl(meeting.youtube_url);
+
+        return embedUrl ? (
+          <Collapsible defaultOpen>
+            {({ open }: any) => null}
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <CardHeader className="flex flex-row items-center justify-between py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Video className="h-4 w-4" />
+                    Gravação da Reunião
+                  </CardTitle>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0 space-y-3">
+                  <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
+                    <iframe
+                      src={embedUrl}
+                      className="absolute inset-0 w-full h-full rounded-md border"
+                      allow="autoplay; encrypted-media"
+                      allowFullScreen
+                    />
+                  </div>
+                  <a href={meeting.youtube_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
+                    <ExternalLink className="h-3 w-3" />
+                    Abrir no Google Drive
+                  </a>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        ) : (
+          <Card>
+            <CardContent className="py-4 flex items-center gap-3">
+              <Link className="h-5 w-5 text-muted-foreground" />
+              <a href={meeting.youtube_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline truncate">
+                {meeting.youtube_url}
+              </a>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Optional manual transcript for link-based meetings */}
       {isLinkBased && meeting.status === "enviado" && (
