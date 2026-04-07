@@ -34,6 +34,31 @@ const MeetingDetail = () => {
     if (id) fetchData();
   }, [id]);
 
+  // Poll for updates when meeting is in a processing state
+  useEffect(() => {
+    const processingStatuses = ["baixando", "transcrevendo", "analisando"];
+    if (!meeting || !processingStatuses.includes(meeting.status)) return;
+
+    setProcessing(true);
+    const interval = setInterval(async () => {
+      const { data: updated } = await supabase
+        .from("meetings")
+        .select("status")
+        .eq("id", meeting.id)
+        .single();
+      if (updated?.status === "completo" || updated?.status === "erro") {
+        clearInterval(interval);
+        setProcessing(false);
+        fetchData();
+      } else if (updated?.status && updated.status !== meeting.status) {
+        // Update status to show progress
+        setMeeting((prev) => prev ? { ...prev, status: updated.status } : prev);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [meeting?.id, meeting?.status]);
+
   const fetchData = async () => {
     const [meetingRes, analysisRes, transcriptionRes, highlightsRes] = await Promise.all([
       supabase.from("meetings").select("*").eq("id", id!).single(),
