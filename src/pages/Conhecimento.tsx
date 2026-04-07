@@ -106,20 +106,36 @@ const Conhecimento = () => {
         docType = "texto";
       }
 
-      const { error } = await supabase.from("knowledge_documents").insert({
+      const { data: insertData, error } = await supabase.from("knowledge_documents").insert({
         title: newDoc.title,
         doc_type: docType,
         category: newDoc.category || null,
         file_url: fileUrl,
         extracted_content: extractedContent,
         uploaded_by: user.id,
-      });
+      }).select().single();
 
       if (error) throw error;
       toast({ title: "Documento adicionado!" });
       setDocDialogOpen(false);
       resetDocForm();
       fetchData();
+
+      // Trigger automatic text extraction for file uploads
+      if (insertData && (sourceTab === "file") && docFile) {
+        toast({ title: "Extraindo conteúdo...", description: "O texto do documento está sendo extraído automaticamente." });
+        supabase.functions.invoke("extract-document", {
+          body: { documentId: insertData.id },
+        }).then(({ error: extractError }) => {
+          if (extractError) {
+            console.error("Extraction error:", extractError);
+            toast({ title: "Aviso", description: "Não foi possível extrair o conteúdo automaticamente.", variant: "destructive" });
+          } else {
+            toast({ title: "Conteúdo extraído!", description: "O texto do documento foi extraído e salvo com sucesso." });
+            fetchData();
+          }
+        });
+      }
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
