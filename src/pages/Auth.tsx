@@ -50,7 +50,7 @@ const Auth = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-primary flex-col justify-center items-center p-12">
+      <div className="hidden lg:flex lg:w-1/2 bg-sidebar flex-col justify-center items-center p-12">
         <div className="max-w-md text-center space-y-8">
           <div className="flex justify-center mb-6">
             <img src={logo} alt="Sales Coach" className="h-16 object-contain" />
