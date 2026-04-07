@@ -187,15 +187,15 @@ const Auth = () => {
           <div className="mt-10 space-y-6">
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-3">
-              <FloatingMetric label="Score Médio" value="82%" delay={0.4} />
-              <FloatingMetric label="Reuniões" value="147" delay={0.6} />
-              <FloatingMetric label="Hot Rate" value="34%" delay={0.8} />
+              <FloatingMetric label="Desempenho" value="↑ 24%" delay={0.4} />
+              <FloatingMetric label="Insights" value="∞" delay={0.6} />
+              <FloatingMetric label="Evolução" value="A+" delay={0.8} />
             </div>
 
             {/* Line chart + Ring */}
             <div className="flex items-center gap-6 opacity-0" style={{ animation: "floatUp 0.5s ease-out 1s forwards" }}>
               <div className="flex-1">
-                <div className="text-xs text-sidebar-foreground/40 mb-2 text-left">Evolução de Performance</div>
+                <div className="text-xs text-sidebar-foreground/40 mb-2 text-left">Crescimento contínuo</div>
                 <AnimatedLineChart />
               </div>
               <div className="flex flex-col items-center gap-1">
@@ -206,7 +206,7 @@ const Auth = () => {
 
             {/* Bar chart */}
             <div className="opacity-0" style={{ animation: "floatUp 0.5s ease-out 0.6s forwards" }}>
-              <div className="text-xs text-sidebar-foreground/40 mb-2 text-left">Reuniões por dia</div>
+              <div className="text-xs text-sidebar-foreground/40 mb-2 text-left">Potencial da sua equipe</div>
               <AnimatedBarChart />
             </div>
           </div>
