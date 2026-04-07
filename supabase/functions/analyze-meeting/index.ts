@@ -244,17 +244,21 @@ ${knowledgeSection}
 RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
 {
   "overall_score": <número de 0 a 100>,
+  "overall_score_reason": "<explicação breve de 1-2 frases justificando o score geral>",
   "temperature": "<frio|morno|quente>",
-  "bant_score": { "budget": <0-25>, "authority": <0-25>, "need": <0-25>, "timeline": <0-25> },
-  "meddic_score": { "metrics": <0-17>, "economic_buyer": <0-17>, "decision_criteria": <0-17>, "decision_process": <0-17>, "identify_pain": <0-17>, "champion": <0-17> },
-  "spin_score": { "situacao": <0-25>, "problema": <0-25>, "implicacao": <0-25>, "necessidade": <0-25> },
-  "talk_ratio": { "seller": <0-100>, "lead": <0-100> },
+  "temperature_reason": "<explicação breve de 1-2 frases justificando a temperatura>",
+  "bant_score": { "budget": { "score": <0-25>, "reason": "<justificativa>" }, "authority": { "score": <0-25>, "reason": "<justificativa>" }, "need": { "score": <0-25>, "reason": "<justificativa>" }, "timeline": { "score": <0-25>, "reason": "<justificativa>" } },
+  "meddic_score": { "metrics": { "score": <0-17>, "reason": "<justificativa>" }, "economic_buyer": { "score": <0-17>, "reason": "<justificativa>" }, "decision_criteria": { "score": <0-17>, "reason": "<justificativa>" }, "decision_process": { "score": <0-17>, "reason": "<justificativa>" }, "identify_pain": { "score": <0-17>, "reason": "<justificativa>" }, "champion": { "score": <0-17>, "reason": "<justificativa>" } },
+  "spin_score": { "situacao": { "score": <0-25>, "reason": "<justificativa>" }, "problema": { "score": <0-25>, "reason": "<justificativa>" }, "implicacao": { "score": <0-25>, "reason": "<justificativa>" }, "necessidade": { "score": <0-25>, "reason": "<justificativa>" } },
+  "talk_ratio": { "seller": <0-100>, "lead": <0-100>, "reason": "<justificativa sobre a proporção de fala>" },
   "conversation_metrics": { "total_questions": <número>, "open_questions": <número>, "objections_handled": <número> },
   "insights": { "positives": ["..."], "improvements": ["..."], "key_moments": ["..."] },
   "sales_coach": { "next_steps": ["..."], "suggestions": ["..."], "scripts": ["..."] },
   "highlights": [{ "type": "<objecao|sinal_compra|momento_chave|dor|necessidade>", "text": "...", "speaker": "<vendedor|lead>" }],
   "rag_results": { "knowledge_adherence_score": <0-100>, "products_mentioned": ["..."], "missed_opportunities": ["..."], "cross_sell_suggestions": ["..."], "discourse_alignment": "..." }
 }
+
+IMPORTANTE: Para cada sub-métrica de BANT, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
 
 Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use a base de conhecimento para enriquecer sua análise e preencher o campo rag_results com detalhes." : " Se não houver base de conhecimento disponível, preencha rag_results como null."}`;
 

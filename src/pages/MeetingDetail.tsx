@@ -23,6 +23,14 @@ const MetricTooltip = ({ text }: { text: string }) => (
   </Tooltip>
 );
 
+// Helper to extract score and reason from both old (number) and new ({score, reason}) formats
+const getMetricValue = (val: any): { score: number; reason?: string } => {
+  if (val === null || val === undefined) return { score: 0 };
+  if (typeof val === "number") return { score: val };
+  if (typeof val === "object" && "score" in val) return { score: val.score, reason: val.reason };
+  return { score: Number(val) || 0 };
+};
+
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
 type Transcription = Tables<"transcriptions">;
@@ -127,6 +135,7 @@ const MeetingDetail = () => {
   const talkRatio = analysis?.talk_ratio as any;
   const metrics = analysis?.conversation_metrics as any;
   const ragResults = analysis?.rag_results as any;
+  const rawAnalysis = analysis?.raw_analysis as any;
 
   const tempColors: Record<string, string> = {
     frio: "bg-info/10 text-info border-info/20",
@@ -318,6 +327,9 @@ const MeetingDetail = () => {
                   {analysis.overall_score ?? "--"}
                 </div>
                 <p className="text-xs text-center text-muted-foreground mt-1">de 100</p>
+                {rawAnalysis?.overall_score_reason && (
+                  <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.overall_score_reason}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -335,6 +347,9 @@ const MeetingDetail = () => {
                     ? { frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente" }[meeting.temperature]
                     : "--"}
                 </div>
+                {rawAnalysis?.temperature_reason && (
+                  <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.temperature_reason}</p>
+                )}
               </CardContent>
             </Card>
 
@@ -354,6 +369,9 @@ const MeetingDetail = () => {
                       <span>Lead: {talkRatio.lead}%</span>
                     </div>
                     <Progress value={talkRatio.seller} />
+                    {talkRatio.reason && (
+                      <p className="text-xs text-muted-foreground italic">{talkRatio.reason}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground">--</div>
@@ -374,15 +392,19 @@ const MeetingDetail = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 {bant ? (
-                  ["budget", "authority", "need", "timeline"].map((key) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="capitalize">{key === "need" ? "Necessidade" : key === "budget" ? "Orçamento" : key === "authority" ? "Autoridade" : "Prazo"}</span>
-                        <span>{bant[key]}/25</span>
+                  ["budget", "authority", "need", "timeline"].map((key) => {
+                    const { score, reason } = getMetricValue(bant[key]);
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="capitalize">{key === "need" ? "Necessidade" : key === "budget" ? "Orçamento" : key === "authority" ? "Autoridade" : "Prazo"}</span>
+                          <span>{score}/25</span>
+                        </div>
+                        <Progress value={(score / 25) * 100} />
+                        {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
                       </div>
-                      <Progress value={(bant[key] / 25) * 100} />
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-muted-foreground">Sem dados</p>
                 )}
@@ -399,15 +421,19 @@ const MeetingDetail = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 {meddic ? (
-                  Object.entries(meddic as Record<string, number>).map(([key, val]) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="capitalize">{key.replace(/_/g, " ")}</span>
-                        <span>{val}/17</span>
+                  Object.entries(meddic as Record<string, any>).map(([key, val]) => {
+                    const { score, reason } = getMetricValue(val);
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="capitalize">{key.replace(/_/g, " ")}</span>
+                          <span>{score}/17</span>
+                        </div>
+                        <Progress value={(score / 17) * 100} />
+                        {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
                       </div>
-                      <Progress value={(val / 17) * 100} />
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-muted-foreground">Sem dados</p>
                 )}
@@ -424,15 +450,19 @@ const MeetingDetail = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 {spin ? (
-                  ["situacao", "problema", "implicacao", "necessidade"].map((key) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="capitalize">{key === "situacao" ? "Situação" : key === "implicacao" ? "Implicação" : key}</span>
-                        <span>{spin[key]}/25</span>
+                  ["situacao", "problema", "implicacao", "necessidade"].map((key) => {
+                    const { score, reason } = getMetricValue(spin[key]);
+                    return (
+                      <div key={key} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="capitalize">{key === "situacao" ? "Situação" : key === "implicacao" ? "Implicação" : key}</span>
+                          <span>{score}/25</span>
+                        </div>
+                        <Progress value={(score / 25) * 100} />
+                        {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
                       </div>
-                      <Progress value={(spin[key] / 25) * 100} />
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-muted-foreground">Sem dados</p>
                 )}

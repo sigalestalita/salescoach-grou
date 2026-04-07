@@ -410,8 +410,13 @@ function computeAvgFramework(
 
   return keys.map(({ key, label }) => {
     const values = validAnalyses
-      .map(a => (a[field] as any)?.[key])
-      .filter((v): v is number => typeof v === "number");
+      .map(a => {
+        const v = (a[field] as any)?.[key];
+        if (typeof v === "number") return v;
+        if (v && typeof v === "object" && "score" in v) return Number(v.score);
+        return null;
+      })
+      .filter((v): v is number => v !== null && !isNaN(v));
     const avg = values.length > 0 ? Math.round(values.reduce((s, v) => s + v, 0) / values.length) : 0;
     return { key, label, avg };
   });
