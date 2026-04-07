@@ -444,7 +444,10 @@ const MeetingDetail = () => {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">💡 Insights</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  💡 Insights
+                  <MetricTooltip text="Análise qualitativa da reunião: o que o vendedor fez bem (técnicas eficazes, rapport, perguntas certas) e o que pode melhorar (oportunidades perdidas, técnicas não utilizadas, pontos fracos da abordagem)." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {insights ? (
@@ -478,7 +481,10 @@ const MeetingDetail = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">🤖 Sales Coach</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  🤖 Sales Coach
+                  <MetricTooltip text="Recomendações personalizadas de um coach de vendas IA: próximos passos ideais para avançar a negociação, sugestões de abordagem e scripts prontos para usar em follow-ups." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {salesCoach ? (
@@ -518,6 +524,7 @@ const MeetingDetail = () => {
                 <CardTitle className="text-sm flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-primary" />
                   📚 Aderência à Base de Conhecimento
+                  <MetricTooltip text="Avalia quanto o vendedor utilizou os materiais da base de conhecimento na conversa. Mostra produtos mencionados, oportunidades perdidas de cross-sell/upsell e o alinhamento do discurso com os argumentos cadastrados." />
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -593,7 +600,10 @@ const MeetingDetail = () => {
           {highlights.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">🎯 Highlights</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  🎯 Highlights
+                  <MetricTooltip text="Momentos-chave identificados na reunião: objeções levantadas pelo lead, sinais de compra, dores e necessidades expressas, e momentos decisivos da conversa." />
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {highlights.map((h) => (
