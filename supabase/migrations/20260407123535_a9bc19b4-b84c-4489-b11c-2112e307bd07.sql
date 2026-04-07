@@ -1,0 +1,1 @@
+ALTER TABLE public.meetings DROP CONSTRAINT meetings_seller_id_fkey;
