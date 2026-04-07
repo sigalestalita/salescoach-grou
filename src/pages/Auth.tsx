@@ -188,8 +188,8 @@ const Auth = () => {
       </div>
 
       {/* Right panel - form */}
-      <div className="flex-1 flex items-center justify-center p-8">
-        <Card className="w-full max-w-md">
+      <div className="flex-1 flex items-center justify-center p-8 bg-grid-subtle">
+        <Card className="w-full max-w-md glass-card">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Entrar</CardTitle>
             <CardDescription>Acesse sua conta para analisar reuniões</CardDescription>
