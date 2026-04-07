@@ -1,34 +1,39 @@
 
 
-## Fix: AssemblyAI API parameter error
+# Video Player for Google Drive Links in Meeting Detail
 
-### Problem
-The edge function is failing with:
-```
-"speech_models" must be a non-empty list containing one or more of: "universal-3-pro", "universal-2"
-```
+## Problem
+Users paste Google Drive links for meeting recordings but can only click the link to open it externally. They want to watch/listen inline while reviewing the analysis side by side.
 
-AssemblyAI updated their API — it now requires a `speech_model` (or `speech_models`) parameter. The current code only sends `language_code: "pt"`, which is incompatible.
+## Approach
+Google Drive files can be embedded using an iframe with the preview URL format:
+`https://drive.google.com/file/d/{FILE_ID}/preview`
 
-### Fix
+The `extractGoogleDriveFileId` helper already exists in the edge function. We need a similar utility on the frontend.
 
-**File:** `supabase/functions/analyze-meeting/index.ts`
+## Plan
 
-Update the `transcribeWithAssemblyAI` function's request body:
+### 1. Add embedded video/audio player to MeetingDetail page
+- Create a helper function `getGoogleDriveEmbedUrl(url)` that extracts the file ID from Google Drive URLs and returns the `/preview` embed URL
+- Replace the current simple link card (lines 125-134) with a card that contains:
+  - An iframe embed of the Google Drive file (using `/preview` URL) when a valid Drive link is detected
+  - The iframe allows `autoplay`, `encrypted-media` permissions
+  - A fallback link for non-Drive URLs (keeps current behavior)
+- The embed card will be styled with 16:9 aspect ratio using the existing `AspectRatio` component
+- Add a toggle button to collapse/expand the player so it doesn't take too much space when not needed
 
-- Remove `language_code: "pt"` (automatic detection works well for Portuguese)
-- Add `speech_model: "universal-2"` (stable, supports Portuguese + speaker diarization)
-- Keep `speaker_labels: true`
+### 2. Technical details
+- **File**: `src/pages/MeetingDetail.tsx`
+- Drive URL patterns to support:
+  - `drive.google.com/file/d/{ID}/...`
+  - `drive.google.com/open?id={ID}`
+- Embed URL: `https://drive.google.com/file/d/{ID}/preview`
+- The iframe `allow` attribute will include `autoplay; encrypted-media`
+- `sandbox` attribute with appropriate permissions for security
+- Important: The Drive file must be shared ("Anyone with the link") for the embed to work -- this is already a requirement per the existing integration
 
-```typescript
-body: JSON.stringify({
-  audio_url: audioUrl,
-  speech_model: "universal-2",
-  speaker_labels: true,
-  language_detection: true,
-})
-```
-
-### After deploy
-The stuck meeting will need to be re-analyzed using the "Refazer análise" button since the current invocation already failed.
+### 3. UI layout
+- The player card appears where the current link card is, above the analysis
+- Collapsible by default (open) so users can minimize when not needed
+- Shows original link below the player for reference
 
