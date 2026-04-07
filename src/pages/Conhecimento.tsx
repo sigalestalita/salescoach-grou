@@ -124,9 +124,9 @@ const Conhecimento = () => {
       resetDocForm();
       fetchData();
 
-      // Trigger automatic text extraction for file uploads
-      if (insertData && (sourceTab === "file") && docFile) {
-        toast({ title: "Extraindo conteúdo...", description: "O texto do documento está sendo extraído automaticamente." });
+      // Trigger automatic content extraction for files and links
+      if (insertData && (sourceTab === "file" || sourceTab === "link")) {
+        toast({ title: "Extraindo conteúdo...", description: "O conteúdo está sendo extraído e analisado automaticamente." });
         supabase.functions.invoke("extract-document", {
           body: { documentId: insertData.id },
         }).then(({ error: extractError }) => {
@@ -134,7 +134,7 @@ const Conhecimento = () => {
             console.error("Extraction error:", extractError);
             toast({ title: "Aviso", description: "Não foi possível extrair o conteúdo automaticamente.", variant: "destructive" });
           } else {
-            toast({ title: "Conteúdo extraído!", description: "O texto do documento foi extraído e salvo com sucesso." });
+            toast({ title: "Conteúdo extraído!", description: "O conteúdo foi extraído e salvo com sucesso." });
             fetchData();
           }
         });
