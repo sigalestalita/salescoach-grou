@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare } from "lucide-react";
@@ -21,6 +22,11 @@ interface DashboardData {
   activeSellers: number;
 }
 
+interface SellerOption {
+  id: string;
+  name: string;
+}
+
 const TEMP_COLORS: Record<string, string> = {
   quente: "hsl(var(--destructive))",
   morno: "hsl(var(--warning, 38 92% 50%))",
@@ -30,32 +36,57 @@ const TEMP_COLORS: Record<string, string> = {
 const Dashboard = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sellers, setSellers] = useState<SellerOption[]>([]);
+  const [selectedSeller, setSelectedSeller] = useState<string>("all");
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [selectedSeller]);
 
   const fetchDashboardData = async () => {
     try {
+      setLoading(true);
       const [meetingsRes, analysisRes, profilesRes] = await Promise.all([
         supabase.from("meetings").select("id, status, temperature, overall_score, seller_id, meeting_date"),
         supabase.from("analysis_results").select("meeting_id, overall_score, temperature, bant_score, meddic_score, spin_score, talk_ratio, created_at"),
         supabase.from("profiles").select("user_id, full_name"),
       ]);
 
-      const meetings = meetingsRes.data || [];
+      const allMeetings = meetingsRes.data || [];
       const analyses = analysisRes.data || [];
       const profiles = profilesRes.data || [];
 
       const profileMap = new Map(profiles.map(p => [p.user_id, p.full_name || "Sem nome"]));
 
+      // Build seller options (only once or when data changes)
+      const uniqueSellers = new Map<string, string>();
+      for (const m of allMeetings) {
+        if (!uniqueSellers.has(m.seller_id)) {
+          uniqueSellers.set(m.seller_id, profileMap.get(m.seller_id) || m.seller_id.slice(0, 8));
+        }
+      }
+      const sellerOptions = Array.from(uniqueSellers.entries())
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setSellers(sellerOptions);
+
+      // Filter meetings by selected seller
+      const meetings = selectedSeller === "all"
+        ? allMeetings
+        : allMeetings.filter(m => m.seller_id === selectedSeller);
+
+      const meetingIds = new Set(meetings.map(m => m.id));
+
       const completed = meetings.filter(m => m.status === "completo");
       const totalMeetings = meetings.length;
       const completedMeetings = completed.length;
 
+      // Filter analyses to only matching meetings
+      const filteredAnalyses = analyses.filter(a => meetingIds.has(a.meeting_id));
+
       // Deduplicate analyses per meeting (take latest)
       const latestAnalysis = new Map<string, typeof analyses[0]>();
-      for (const a of analyses) {
+      for (const a of filteredAnalyses) {
         const existing = latestAnalysis.get(a.meeting_id);
         if (!existing || a.created_at > existing.created_at) {
           latestAnalysis.set(a.meeting_id, a);
@@ -81,7 +112,7 @@ const Dashboard = () => {
         { name: "Frio", value: tempCounts.frio, color: TEMP_COLORS.frio },
       ].filter(t => t.value > 0);
 
-      // Seller ranking
+      // Seller ranking (only when viewing all)
       const sellerData = new Map<string, { scores: number[]; count: number }>();
       for (const m of completed) {
         if (!sellerData.has(m.seller_id)) sellerData.set(m.seller_id, { scores: [], count: 0 });
@@ -97,7 +128,7 @@ const Dashboard = () => {
         }))
         .sort((a, b) => b.avgScore - a.avgScore);
 
-      const activeSellers = sellerData.size;
+      const activeSellers = selectedSeller === "all" ? sellerData.size : (sellerData.size > 0 ? 1 : 0);
 
       // Score evolution (by month)
       const monthlyScores = new Map<string, number[]>();
@@ -173,11 +204,31 @@ const Dashboard = () => {
     return <div className="text-center py-12 text-muted-foreground">Erro ao carregar dados</div>;
   }
 
+  const isFiltered = selectedSeller !== "all";
+  const selectedSellerName = sellers.find(s => s.id === selectedSeller)?.name;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Visão geral do desempenho das reuniões comerciais</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            {isFiltered
+              ? `Métricas individuais de ${selectedSellerName}`
+              : "Visão geral do desempenho das reuniões comerciais"}
+          </p>
+        </div>
+        <Select value={selectedSeller} onValueChange={setSelectedSeller}>
+          <SelectTrigger className="w-[220px]">
+            <SelectValue placeholder="Filtrar vendedor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os vendedores</SelectItem>
+            {sellers.map(s => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* KPI Cards */}
@@ -214,12 +265,12 @@ const Dashboard = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vendedores Ativos</CardTitle>
+            <CardTitle className="text-sm font-medium">{isFiltered ? "Agendas Analisadas" : "Vendedores Ativos"}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.activeSellers}</div>
-            <p className="text-xs text-muted-foreground">Com agendas analisadas</p>
+            <div className="text-2xl font-bold">{isFiltered ? data.completedMeetings : data.activeSellers}</div>
+            <p className="text-xs text-muted-foreground">{isFiltered ? "deste vendedor" : "Com agendas analisadas"}</p>
           </CardContent>
         </Card>
       </div>
@@ -233,7 +284,7 @@ const Dashboard = () => {
               <TrendingUp className="h-4 w-4" />
               Evolução de Scores
             </CardTitle>
-            <CardDescription>Score médio mensal do time</CardDescription>
+            <CardDescription>{isFiltered ? "Score mensal individual" : "Score médio mensal do time"}</CardDescription>
           </CardHeader>
           <CardContent className="h-64">
             {data.scoreEvolution.length > 0 ? (
@@ -292,9 +343,9 @@ const Dashboard = () => {
 
       {/* Framework Averages */}
       <div className="grid gap-4 md:grid-cols-3">
-        <FrameworkCard title="BANT Médio" items={data.avgBant} maxValue={25} />
-        <FrameworkCard title="MEDDIC Médio" items={data.avgMeddic} maxValue={17} />
-        <FrameworkCard title="SPIN Médio" items={data.avgSpin} maxValue={25} />
+        <FrameworkCard title={isFiltered ? "BANT Individual" : "BANT Médio"} items={data.avgBant} maxValue={25} />
+        <FrameworkCard title={isFiltered ? "MEDDIC Individual" : "MEDDIC Médio"} items={data.avgMeddic} maxValue={17} />
+        <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
       </div>
 
       {/* Talk Ratio + Ranking */}
@@ -304,9 +355,9 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <MessageSquare className="h-4 w-4" />
-              Talk Ratio Médio
+              Talk Ratio {isFiltered ? "Individual" : "Médio"}
             </CardTitle>
-            <CardDescription>Proporção média de fala vendedor vs lead</CardDescription>
+            <CardDescription>{isFiltered ? "Proporção de fala deste vendedor" : "Proporção média de fala vendedor vs lead"}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.avgTalkRatio ? (
@@ -320,9 +371,9 @@ const Dashboard = () => {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {data.avgTalkRatio.seller > 60
-                    ? "⚠️ Vendedores estão falando mais que o recomendado. O ideal é ouvir mais o lead."
+                    ? "⚠️ Vendedor está falando mais que o recomendado. O ideal é ouvir mais o lead."
                     : data.avgTalkRatio.seller < 40
-                    ? "✅ Boa escuta ativa! Os vendedores estão dando espaço para o lead."
+                    ? "✅ Boa escuta ativa! Dando espaço para o lead."
                     : "👍 Proporção equilibrada de fala."}
                 </p>
               </div>
@@ -337,16 +388,16 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <Users className="h-4 w-4" />
-              Ranking de Vendedores
+              {isFiltered ? "Resumo do Vendedor" : "Ranking de Vendedores"}
             </CardTitle>
-            <CardDescription>Performance por vendedor</CardDescription>
+            <CardDescription>{isFiltered ? "Performance individual" : "Performance por vendedor"}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.sellerRanking.length > 0 ? (
               <div className="space-y-3">
                 {data.sellerRanking.map((seller, idx) => (
                   <div key={idx} className="flex items-center gap-3">
-                    <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}°</span>
+                    {!isFiltered && <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}°</span>}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-sm font-medium truncate">{seller.name}</span>
@@ -378,7 +429,7 @@ function FrameworkCard({ title, items, maxValue }: { title: string; items: { key
     <Card>
       <CardHeader>
         <CardTitle className="text-sm">{title}</CardTitle>
-        <CardDescription>Média do time</CardDescription>
+        <CardDescription>Média das reuniões</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {items.length > 0 ? (
