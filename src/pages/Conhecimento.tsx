@@ -50,6 +50,7 @@ const Conhecimento = () => {
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [training, setTraining] = useState(false);
   const { user, role } = useAuth();
   const { toast } = useToast();
   const isAdmin = role === "admin";
