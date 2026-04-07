@@ -62,8 +62,8 @@ const MeetingDetail = () => {
   const fetchData = async () => {
     const [meetingRes, analysisRes, transcriptionRes, highlightsRes] = await Promise.all([
       supabase.from("meetings").select("*").eq("id", id!).single(),
-      supabase.from("analysis_results").select("*").eq("meeting_id", id!).single(),
-      supabase.from("transcriptions").select("*").eq("meeting_id", id!).single(),
+      supabase.from("analysis_results").select("*").eq("meeting_id", id!).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("transcriptions").select("*").eq("meeting_id", id!).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("highlights").select("*").eq("meeting_id", id!),
     ]);
     if (meetingRes.data) setMeeting(meetingRes.data);
