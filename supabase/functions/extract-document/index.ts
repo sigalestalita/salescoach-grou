@@ -23,18 +23,38 @@ function getGoogleSheetsCsvUrl(url: string): string {
 }
 
 async function extractFromUrl(url: string, lovableKey: string): Promise<string> {
-  // Google Sheets → export as CSV and read directly
+  // Google Sheets → try CSV export first, fallback to HTML scraping
   if (isGoogleSheetsUrl(url)) {
     console.log("Extracting Google Sheets as CSV...");
     const csvUrl = getGoogleSheetsCsvUrl(url);
     const res = await fetch(csvUrl, { redirect: "follow" });
-    if (!res.ok) {
-      throw new Error(`Failed to fetch Google Sheet: ${res.status}`);
+    if (res.ok) {
+      const csvText = await res.text();
+      return await summarizeWithAI(
+        `Este é o conteúdo de uma planilha Google Sheets exportada como CSV:\n\n${csvText.substring(0, 15000)}`,
+        lovableKey
+      );
     }
-    const csvText = await res.text();
-    // Use AI to summarize/structure the CSV data
+    // CSV export failed (sheet not public) → fall back to HTML scraping
+    console.log(`CSV export failed (${res.status}), falling back to HTML scraping...`);
+    const htmlRes = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; LovableBot/1.0)",
+        Accept: "text/html,application/xhtml+xml,*/*",
+      },
+      redirect: "follow",
+    });
+    if (!htmlRes.ok) {
+      throw new Error(`Failed to fetch Google Sheet page: ${htmlRes.status}`);
+    }
+    const html = await htmlRes.text();
+    const textContent = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
     return await summarizeWithAI(
-      `Este é o conteúdo de uma planilha Google Sheets exportada como CSV:\n\n${csvText.substring(0, 15000)}`,
+      `Este é o conteúdo extraído de uma planilha Google Sheets (HTML):\n\n${textContent.substring(0, 15000)}`,
       lovableKey
     );
   }
