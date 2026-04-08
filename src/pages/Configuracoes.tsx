@@ -25,7 +25,7 @@ interface ManagedUser {
 const roleLabels: Record<string, string> = {
   admin: "Admin",
   gestor: "Gestor",
-  vendedor: "Vendedor",
+  vendedor: "Executivo",
 };
 
 const Configuracoes = () => {
@@ -214,6 +214,7 @@ const Configuracoes = () => {
                     <Select value={newRole} onValueChange={setNewRole}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
+                      <SelectItem value="vendedor">Executivo</SelectItem>
                         <SelectItem value="gestor">Gestor</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                       </SelectContent>
@@ -351,9 +352,10 @@ const Configuracoes = () => {
               <Select value={selectedRole} onValueChange={setSelectedRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gestor">Gestor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
+                  <SelectItem value="vendedor">Executivo</SelectItem>
+                   <SelectItem value="gestor">Gestor</SelectItem>
+                   <SelectItem value="admin">Admin</SelectItem>
+                 </SelectContent>
               </Select>
             </div>
           </div>

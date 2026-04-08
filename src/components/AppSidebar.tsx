@@ -25,10 +25,10 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const mainItems = [
-  { title: "Dashboard", url: "/", icon: BarChart3 },
-  { title: "Agendas", url: "/agendas", icon: Calendar },
-  { title: "Base de Conhecimento", url: "/conhecimento", icon: BookOpen },
+const allMainItems = [
+  { title: "Dashboard", url: "/", icon: BarChart3, roles: ["admin", "gestor"] },
+  { title: "Agendas", url: "/agendas", icon: Calendar, roles: ["admin", "gestor", "vendedor"] },
+  { title: "Base de Conhecimento", url: "/conhecimento", icon: BookOpen, roles: ["admin", "gestor"] },
 ];
 
 const managementItems = [
@@ -48,8 +48,10 @@ export function AppSidebar() {
   const roleLabels: Record<string, string> = {
     admin: "Administrador",
     gestor: "Gestor",
-    vendedor: "Vendedor",
+    vendedor: "Executivo",
   };
+
+  const mainItems = allMainItems.filter(item => !role || item.roles.includes(role));
 
   return (
     <Sidebar collapsible="icon">
