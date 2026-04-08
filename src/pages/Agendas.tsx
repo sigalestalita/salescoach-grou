@@ -113,7 +113,8 @@ const Agendas = () => {
     seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isVendedor = role === "vendedor";
   const { toast } = useToast();
   const navigate = useNavigate();
 
