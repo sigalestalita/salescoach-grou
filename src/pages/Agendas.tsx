@@ -430,6 +430,7 @@ const Agendas = () => {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Search & Filters */}
