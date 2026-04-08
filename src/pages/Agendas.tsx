@@ -523,6 +523,7 @@ const Agendas = () => {
                     <Badge className={statusColors[meeting.status]}>
                       {statusLabels[meeting.status]}
                     </Badge>
+                    {!isVendedor && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -550,6 +551,7 @@ const Agendas = () => {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </CardContent>
