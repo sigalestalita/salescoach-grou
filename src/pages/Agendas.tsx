@@ -113,7 +113,8 @@ const Agendas = () => {
     seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const isVendedor = role === "vendedor";
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -287,8 +288,9 @@ const Agendas = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Agendas</h1>
-          <p className="text-muted-foreground">Gerencie e analise suas reuniões comerciais</p>
+          <p className="text-muted-foreground">{isVendedor ? "Visualize suas reuniões e análises" : "Gerencie e analise suas reuniões comerciais"}</p>
         </div>
+        {!isVendedor && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -428,6 +430,7 @@ const Agendas = () => {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Search & Filters */}
@@ -451,6 +454,7 @@ const Agendas = () => {
             <SelectItem value="consultoria">Consultoria</SelectItem>
           </SelectContent>
         </Select>
+        {!isVendedor && (
         <Select value={filterSeller} onValueChange={setFilterSeller}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Executivo" />
@@ -464,6 +468,7 @@ const Agendas = () => {
             ))}
           </SelectContent>
         </Select>
+        )}
       </div>
 
       {/* Meeting list */}
@@ -518,6 +523,7 @@ const Agendas = () => {
                     <Badge className={statusColors[meeting.status]}>
                       {statusLabels[meeting.status]}
                     </Badge>
+                    {!isVendedor && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -545,6 +551,7 @@ const Agendas = () => {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </CardContent>

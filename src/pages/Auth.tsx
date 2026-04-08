@@ -116,17 +116,17 @@ const Auth = () => {
         .eq("user_id", data.user.id)
         .single();
 
-      if (!roleData || roleData.role === "vendedor") {
+      if (!roleData) {
         await supabase.auth.signOut();
         toast({
           title: "Acesso negado",
-          description: "Apenas gestores e administradores têm acesso à plataforma.",
+          description: "Usuário sem papel definido. Contate o administrador.",
           variant: "destructive",
         });
         return;
       }
 
-      navigate("/");
+      navigate(roleData.role === "vendedor" ? "/agendas" : "/");
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
