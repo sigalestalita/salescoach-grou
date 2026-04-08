@@ -126,7 +126,7 @@ const Auth = () => {
         return;
       }
 
-      navigate("/");
+      navigate(roleData.role === "vendedor" ? "/agendas" : "/");
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {

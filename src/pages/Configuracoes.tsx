@@ -40,7 +40,7 @@ const Configuracoes = () => {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState("gestor");
+  const [newRole, setNewRole] = useState("vendedor");
   const [newTeamId, setNewTeamId] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -106,7 +106,7 @@ const Configuracoes = () => {
       setNewEmail("");
       setNewPassword("");
       setNewName("");
-      setNewRole("gestor");
+      setNewRole("vendedor");
       setNewTeamId("");
       fetchUsers();
     } catch (err: any) {
