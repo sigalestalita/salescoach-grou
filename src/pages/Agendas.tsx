@@ -288,8 +288,9 @@ const Agendas = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Agendas</h1>
-          <p className="text-muted-foreground">Gerencie e analise suas reuniões comerciais</p>
+          <p className="text-muted-foreground">{isVendedor ? "Visualize suas reuniões e análises" : "Gerencie e analise suas reuniões comerciais"}</p>
         </div>
+        {!isVendedor && (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
