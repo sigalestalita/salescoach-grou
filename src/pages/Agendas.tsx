@@ -454,6 +454,7 @@ const Agendas = () => {
             <SelectItem value="consultoria">Consultoria</SelectItem>
           </SelectContent>
         </Select>
+        {!isVendedor && (
         <Select value={filterSeller} onValueChange={setFilterSeller}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Executivo" />
@@ -467,6 +468,7 @@ const Agendas = () => {
             ))}
           </SelectContent>
         </Select>
+        )}
       </div>
 
       {/* Meeting list */}
