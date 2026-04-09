@@ -71,7 +71,7 @@ serve(async (req) => {
     let offerInstruction = "";
     if (offerType === "pda") {
       offerInstruction = `FOCO EXCLUSIVO: Licença PDA (Personal Development Analysis). 
-Todos os argumentos devem girar em torno do produto PDA: assessment comportamental, licenciamento, ROI de mapeamento de perfis, assertividade em contratação e desenvolvimento.
+Todos os argumentos devem girar em torno do produto PDA: assessment comportamental, licença PDA, ROI de mapeamento de perfis, assertividade em contratação e desenvolvimento.
 NÃO mencione serviços de consultoria ou treinamento — foque apenas no produto/licença.`;
     } else if (offerType === "servicos") {
       offerInstruction = `FOCO EXCLUSIVO: Serviços e Treinamentos Grou.
@@ -80,7 +80,7 @@ NÃO foque no produto PDA como licença — foque nos serviços que geram valor 
 ${servicesContext ? `\nSERVIÇOS SELECIONADOS PELO EXECUTIVO (foque nestes):\n${servicesContext}` : ''}`;
     } else {
       offerInstruction = `FOCO: Licença PDA + Serviços Grou combinados.
-Gere argumentos que cubram tanto o produto PDA (assessment, licenciamento) quanto os serviços complementares (consultorias, treinamentos, diagnósticos).
+Gere argumentos que cubram tanto o produto PDA (assessment, licença PDA) quanto os serviços complementares (consultorias, treinamentos, diagnósticos).
 ${servicesContext ? `\nSERVIÇOS SELECIONADOS:\n${servicesContext}` : ''}`;
     }
 
