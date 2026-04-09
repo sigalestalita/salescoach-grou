@@ -1,39 +1,28 @@
 
 
-# Video Player for Google Drive Links in Meeting Detail
+## Plano: Filtro de Tipo de Oferta (Licença PDA vs Serviços) + Atualização do Modelo de IA
 
-## Problem
-Users paste Google Drive links for meeting recordings but can only click the link to open it externally. They want to watch/listen inline while reviewing the analysis side by side.
+### Problema
+Atualmente o gerador não distingue entre venda de **Licença PDA** (produto) e **Serviços Grou** (consultorias, treinamentos, diagnósticos). Isso gera argumentos genéricos que misturam os dois. Além disso, o modelo de IA atual é o **Gemini 2.5 Flash** — vamos atualizar para o **Gemini 3 Flash Preview**, mais recente e com melhor custo-benefício.
 
-## Approach
-Google Drive files can be embedded using an iframe with the preview URL format:
-`https://drive.google.com/file/d/{FILE_ID}/preview`
+### Alterações
 
-The `extractGoogleDriveFileId` helper already exists in the edge function. We need a similar utility on the frontend.
+**1. Frontend (`src/pages/ArgumentGenerator.tsx`)**
+- Adicionar novo filtro **"Tipo de Oferta"** com 3 opções:
+  - **Licença PDA** (produto)
+  - **Serviços Grou** (consultorias, treinamentos, diagnósticos — lista puxada da base de conhecimento)
+  - **Ambos**
+- Quando "Serviços Grou" for selecionado, buscar da tabela `knowledge_items` os itens com `item_type` = serviço/treinamento para exibir como sub-opções selecionáveis
+- Enviar o campo `offerType` e `selectedServices` no body da requisição
 
-## Plan
+**2. Edge Function (`supabase/functions/generate-arguments/index.ts`)**
+- Receber os novos campos `offerType` e `selectedServices`
+- Ajustar o prompt para direcionar argumentos especificamente para produto PDA, serviços selecionados, ou ambos
+- Quando for serviços, incluir descrições dos serviços selecionados da base de conhecimento no contexto
+- Atualizar modelo de `google/gemini-2.5-flash` para `google/gemini-3-flash-preview`
 
-### 1. Add embedded video/audio player to MeetingDetail page
-- Create a helper function `getGoogleDriveEmbedUrl(url)` that extracts the file ID from Google Drive URLs and returns the `/preview` embed URL
-- Replace the current simple link card (lines 125-134) with a card that contains:
-  - An iframe embed of the Google Drive file (using `/preview` URL) when a valid Drive link is detected
-  - The iframe allows `autoplay`, `encrypted-media` permissions
-  - A fallback link for non-Drive URLs (keeps current behavior)
-- The embed card will be styled with 16:9 aspect ratio using the existing `AspectRatio` component
-- Add a toggle button to collapse/expand the player so it doesn't take too much space when not needed
-
-### 2. Technical details
-- **File**: `src/pages/MeetingDetail.tsx`
-- Drive URL patterns to support:
-  - `drive.google.com/file/d/{ID}/...`
-  - `drive.google.com/open?id={ID}`
-- Embed URL: `https://drive.google.com/file/d/{ID}/preview`
-- The iframe `allow` attribute will include `autoplay; encrypted-media`
-- `sandbox` attribute with appropriate permissions for security
-- Important: The Drive file must be shared ("Anyone with the link") for the embed to work -- this is already a requirement per the existing integration
-
-### 3. UI layout
-- The player card appears where the current link card is, above the analysis
-- Collapsible by default (open) so users can minimize when not needed
-- Shows original link below the player for reference
+### Detalhes Técnicos
+- Query na `knowledge_items` filtrando por categorias de serviço/treinamento para popular o seletor dinâmico
+- O prompt do sistema será contextualizado: se for só PDA, foca em licenciamento e ROI de assessment; se for serviços, foca nos benefícios específicos dos serviços selecionados
+- Modelo atualizado para `google/gemini-3-flash-preview` (melhor qualidade de resposta)
 
