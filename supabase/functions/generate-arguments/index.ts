@@ -194,7 +194,7 @@ Gere o output EXATAMENTE neste formato JSON:
 
     // Log usage
     await supabase.from("api_usage_logs").insert({
-      user_id: user.id,
+      user_id: userId,
       operation_type: "generate_arguments",
       model_used: "google/gemini-3-flash-preview",
       input_tokens: aiData.usage?.prompt_tokens || 0,
