@@ -273,6 +273,71 @@ export default function ArgumentGenerator() {
 
           <Card className="glass-card">
             <CardHeader className="pb-3">
+              <CardTitle className="text-base">Tipo de Oferta</CardTitle>
+              <CardDescription className="text-xs">Direcione o argumento para o tipo de venda</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "pda" as const, label: "Licença PDA", icon: Package },
+                  { value: "servicos" as const, label: "Serviços Grou", icon: Briefcase },
+                  { value: "ambos" as const, label: "Ambos", icon: Zap },
+                ]).map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setOfferType(opt.value)}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-all ${
+                      offerType === opt.value
+                        ? "bg-primary/20 border-primary/50 text-primary"
+                        : "border-border/50 text-muted-foreground hover:bg-accent/30"
+                    }`}
+                  >
+                    <opt.icon className="h-4 w-4" />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {offerType !== "pda" && services.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border/30">
+                  <Label className="text-xs text-muted-foreground">Serviços/Treinamentos disponíveis</Label>
+                  <div className="max-h-[150px] overflow-y-auto space-y-1.5">
+                    {services.map(svc => (
+                      <label
+                        key={svc.id}
+                        className={`flex items-start gap-2 p-2 rounded cursor-pointer transition-all text-xs ${
+                          selectedServices.includes(svc.name)
+                            ? "bg-primary/10 border border-primary/30"
+                            : "hover:bg-accent/20"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={selectedServices.includes(svc.name)}
+                          onCheckedChange={() => toggleService(svc.name)}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <span className="font-medium text-foreground">{svc.name}</span>
+                          {svc.description && (
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{svc.description}</p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {offerType !== "pda" && services.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">
+                  Nenhum serviço cadastrado na base de conhecimento. Cadastre serviços/treinamentos para ativar este filtro.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader className="pb-3">
               <CardTitle className="text-base">Dores do Cliente</CardTitle>
               <CardDescription className="text-xs">Selecione as dores identificadas</CardDescription>
             </CardHeader>
