@@ -12,6 +12,7 @@ import MeetingDetail from "./pages/MeetingDetail";
 import Conhecimento from "./pages/Conhecimento";
 import Equipe from "./pages/Equipe";
 import Configuracoes from "./pages/Configuracoes";
+import ArgumentGenerator from "./pages/ArgumentGenerator";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ const App = () => (
             <Route path="/conhecimento" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Conhecimento /></ProtectedRoute>} />
             <Route path="/equipe" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Equipe /></ProtectedRoute>} />
             <Route path="/configuracoes" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Configuracoes /></ProtectedRoute>} />
+            <Route path="/argumentos" element={<ProtectedRoute><ArgumentGenerator /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

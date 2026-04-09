@@ -5,6 +5,7 @@ import {
   Users,
   Settings,
   LogOut,
+  Zap,
 } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { NavLink } from "@/components/NavLink";
@@ -29,6 +30,7 @@ const allMainItems = [
   { title: "Dashboard", url: "/", icon: BarChart3, roles: ["admin", "gestor"] },
   { title: "Agendas", url: "/agendas", icon: Calendar, roles: ["admin", "gestor", "vendedor"] },
   { title: "Base de Conhecimento", url: "/conhecimento", icon: BookOpen, roles: ["admin", "gestor"] },
+  { title: "Gerador de Argumentos", url: "/argumentos", icon: Zap, roles: ["admin", "gestor", "vendedor"] },
 ];
 
 const managementItems = [
