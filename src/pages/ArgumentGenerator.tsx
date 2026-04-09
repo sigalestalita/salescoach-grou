@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, Zap, Users, Clock, BarChart3, DollarSign, Brain, TrendingUp,
   MessageSquare, Mail, Video, FileText, ShieldCheck, Copy, Check,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Package, Briefcase,
 } from "lucide-react";
 
 const PAIN_CATEGORIES = [
@@ -133,8 +134,32 @@ export default function ArgumentGenerator() {
   const [estimatedTicket, setEstimatedTicket] = useState("");
   const [audienceType, setAudienceType] = useState("rh");
 
+  // Offer type
+  const [offerType, setOfferType] = useState<"pda" | "servicos" | "ambos">("ambos");
+  const [services, setServices] = useState<Array<{ id: string; name: string; description: string | null }>>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+
   // Pain selection
   const [selectedPains, setSelectedPains] = useState<string[]>([]);
+
+  // Fetch services from knowledge base
+  useEffect(() => {
+    const fetchServices = async () => {
+      const { data } = await supabase
+        .from("knowledge_items")
+        .select("id, name, description, item_type, category")
+        .or("item_type.ilike.%servi%,item_type.ilike.%treina%,item_type.ilike.%consultoria%,item_type.ilike.%diagnos%,category.ilike.%servi%,category.ilike.%treina%")
+        .order("name");
+      if (data && data.length > 0) {
+        setServices(data.map(d => ({ id: d.id, name: d.name, description: d.description })));
+      }
+    };
+    fetchServices();
+  }, []);
+
+  const toggleService = (name: string) => {
+    setSelectedServices(prev => prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name]);
+  };
   const [expandedCategories, setExpandedCategories] = useState<string[]>(PAIN_CATEGORIES.map(c => c.id));
 
   const togglePain = (pain: string) => {
