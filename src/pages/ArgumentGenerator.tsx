@@ -189,6 +189,8 @@ export default function ArgumentGenerator() {
           context: { segment, companySize, hrMaturity, saleType, estimatedTicket },
           pains: selectedPains,
           audienceType,
+          offerType,
+          selectedServices: offerType !== "pda" ? selectedServices : [],
         },
       });
       if (error) throw error;
