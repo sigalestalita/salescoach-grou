@@ -22,7 +22,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
-    const { context, pains, audienceType } = await req.json();
+    const { context, pains, audienceType, offerType, selectedServices } = await req.json();
 
     // Fetch knowledge base for context
     const [docsRes, itemsRes] = await Promise.all([
@@ -34,6 +34,16 @@ serve(async (req) => {
       ...(docsRes.data || []).map((d: any) => `[${d.category || 'doc'}] ${d.title}: ${(d.extracted_content || '').slice(0, 500)}`),
       ...(itemsRes.data || []).map((i: any) => `[${i.item_type}/${i.category || ''}] ${i.name}: ${i.description || ''}`),
     ].join("\n");
+
+    // Build services context when relevant
+    let servicesContext = "";
+    if (offerType !== "pda" && selectedServices && selectedServices.length > 0) {
+      const allItems = itemsRes.data || [];
+      const matchedServices = allItems.filter((i: any) => selectedServices.includes(i.name));
+      servicesContext = matchedServices
+        .map((s: any) => `- ${s.name}: ${s.description || 'sem descrição'}${s.metadata ? ` | Detalhes: ${JSON.stringify(s.metadata)}` : ''}`)
+        .join("\n");
+    }
 
     // Fetch recent high-scoring analyses for learning
     const { data: analyses } = await supabase
@@ -52,9 +62,28 @@ serve(async (req) => {
     const painsList = (pains || []).join(", ");
     const audienceLabel = audienceType === "c-level" ? "decisores C-Level" : audienceType === "rh" ? "profissionais de RH" : "gestores operacionais";
 
+    // Build offer-specific instructions
+    let offerInstruction = "";
+    if (offerType === "pda") {
+      offerInstruction = `FOCO EXCLUSIVO: Licença PDA (Personal Development Analysis). 
+Todos os argumentos devem girar em torno do produto PDA: assessment comportamental, licenciamento, ROI de mapeamento de perfis, assertividade em contratação e desenvolvimento.
+NÃO mencione serviços de consultoria ou treinamento — foque apenas no produto/licença.`;
+    } else if (offerType === "servicos") {
+      offerInstruction = `FOCO EXCLUSIVO: Serviços e Treinamentos Grou.
+Todos os argumentos devem girar em torno dos serviços oferecidos pela Grou (consultorias, treinamentos, diagnósticos comportamentais, workshops).
+NÃO foque no produto PDA como licença — foque nos serviços que geram valor com a metodologia.
+${servicesContext ? `\nSERVIÇOS SELECIONADOS PELO EXECUTIVO (foque nestes):\n${servicesContext}` : ''}`;
+    } else {
+      offerInstruction = `FOCO: Licença PDA + Serviços Grou combinados.
+Gere argumentos que cubram tanto o produto PDA (assessment, licenciamento) quanto os serviços complementares (consultorias, treinamentos, diagnósticos).
+${servicesContext ? `\nSERVIÇOS SELECIONADOS:\n${servicesContext}` : ''}`;
+    }
+
     const systemPrompt = `Você é um especialista em vendas consultivas B2B da Grou, empresa líder em inteligência comportamental com a ferramenta PDA (Personal Development Analysis). Você domina frameworks BANT, SPIN e MEDDIC.
 
-Sua missão é gerar argumentos comerciais personalizados, ROI-driven, que ajudem executivos de vendas a fechar negócios de licenças PDA e serviços Grou (consultorias, treinamentos, diagnósticos comportamentais).
+Sua missão é gerar argumentos comerciais personalizados, ROI-driven, que ajudem executivos de vendas a fechar negócios.
+
+${offerInstruction}
 
 REGRAS CRÍTICAS:
 - NUNCA gere respostas genéricas. Cruze dor + contexto + solução.
@@ -78,6 +107,7 @@ CONTEXTO DO LEAD:
 - Maturidade de RH: ${context.hrMaturity || 'não informado'}
 - Tipo de venda: ${context.saleType || 'não informado'}
 - Ticket estimado: ${context.estimatedTicket || 'não informado'}
+- Tipo de oferta: ${offerType === 'pda' ? 'Licença PDA (produto)' : offerType === 'servicos' ? 'Serviços Grou' : 'Licença PDA + Serviços'}
 
 DORES IDENTIFICADAS:
 ${painsList}
@@ -124,7 +154,7 @@ Gere o output EXATAMENTE neste formato JSON:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -164,7 +194,7 @@ Gere o output EXATAMENTE neste formato JSON:
     await supabase.from("api_usage_logs").insert({
       user_id: user.id,
       operation_type: "generate_arguments",
-      model_used: "google/gemini-2.5-flash",
+      model_used: "google/gemini-3-flash-preview",
       input_tokens: aiData.usage?.prompt_tokens || 0,
       output_tokens: aiData.usage?.completion_tokens || 0,
       estimated_cost: ((aiData.usage?.prompt_tokens || 0) * 0.000001 + (aiData.usage?.completion_tokens || 0) * 0.000004),

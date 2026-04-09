@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Loader2, Zap, Users, Clock, BarChart3, DollarSign, Brain, TrendingUp,
   MessageSquare, Mail, Video, FileText, ShieldCheck, Copy, Check,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Package, Briefcase,
 } from "lucide-react";
 
 const PAIN_CATEGORIES = [
@@ -133,8 +134,32 @@ export default function ArgumentGenerator() {
   const [estimatedTicket, setEstimatedTicket] = useState("");
   const [audienceType, setAudienceType] = useState("rh");
 
+  // Offer type
+  const [offerType, setOfferType] = useState<"pda" | "servicos" | "ambos">("ambos");
+  const [services, setServices] = useState<Array<{ id: string; name: string; description: string | null }>>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+
   // Pain selection
   const [selectedPains, setSelectedPains] = useState<string[]>([]);
+
+  // Fetch services from knowledge base
+  useEffect(() => {
+    const fetchServices = async () => {
+      const { data } = await supabase
+        .from("knowledge_items")
+        .select("id, name, description, item_type, category")
+        .or("item_type.ilike.%servi%,item_type.ilike.%treina%,item_type.ilike.%consultoria%,item_type.ilike.%diagnos%,category.ilike.%servi%,category.ilike.%treina%")
+        .order("name");
+      if (data && data.length > 0) {
+        setServices(data.map(d => ({ id: d.id, name: d.name, description: d.description })));
+      }
+    };
+    fetchServices();
+  }, []);
+
+  const toggleService = (name: string) => {
+    setSelectedServices(prev => prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name]);
+  };
   const [expandedCategories, setExpandedCategories] = useState<string[]>(PAIN_CATEGORIES.map(c => c.id));
 
   const togglePain = (pain: string) => {
@@ -164,6 +189,8 @@ export default function ArgumentGenerator() {
           context: { segment, companySize, hrMaturity, saleType, estimatedTicket },
           pains: selectedPains,
           audienceType,
+          offerType,
+          selectedServices: offerType !== "pda" ? selectedServices : [],
         },
       });
       if (error) throw error;
@@ -241,6 +268,71 @@ export default function ArgumentGenerator() {
                   </SelectContent>
                 </Select>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Tipo de Oferta</CardTitle>
+              <CardDescription className="text-xs">Direcione o argumento para o tipo de venda</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "pda" as const, label: "Licença PDA", icon: Package },
+                  { value: "servicos" as const, label: "Serviços Grou", icon: Briefcase },
+                  { value: "ambos" as const, label: "Ambos", icon: Zap },
+                ]).map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setOfferType(opt.value)}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-all ${
+                      offerType === opt.value
+                        ? "bg-primary/20 border-primary/50 text-primary"
+                        : "border-border/50 text-muted-foreground hover:bg-accent/30"
+                    }`}
+                  >
+                    <opt.icon className="h-4 w-4" />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {offerType !== "pda" && services.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border/30">
+                  <Label className="text-xs text-muted-foreground">Serviços/Treinamentos disponíveis</Label>
+                  <div className="max-h-[150px] overflow-y-auto space-y-1.5">
+                    {services.map(svc => (
+                      <label
+                        key={svc.id}
+                        className={`flex items-start gap-2 p-2 rounded cursor-pointer transition-all text-xs ${
+                          selectedServices.includes(svc.name)
+                            ? "bg-primary/10 border border-primary/30"
+                            : "hover:bg-accent/20"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={selectedServices.includes(svc.name)}
+                          onCheckedChange={() => toggleService(svc.name)}
+                          className="mt-0.5"
+                        />
+                        <div>
+                          <span className="font-medium text-foreground">{svc.name}</span>
+                          {svc.description && (
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{svc.description}</p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {offerType !== "pda" && services.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">
+                  Nenhum serviço cadastrado na base de conhecimento. Cadastre serviços/treinamentos para ativar este filtro.
+                </p>
+              )}
             </CardContent>
           </Card>
 
