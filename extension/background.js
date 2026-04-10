@@ -71,6 +71,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     offscreenCreated = false;
     return false;
   }
+
+  // Storage proxy for offscreen document (Arc browser compatibility)
+  if (msg.action === 'storageSet') {
+    chrome.storage.local.set(msg.data);
+    return false;
+  }
+
+  if (msg.action === 'storageGet') {
+    chrome.storage.local.get(msg.keys, (result) => {
+      sendResponse(result);
+    });
+    return true; // async response
+  }
+
+  if (msg.action === 'storageRemove') {
+    chrome.storage.local.remove(msg.keys);
+    return false;
+  }
 });
 
 async function handleStartMicRecording(sendResponse) {

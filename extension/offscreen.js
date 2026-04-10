@@ -11,6 +11,52 @@ let audioContext = null;
 let mixedDest = null;
 let currentCombinedStream = null;
 
+// Safe storage wrapper - falls back to messaging background when chrome.storage is unavailable
+async function safeStorageSet(data) {
+  try {
+    if (chrome.storage && chrome.storage.local) {
+      await chrome.storage.local.set(data);
+      return;
+    }
+  } catch (e) {
+    console.warn('chrome.storage.local.set failed, using message fallback:', e.message);
+  }
+  // Fallback: ask background to set storage
+  chrome.runtime.sendMessage({ action: 'storageSet', data });
+}
+
+async function safeStorageGet(keys) {
+  try {
+    if (chrome.storage && chrome.storage.local) {
+      return await chrome.storage.local.get(keys);
+    }
+  } catch (e) {
+    console.warn('chrome.storage.local.get failed, using message fallback:', e.message);
+  }
+  // Fallback: ask background to get storage
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'storageGet', keys }, (response) => {
+      resolve(response || {});
+    });
+  });
+}
+
+async function safeStorageRemove(keys) {
+  try {
+    if (chrome.storage && chrome.storage.local) {
+      await chrome.storage.local.remove(keys);
+      return;
+    }
+  } catch (e) {
+    console.warn('chrome.storage.local.remove failed, using message fallback:', e.message);
+  }
+  chrome.runtime.sendMessage({ action: 'storageRemove', keys });
+}
+
+async function setState(state, extras = {}) {
+  await safeStorageSet({ recordingState: state, ...extras });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.target !== 'offscreen') return;
 
@@ -27,24 +73,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-async function setState(state, extras = {}) {
-  await chrome.storage.local.set({ recordingState: state, ...extras });
-}
-
 async function startMicOnlyRecording() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true },
     });
 
-    // Set up audio context for mixing (will add screen audio later if needed)
     audioContext = new AudioContext();
     mixedDest = audioContext.createMediaStreamDestination();
 
     const micSource = audioContext.createMediaStreamSource(micStream);
     micSource.connect(mixedDest);
 
-    // Start with audio-only recording
     currentCombinedStream = new MediaStream([
       ...mixedDest.stream.getAudioTracks(),
     ]);
@@ -122,7 +162,6 @@ async function addScreenShare(streamId) {
       },
     });
 
-    // Add system audio to the mix
     const systemAudioTracks = screenStream.getAudioTracks();
     if (systemAudioTracks.length > 0 && audioContext && mixedDest) {
       const systemSource = audioContext.createMediaStreamSource(
@@ -131,26 +170,19 @@ async function addScreenShare(streamId) {
       systemSource.connect(mixedDest);
     }
 
-    // Stop current recorder, keep chunks
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
-      // Wait for the stop event to fire and collect remaining chunks
       await new Promise(resolve => {
         const origOnStop = mediaRecorder.onstop;
-        mediaRecorder.onstop = (e) => {
-          // Don't upload yet, just collect chunks
-          resolve();
-        };
+        mediaRecorder.onstop = () => { resolve(); };
       });
     }
 
-    // Create new combined stream with video + mixed audio
     currentCombinedStream = new MediaStream([
       ...screenStream.getVideoTracks(),
       ...mixedDest.stream.getAudioTracks(),
     ]);
 
-    // Start new recorder with video+audio
     mediaRecorder = new MediaRecorder(currentCombinedStream, {
       mimeType: 'video/webm;codecs=vp8,opus',
       videoBitsPerSecond: 1000000,
@@ -182,7 +214,7 @@ async function addScreenShare(streamId) {
     };
 
     mediaRecorder.start(1000);
-    await chrome.storage.local.set({ isScreenSharing: true });
+    await safeStorageSet({ isScreenSharing: true });
     chrome.runtime.sendMessage({ action: 'screenShareStarted' });
     console.log('Screen share added to recording');
   } catch (err) {
@@ -221,7 +253,7 @@ function stopRecording() {
 
 async function refreshAccessToken() {
   try {
-    const data = await chrome.storage.local.get(['refreshToken']);
+    const data = await safeStorageGet(['refreshToken']);
     if (!data.refreshToken) return null;
 
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
@@ -236,7 +268,7 @@ async function refreshAccessToken() {
     if (!res.ok) return null;
 
     const result = await res.json();
-    await chrome.storage.local.set({
+    await safeStorageSet({
       accessToken: result.access_token,
       refreshToken: result.refresh_token,
     });
@@ -252,11 +284,10 @@ async function uploadFromOffscreen(blob) {
   await setState('uploading');
 
   try {
-    const data = await chrome.storage.local.get(['accessToken', 'refreshToken', 'meetingData']);
+    const data = await safeStorageGet(['accessToken', 'refreshToken', 'meetingData']);
     let accessToken = data.accessToken;
     const meetingData = data.meetingData || {};
 
-    // Try to refresh token before upload
     const freshToken = await refreshAccessToken();
     if (freshToken) {
       accessToken = freshToken;
@@ -299,7 +330,7 @@ async function uploadFromOffscreen(blob) {
     }
 
     await setState('done', { lastMeetingId: result.meetingId });
-    await chrome.storage.local.remove(['meetingData']);
+    await safeStorageRemove(['meetingData']);
 
     chrome.runtime.sendMessage({
       action: 'uploadComplete',
