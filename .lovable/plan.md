@@ -1,60 +1,44 @@
 
 
-## Plano: Extensão Chrome com Gravação de Tela + Áudio
+## Plano: Corrigir botão "Iniciar Gravação" da extensão Chrome
 
-### Contexto
-Os executivos compartilham tela durante apresentações comerciais. A extensão precisa capturar tanto o áudio quanto o vídeo da tela, gerando uma gravação completa da reunião.
+### Problema Identificado
 
-### Arquitetura
+Há **3 bugs** no código da extensão que impedem o funcionamento:
 
-**Extensão Chrome (Manifest V3)**
+1. **`chrome.desktopCapture.chooseDesktopMedia` precisa receber a aba de origem como segundo parâmetro.** Sem isso, a API falha silenciosamente no Manifest V3. A assinatura correta é `chooseDesktopMedia(sources, targetTab, callback)`.
 
-| Arquivo | Função |
-|---------|--------|
-| `extension/manifest.json` | Permissões: tabCapture, desktopCapture, storage, offscreen |
-| `extension/popup.html` + `popup.js` | UI: botões Gravar/Parar, campos título, tipo, lead |
-| `extension/background.js` | Service worker: coordena captura via `chrome.desktopCapture` ou `chrome.tabCapture` |
-| `extension/offscreen.html` + `offscreen.js` | MediaRecorder gravando vídeo+áudio (webm/vp8+opus) |
-| `extension/icon.png` | Ícone da extensão |
+2. **O callback de `chooseDesktopMedia` recebe apenas `streamId`, não `(streamId, options)`.** O segundo parâmetro não existe nessa API.
 
-**Captura de tela + áudio:**
-- Usa `chrome.desktopCapture.chooseDesktopMedia` para o executivo selecionar qual tela/aba compartilhar (mesma UX do Google Meet)
-- O stream resultante inclui vídeo da tela + áudio do sistema
-- Opcionalmente combina com áudio do microfone via `navigator.mediaDevices.getUserMedia({ audio: true })`
-- Grava em formato WebM (vídeo+áudio) via MediaRecorder no offscreen document
+3. **O `sendResponse` é chamado dentro de um callback assíncrono aninhado**, mas o canal de mensagem já pode estar fechado quando `chooseDesktopMedia` retorna. O popup nunca recebe a resposta e não muda de estado.
 
-**Edge Function: `upload-recording`**
-- Recebe o arquivo WebM via multipart upload
-- Salva no bucket `meeting-files`
-- Cria registro na tabela `meetings`
-- Dispara o pipeline `analyze-meeting` existente (que extrai o áudio para transcrição)
+### Solução
 
-**Fluxo de dados:**
-```text
-Tela compartilhada + Microfone
-  → chrome.desktopCapture → MediaStream (vídeo+áudio)
-  → MediaRecorder → blob WebM
-  → POST /upload-recording
-       → Supabase Storage (meeting-files)
-       → meetings table (status: "enviado")
-       → analyze-meeting pipeline
-```
+**`extension/popup.js`** — ao clicar "Iniciar Gravação":
+- Obter a aba ativa com `chrome.tabs.query({ active: true, currentWindow: true })` 
+- Enviar o `tabId` junto na mensagem `startCapture`
+- Após enviar a mensagem, já trocar a UI para "gravando" (otimista), pois o seletor de tela aparecerá em seguida
 
-### Funcionalidades do Popup
-1. Botão "Gravar" — abre seletor de tela/aba, inicia gravação
-2. Timer mostrando duração da gravação
-3. Campos: título da agenda, tipo (empresa/consultoria), lead (nome, empresa, email)
-4. Botão "Parar e Enviar" — para gravação, faz upload automático
-5. Indicador de status (gravando, enviando, concluído)
-6. Login com credenciais do Sales Coach (token salvo no chrome.storage)
+**`extension/background.js`** — `handleStartCapture`:
+- Receber o `tabId` da mensagem
+- Buscar o tab object com `chrome.tabs.get(tabId)`
+- Passar o tab como segundo argumento: `chrome.desktopCapture.chooseDesktopMedia(['screen', 'window', 'tab'], tab, callback)`
+- Corrigir assinatura do callback para receber apenas `streamId`
+- Responder com `sendResponse({ success: true })` **antes** do callback do desktopCapture (indicando que o seletor foi aberto)
+- Usar uma mensagem separada para notificar o popup sobre sucesso/falha da captura
 
-### Página de Download
-- Adicionar rota `/extensao` no app com instruções de instalação e botão de download do ZIP
-- ZIP gerado e disponibilizado em `public/sales-coach-extension.zip`
+**`extension/manifest.json`** — adicionar permissão `"tabs"` (necessária para `chrome.tabs.query`).
 
-### Detalhes Técnicos
-- `chrome.desktopCapture` permite capturar tela inteira, janela específica ou aba — o executivo escolhe
-- O vídeo gravado fica disponível como anexo na página de detalhes da reunião
-- A transcrição continua usando apenas o áudio extraído do WebM (AssemblyAI aceita WebM diretamente)
-- Chunk upload para arquivos grandes (>50MB): divide em partes e faz upload sequencial
+**`extension/offscreen.js`** — sem alterações necessárias.
+
+### Mudanças por Arquivo
+
+| Arquivo | Mudança |
+|---------|---------|
+| `extension/manifest.json` | Adicionar `"tabs"` às permissions |
+| `extension/popup.js` | Enviar `tabId` com a mensagem; ouvir mensagem de resultado da captura |
+| `extension/background.js` | Usar `tab` no `chooseDesktopMedia`; corrigir callback; responder antes do seletor |
+
+### Re-empacotar
+- Recriar `public/sales-coach-extension.zip` com os arquivos atualizados
 
