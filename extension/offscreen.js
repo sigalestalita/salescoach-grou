@@ -77,6 +77,38 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+function getStartErrorMessage(err) {
+  const message = err?.message || 'Erro desconhecido';
+
+  if (err?.name === 'NotAllowedError' || /permission dismissed/i.test(message)) {
+    return 'Permissão de microfone negada ou dispensada. Permita o microfone no popup da extensão e tente novamente.';
+  }
+
+  if (err?.name === 'NotFoundError') {
+    return 'Nenhum microfone foi encontrado.';
+  }
+
+  return 'Erro ao iniciar gravação: ' + message;
+}
+
+async function markRecordingStarted(mode) {
+  const startTime = Date.now();
+  const isScreenSharing = mode === 'screen_audio';
+
+  await setState('recording', {
+    recordingStartTime: startTime,
+    recordingMode: mode,
+    isScreenSharing,
+    uploadError: null,
+  });
+
+  chrome.runtime.sendMessage({
+    action: 'recordingStarted',
+    mode,
+    startTime,
+  });
+}
+
 async function startMicOnlyRecording() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({
@@ -134,26 +166,26 @@ async function startMicOnlyRecording() {
     };
 
     mediaRecorder.start(1000);
-    await setState('recording');
+    await markRecordingStarted('audio_only');
     console.log('Mic-only recording started');
   } catch (err) {
+    const errorMessage = getStartErrorMessage(err);
     console.error('Failed to start mic recording:', err);
-    await setState('error', { uploadError: 'Permissão de microfone negada. Verifique as configurações do navegador.' });
+    await setState('error', { uploadError: errorMessage });
     chrome.runtime.sendMessage({
       action: 'captureError',
-      error: 'Permissão de microfone negada.',
+      error: errorMessage,
     });
+    cleanup();
   }
 }
 
 async function startFullRecording(streamId) {
   try {
-    // Get mic
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true },
     });
 
-    // Try to get screen + system audio
     let screenCaptureSuccess = false;
     try {
       screenStream = await navigator.mediaDevices.getUserMedia({
@@ -178,7 +210,6 @@ async function startFullRecording(streamId) {
       console.warn('Screen capture failed, falling back to mic-only:', screenErr.message);
     }
 
-    // Mix audio
     audioContext = new AudioContext();
     mixedDest = audioContext.createMediaStreamDestination();
 
@@ -194,19 +225,18 @@ async function startFullRecording(streamId) {
         systemSource.connect(mixedDest);
       }
 
-      // Combined stream: screen video + mixed audio
       currentCombinedStream = new MediaStream([
         ...screenStream.getVideoTracks(),
         ...mixedDest.stream.getAudioTracks(),
       ]);
     } else {
-      // Mic-only fallback
       currentCombinedStream = new MediaStream([
         ...mixedDest.stream.getAudioTracks(),
       ]);
     }
 
     const isVideo = screenCaptureSuccess && screenStream && screenStream.getVideoTracks().length > 0;
+    const mode = isVideo ? 'screen_audio' : 'audio_only';
     const mimeType = isVideo ? 'video/webm;codecs=vp8,opus' : 'audio/webm;codecs=opus';
 
     recordedChunks = [];
@@ -249,20 +279,20 @@ async function startFullRecording(streamId) {
     };
 
     mediaRecorder.start(1000);
-    await setState('recording');
-    if (screenCaptureSuccess) {
-      await safeStorageSet({ isScreenSharing: true });
-    }
-    console.log(screenCaptureSuccess ? 'Full recording started (screen + mic)' : 'Recording started (mic-only fallback)');
+    await markRecordingStarted(mode);
+    console.log(isVideo ? 'Full recording started (screen + mic)' : 'Recording started (mic-only fallback)');
   } catch (err) {
+    const errorMessage = getStartErrorMessage(err);
     console.error('Failed to start recording:', err);
-    await setState('error', { uploadError: 'Erro ao iniciar gravação: ' + err.message });
+    await setState('error', { uploadError: errorMessage });
     chrome.runtime.sendMessage({
       action: 'captureError',
-      error: 'Erro ao iniciar gravação: ' + err.message,
+      error: errorMessage,
     });
+    cleanup();
   }
 }
+
 async function addScreenShare(streamId) {
   try {
     screenStream = await navigator.mediaDevices.getUserMedia({

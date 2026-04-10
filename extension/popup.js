@@ -27,12 +27,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function restoreState() {
-  const data = await chrome.storage.local.get(['recordingState', 'recordingStartTime', 'uploadError', 'lastMeetingId', 'isScreenSharing']);
+  const data = await chrome.storage.local.get([
+    'recordingState',
+    'recordingStartTime',
+    'recordingMode',
+    'uploadError',
+    'lastMeetingId',
+    'isScreenSharing',
+  ]);
   const state = data.recordingState || 'idle';
+  const mode = data.recordingMode || (data.isScreenSharing ? 'screen_audio' : 'audio_only');
 
   if (state === 'recording') {
-    startTime = data.recordingStartTime;
-    showActiveRecording();
+    startTime = data.recordingStartTime || Date.now();
+    showActiveRecording(mode);
   } else if (state === 'stopping' || state === 'uploading') {
     showUploadingState();
   } else if (state === 'done') {
@@ -116,14 +124,33 @@ function showRecordingUI() {
   formSection.classList.remove('hidden');
   activeRecording.classList.add('hidden');
   uploadStatus.classList.add('hidden');
+  uploadStatus.textContent = '';
+  screenStatus.textContent = '🖥 Tela + 🎙 Áudio';
+  screenStatus.className = 'screen-status sharing';
 }
 
-function showActiveRecording() {
+function showPendingStartState(message) {
+  formSection.classList.add('hidden');
+  activeRecording.classList.add('hidden');
+  uploadStatus.classList.remove('hidden');
+  uploadStatus.className = 'status sending';
+  uploadStatus.textContent = message;
+  stopTimer();
+}
+
+function showActiveRecording(mode = 'screen_audio') {
   formSection.classList.add('hidden');
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
-  screenStatus.textContent = '🖥 Tela + 🎙 Áudio';
-  screenStatus.className = 'screen-status sharing';
+
+  if (mode === 'audio_only') {
+    screenStatus.textContent = '🎙 Apenas áudio';
+    screenStatus.className = 'screen-status';
+  } else {
+    screenStatus.textContent = '🖥 Tela + 🎙 Áudio';
+    screenStatus.className = 'screen-status sharing';
+  }
+
   startTimer();
 }
 
@@ -145,7 +172,7 @@ function showDoneState() {
   stopTimer();
   setTimeout(async () => {
     await chrome.storage.local.set({ recordingState: 'idle' });
-    await chrome.storage.local.remove(['recordingStartTime', 'lastMeetingId', 'uploadError', 'isScreenSharing']);
+    await chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'lastMeetingId', 'uploadError', 'isScreenSharing']);
     showRecordingUI();
   }, 5000);
 }
@@ -159,9 +186,39 @@ function showErrorState(errorMsg) {
   stopTimer();
   setTimeout(async () => {
     await chrome.storage.local.set({ recordingState: 'idle' });
-    await chrome.storage.local.remove(['recordingStartTime', 'uploadError', 'isScreenSharing']);
+    await chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'uploadError', 'isScreenSharing']);
     showRecordingUI();
   }, 8000);
+}
+
+function getPermissionErrorMessage(err) {
+  const message = err?.message || '';
+
+  if (err?.name === 'NotAllowedError' || /permission dismissed/i.test(message)) {
+    return 'Permissão de microfone dispensada. Clique em Permitir no navegador e tente novamente.';
+  }
+
+  if (err?.name === 'NotFoundError') {
+    return 'Nenhum microfone foi encontrado.';
+  }
+
+  return message || 'Erro ao solicitar acesso ao microfone.';
+}
+
+async function ensureMicrophoneAccess() {
+  let tempStream = null;
+
+  try {
+    tempStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+  } catch (err) {
+    throw new Error(getPermissionErrorMessage(err));
+  } finally {
+    if (tempStream) {
+      tempStream.getTracks().forEach((track) => track.stop());
+    }
+  }
 }
 
 // ── Recording ──
@@ -180,39 +237,36 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     leadEmail: document.getElementById('lead-email').value.trim(),
   };
 
-  await chrome.storage.local.set({ meetingData });
+  try {
+    showPendingStartState('🎙 Autorize o microfone para continuar...');
+    await ensureMicrophoneAccess();
+    await chrome.storage.local.set({ meetingData });
+  } catch (err) {
+    await chrome.storage.local.set({ recordingState: 'error', uploadError: err.message });
+    showErrorState(err.message);
+    return;
+  }
 
-  // Get active tab for screen capture
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tabId = tabs.length > 0 ? tabs[0].id : null;
 
   if (!tabId) {
-    alert('Erro: nenhuma aba ativa encontrada.');
+    showErrorState('Erro: nenhuma aba ativa encontrada.');
     return;
   }
 
-  // Start screen+mic recording in one step
+  showPendingStartState('🖥 Selecione a tela na janela do navegador para iniciar...');
   chrome.runtime.sendMessage({ action: 'startFullRecording', tabId }, (response) => {
     if (chrome.runtime.lastError) {
-      alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
+      showErrorState('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
       return;
     }
+
     if (!response || !response.success) {
-      alert(response?.error || 'Erro ao iniciar gravação.');
-      return;
+      showErrorState(response?.error || 'Erro ao iniciar gravação.');
     }
-    // Screen picker is opening — UI will update when recording actually starts
-    startTime = Date.now();
-    chrome.storage.local.set({
-      recordingState: 'recording',
-      recordingStartTime: startTime,
-      isScreenSharing: true,
-    });
-    showActiveRecording(true);
   });
 });
-
-// Screen share button removed - screen capture is now automatic
 
 document.getElementById('btn-stop').addEventListener('click', async () => {
   stopTimer();
@@ -228,12 +282,16 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
 
 // Listen for messages from background/offscreen
 chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'recordingStarted') {
+    startTime = msg.startTime || Date.now();
+    showActiveRecording(msg.mode || 'screen_audio');
+  }
+
   if (msg.action === 'captureError') {
     stopTimer();
-    chrome.storage.local.set({ recordingState: 'idle' });
-    chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing']);
-    showRecordingUI();
-    alert(msg.error || 'Erro na gravação.');
+    chrome.storage.local.set({ recordingState: 'error', uploadError: msg.error || 'Erro na gravação.' });
+    chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing', 'recordingMode']);
+    showErrorState(msg.error || 'Erro na gravação.');
   }
 
   if (msg.action === 'screenShareStarted') {
