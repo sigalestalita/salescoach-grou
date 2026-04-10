@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Sales Coach AI - Gravador de Reuniões",
+  "version": "1.0.0",
+  "description": "Grave suas reuniões comerciais com tela e áudio, e envie automaticamente para análise no Sales Coach AI.",
+  "permissions": [
+    "desktopCapture",
+    "tabCapture",
+    "storage",
+    "offscreen"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
