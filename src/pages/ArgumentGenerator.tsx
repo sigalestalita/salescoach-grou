@@ -142,16 +142,39 @@ export default function ArgumentGenerator() {
   // Pain selection
   const [selectedPains, setSelectedPains] = useState<string[]>([]);
 
-  // Fetch services from knowledge base
+  // Track whether services came from items or documents
+  const [servicesSource, setServicesSource] = useState<"items" | "docs">("items");
+
+  // Fetch services from knowledge base (items first, then documents as fallback)
   useEffect(() => {
     const fetchServices = async () => {
-      const { data } = await supabase
+      // Try knowledge_items first
+      const { data: items } = await supabase
         .from("knowledge_items")
         .select("id, name, description, item_type, category")
         .or("item_type.ilike.%servi%,item_type.ilike.%treina%,item_type.ilike.%consultoria%,item_type.ilike.%diagnos%,category.ilike.%servi%,category.ilike.%treina%")
         .order("name");
-      if (data && data.length > 0) {
-        setServices(data.map(d => ({ id: d.id, name: d.name, description: d.description })));
+
+      if (items && items.length > 0) {
+        setServices(items.map(d => ({ id: d.id, name: d.name, description: d.description })));
+        setServicesSource("items");
+        return;
+      }
+
+      // Fallback: fetch from knowledge_documents (LPs, portfolio, site pages)
+      const { data: docs } = await supabase
+        .from("knowledge_documents")
+        .select("id, title, category, extracted_content")
+        .or("category.ilike.%lp%,category.ilike.%portfólio%,category.ilike.%portfolio%,category.ilike.%site%")
+        .order("title");
+
+      if (docs && docs.length > 0) {
+        setServices(docs.map(d => ({
+          id: d.id,
+          name: d.title,
+          description: d.extracted_content ? d.extracted_content.slice(0, 120) + "..." : d.category,
+        })));
+        setServicesSource("docs");
       }
     };
     fetchServices();
@@ -191,6 +214,9 @@ export default function ArgumentGenerator() {
           audienceType,
           offerType,
           selectedServices: offerType !== "pda" ? selectedServices : [],
+          selectedDocIds: offerType !== "pda" && servicesSource === "docs"
+            ? services.filter(s => selectedServices.includes(s.name)).map(s => s.id)
+            : [],
         },
       });
       if (error) throw error;
