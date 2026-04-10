@@ -1,29 +1,60 @@
 
 
-## Plano: Corrigir filtro de Serviços no Gerador de Argumentos
+## Plano: Extensão Chrome com Gravação de Tela + Áudio
 
-### Problema Identificado
-A tabela `knowledge_items` (Produtos & Serviços) está vazia. O Gerador de Argumentos busca serviços apenas dessa tabela, então quando o executivo seleciona "Serviços Grou", nenhuma opção aparece.
+### Contexto
+Os executivos compartilham tela durante apresentações comerciais. A extensão precisa capturar tanto o áudio quanto o vídeo da tela, gerando uma gravação completa da reunião.
 
-A base de conhecimento tem 18 documentos cadastrados (incluindo "apresentação serviços 2026", landing pages de produtos como Bússola, Feedback 360, Workshop NR1, Master Líder, Certificação PDA, Dilemas de Gestão, etc.), mas nenhum item na aba "Produtos & Serviços".
+### Arquitetura
 
-### Solução Proposta
+**Extensão Chrome (Manifest V3)**
 
-**1. Busca híbrida no ArgumentGenerator.tsx**
-- Além de buscar da `knowledge_items`, também buscar da `knowledge_documents` filtrando por categorias relevantes (portfólio de serviços, lp, apresentação)
-- Combinar ambas as fontes para exibir como opções selecionáveis no filtro de serviços
-- Quando não houver itens em `knowledge_items`, usar os documentos como fallback
+| Arquivo | Função |
+|---------|--------|
+| `extension/manifest.json` | Permissões: tabCapture, desktopCapture, storage, offscreen |
+| `extension/popup.html` + `popup.js` | UI: botões Gravar/Parar, campos título, tipo, lead |
+| `extension/background.js` | Service worker: coordena captura via `chrome.desktopCapture` ou `chrome.tabCapture` |
+| `extension/offscreen.html` + `offscreen.js` | MediaRecorder gravando vídeo+áudio (webm/vp8+opus) |
+| `extension/icon.png` | Ícone da extensão |
 
-**2. Atualizar a Edge Function**
-- Quando serviços forem selecionados via documentos (ao invés de items), incluir o `extracted_content` dos documentos selecionados no contexto enviado à IA
-- Manter compatibilidade com `knowledge_items` quando estes existirem
+**Captura de tela + áudio:**
+- Usa `chrome.desktopCapture.chooseDesktopMedia` para o executivo selecionar qual tela/aba compartilhar (mesma UX do Google Meet)
+- O stream resultante inclui vídeo da tela + áudio do sistema
+- Opcionalmente combina com áudio do microfone via `navigator.mediaDevices.getUserMedia({ audio: true })`
+- Grava em formato WebM (vídeo+áudio) via MediaRecorder no offscreen document
+
+**Edge Function: `upload-recording`**
+- Recebe o arquivo WebM via multipart upload
+- Salva no bucket `meeting-files`
+- Cria registro na tabela `meetings`
+- Dispara o pipeline `analyze-meeting` existente (que extrai o áudio para transcrição)
+
+**Fluxo de dados:**
+```text
+Tela compartilhada + Microfone
+  → chrome.desktopCapture → MediaStream (vídeo+áudio)
+  → MediaRecorder → blob WebM
+  → POST /upload-recording
+       → Supabase Storage (meeting-files)
+       → meetings table (status: "enviado")
+       → analyze-meeting pipeline
+```
+
+### Funcionalidades do Popup
+1. Botão "Gravar" — abre seletor de tela/aba, inicia gravação
+2. Timer mostrando duração da gravação
+3. Campos: título da agenda, tipo (empresa/consultoria), lead (nome, empresa, email)
+4. Botão "Parar e Enviar" — para gravação, faz upload automático
+5. Indicador de status (gravando, enviando, concluído)
+6. Login com credenciais do Sales Coach (token salvo no chrome.storage)
+
+### Página de Download
+- Adicionar rota `/extensao` no app com instruções de instalação e botão de download do ZIP
+- ZIP gerado e disponibilizado em `public/sales-coach-extension.zip`
 
 ### Detalhes Técnicos
-
-- Query adicional em `knowledge_documents` filtrando categorias como `lp`, `portfólio de serviços`, `site`
-- Mapear documentos para o mesmo formato de seleção (nome + descrição)
-- Na Edge Function, receber um campo adicional `selectedDocIds` para buscar conteúdo extraído dos documentos selecionados e injetar no prompt
-
-### Alternativa
-Se preferir, posso criar os itens de Produtos & Serviços automaticamente na tabela `knowledge_items` com base nos documentos existentes (ex: Bússola, Feedback 360, Workshop NR1, Master Líder, Certificação PDA, Dilemas de Gestão, PDA Assessment). Assim o filtro funcionaria imediatamente sem alterar a lógica de busca.
+- `chrome.desktopCapture` permite capturar tela inteira, janela específica ou aba — o executivo escolhe
+- O vídeo gravado fica disponível como anexo na página de detalhes da reunião
+- A transcrição continua usando apenas o áudio extraído do WebM (AssemblyAI aceita WebM diretamente)
+- Chunk upload para arquivos grandes (>50MB): divide em partes e faz upload sequencial
 
