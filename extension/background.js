@@ -41,6 +41,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.action === 'startFullRecording') {
+    handleStartFullRecording(msg, sendResponse);
+    return true;
+  }
+
   if (msg.action === 'startScreenShare') {
     handleStartScreenShare(msg, sendResponse);
     return true;
