@@ -20,6 +20,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+async function setState(state, extras = {}) {
+  await chrome.storage.local.set({ recordingState: state, ...extras });
+}
+
 async function startRecording(streamId) {
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -40,7 +44,6 @@ async function startRecording(streamId) {
       },
     });
 
-    // Try to get microphone audio too
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
@@ -49,7 +52,6 @@ async function startRecording(streamId) {
       console.log('Microphone not available, recording system audio only');
     }
 
-    // Combine streams
     let combinedStream;
     if (micStream) {
       const audioContext = new AudioContext();
@@ -87,12 +89,12 @@ async function startRecording(streamId) {
     };
 
     mediaRecorder.onstop = async () => {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      await setState('stopping');
+      chrome.runtime.sendMessage({ action: 'uploadStarted' });
 
-      // Upload directly from offscreen (blob URLs don't cross document boundaries)
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
       await uploadFromOffscreen(blob);
 
-      // Cleanup
       if (mediaStream) {
         mediaStream.getTracks().forEach((t) => t.stop());
         mediaStream = null;
@@ -105,9 +107,11 @@ async function startRecording(streamId) {
     };
 
     mediaRecorder.start(1000);
+    await setState('recording');
     console.log('Recording started');
   } catch (err) {
     console.error('Failed to start recording:', err);
+    await setState('error', { uploadError: err.message });
     chrome.runtime.sendMessage({
       action: 'recordingError',
       error: err.message,
@@ -123,16 +127,15 @@ function stopRecording() {
 }
 
 async function uploadFromOffscreen(blob) {
-  // Notify popup that upload is starting
-  chrome.runtime.sendMessage({ action: 'uploadStarted' });
+  await setState('uploading');
 
   try {
-    // Get session and meeting data from storage
     const data = await chrome.storage.local.get(['accessToken', 'meetingData']);
     const accessToken = data.accessToken;
     const meetingData = data.meetingData || {};
 
     if (!accessToken) {
+      await setState('error', { uploadError: 'Sessão expirada. Faça login novamente.' });
       chrome.runtime.sendMessage({ action: 'uploadError', error: 'Sessão expirada. Faça login novamente.' });
       return;
     }
@@ -160,14 +163,16 @@ async function uploadFromOffscreen(blob) {
       throw new Error(result.error || 'Erro no upload');
     }
 
+    await setState('done', { lastMeetingId: result.meetingId });
+    await chrome.storage.local.remove(['meetingData']);
+
     chrome.runtime.sendMessage({
       action: 'uploadComplete',
       meetingId: result.meetingId,
     });
-
-    await chrome.storage.local.remove(['isRecording', 'recordingStartTime', 'meetingData']);
   } catch (err) {
     console.error('Upload error:', err);
+    await setState('error', { uploadError: err.message });
     chrome.runtime.sendMessage({ action: 'uploadError', error: err.message });
   }
 }

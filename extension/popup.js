@@ -19,17 +19,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   const session = await getSession();
   if (session) {
     showRecordingUI();
+    await restoreState();
   } else {
     showLoginUI();
   }
-
-  chrome.storage.local.get(['isRecording', 'recordingStartTime'], (data) => {
-    if (data.isRecording) {
-      startTime = data.recordingStartTime;
-      showActiveRecording();
-    }
-  });
 });
+
+async function restoreState() {
+  const data = await chrome.storage.local.get(['recordingState', 'recordingStartTime', 'uploadError', 'lastMeetingId']);
+  const state = data.recordingState || 'idle';
+
+  if (state === 'recording') {
+    startTime = data.recordingStartTime;
+    showActiveRecording();
+  } else if (state === 'stopping' || state === 'uploading') {
+    showUploadingState();
+  } else if (state === 'done') {
+    showDoneState();
+  } else if (state === 'error') {
+    showErrorState(data.uploadError || 'Erro desconhecido');
+  }
+  // idle → default form UI already shown
+}
 
 // ── Auth ──
 async function getSession() {
@@ -91,7 +102,7 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   showLoginUI();
 });
 
-// ── UI toggles ──
+// ── UI states ──
 function showLoginUI() {
   loginSection.classList.remove('hidden');
   recordingSection.classList.add('hidden');
@@ -112,6 +123,43 @@ function showActiveRecording() {
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
   startTimer();
+}
+
+function showUploadingState() {
+  formSection.classList.add('hidden');
+  activeRecording.classList.add('hidden');
+  uploadStatus.classList.remove('hidden');
+  uploadStatus.className = 'status sending';
+  uploadStatus.textContent = '⏳ Enviando gravação ao sistema...';
+  stopTimer();
+}
+
+function showDoneState() {
+  formSection.classList.add('hidden');
+  activeRecording.classList.add('hidden');
+  uploadStatus.classList.remove('hidden');
+  uploadStatus.className = 'status success';
+  uploadStatus.textContent = '✅ Gravação enviada! A análise será processada automaticamente.';
+  stopTimer();
+  setTimeout(async () => {
+    await chrome.storage.local.set({ recordingState: 'idle' });
+    await chrome.storage.local.remove(['recordingStartTime', 'lastMeetingId', 'uploadError']);
+    showRecordingUI();
+  }, 5000);
+}
+
+function showErrorState(errorMsg) {
+  formSection.classList.add('hidden');
+  activeRecording.classList.add('hidden');
+  uploadStatus.classList.remove('hidden');
+  uploadStatus.className = 'status error';
+  uploadStatus.textContent = '❌ Erro: ' + errorMsg;
+  stopTimer();
+  setTimeout(async () => {
+    await chrome.storage.local.set({ recordingState: 'idle' });
+    await chrome.storage.local.remove(['recordingStartTime', 'uploadError']);
+    showRecordingUI();
+  }, 8000);
 }
 
 // ── Recording ──
@@ -140,14 +188,14 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     return;
   }
 
-  chrome.runtime.sendMessage({ action: 'startCapture', tabId }, (response) => {
+  chrome.runtime.sendMessage({ action: 'startCapture', tabId }, async (response) => {
     if (chrome.runtime.lastError) {
       alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success) {
       startTime = Date.now();
-      chrome.storage.local.set({ isRecording: true, recordingStartTime: startTime });
+      await chrome.storage.local.set({ recordingStartTime: startTime });
       showActiveRecording();
     } else {
       alert(response?.error || 'Erro ao iniciar gravação. Tente novamente.');
@@ -157,18 +205,11 @@ document.getElementById('btn-start').addEventListener('click', async () => {
 
 document.getElementById('btn-stop').addEventListener('click', async () => {
   stopTimer();
-
-  uploadStatus.classList.remove('hidden');
-  uploadStatus.className = 'status sending';
-  uploadStatus.textContent = '⏳ Parando gravação e enviando...';
-  activeRecording.classList.add('hidden');
+  showUploadingState();
 
   chrome.runtime.sendMessage({ action: 'stopCapture' }, (response) => {
-    if (response && response.success) {
-      uploadStatus.textContent = '⏳ Processando e enviando gravação...';
-    } else {
-      uploadStatus.className = 'status error';
-      uploadStatus.textContent = '❌ Erro ao parar gravação: ' + (response?.error || 'desconhecido');
+    if (!response || !response.success) {
+      showErrorState(response?.error || 'Erro ao parar gravação');
     }
   });
 });
@@ -177,31 +218,28 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'captureError') {
     stopTimer();
-    chrome.storage.local.remove(['isRecording', 'recordingStartTime']);
+    chrome.storage.local.set({ recordingState: 'idle' });
+    chrome.storage.local.remove(['recordingStartTime']);
     showRecordingUI();
     alert(msg.error || 'Erro na captura de tela.');
   }
 
   if (msg.action === 'uploadStarted') {
-    uploadStatus.classList.remove('hidden');
-    uploadStatus.className = 'status sending';
-    uploadStatus.textContent = '⏳ Enviando gravação ao servidor...';
+    showUploadingState();
   }
 
   if (msg.action === 'uploadComplete') {
-    uploadStatus.className = 'status success';
-    uploadStatus.textContent = '✅ Gravação enviada! A análise será processada automaticamente.';
-    setTimeout(() => showRecordingUI(), 5000);
+    showDoneState();
   }
 
   if (msg.action === 'uploadError') {
-    uploadStatus.className = 'status error';
-    uploadStatus.textContent = '❌ Erro no envio: ' + (msg.error || 'desconhecido');
+    showErrorState(msg.error || 'Erro desconhecido');
   }
 });
 
 // ── Timer ──
 function startTimer() {
+  stopTimer();
   const timerEl = document.getElementById('timer');
   timerInterval = setInterval(() => {
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
