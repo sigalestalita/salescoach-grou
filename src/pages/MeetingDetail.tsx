@@ -169,7 +169,48 @@ const MeetingDetail = () => {
         )}
       </div>
 
-      {/* Video/Audio Player or Link */}
+      {/* Video/Audio Player — Storage file */}
+      {meeting.file_url && !meeting.youtube_url && (() => {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const isVideo = meeting.file_type === "webm" || meeting.file_type === "mp4" || meeting.file_url.endsWith(".webm") || meeting.file_url.endsWith(".mp4");
+        const { data: urlData } = supabase.storage.from("meeting-files").getPublicUrl(meeting.file_url);
+        const mediaUrl = urlData?.publicUrl;
+
+        if (!mediaUrl) return null;
+
+        return (
+          <Collapsible defaultOpen>
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <CardHeader className="flex flex-row items-center justify-between py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    {isVideo ? <Video className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    Gravação da Reunião
+                  </CardTitle>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  {isVideo ? (
+                    <video controls className="w-full rounded-md border" preload="metadata">
+                      <source src={mediaUrl} type="video/webm" />
+                      Seu navegador não suporta o player de vídeo.
+                    </video>
+                  ) : (
+                    <audio controls className="w-full" preload="metadata">
+                      <source src={mediaUrl} type="audio/webm" />
+                      Seu navegador não suporta o player de áudio.
+                    </audio>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        );
+      })()}
+
+      {/* Video/Audio Player — Google Drive link */}
       {meeting.youtube_url && (() => {
         const getGoogleDriveEmbedUrl = (url: string): string | null => {
           let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
