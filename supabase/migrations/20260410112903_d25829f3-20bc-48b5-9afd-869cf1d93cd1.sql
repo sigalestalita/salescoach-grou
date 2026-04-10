@@ -1,0 +1,2 @@
+ALTER TABLE public.knowledge_documents DROP CONSTRAINT knowledge_documents_doc_type_check;
+ALTER TABLE public.knowledge_documents ADD CONSTRAINT knowledge_documents_doc_type_check CHECK (doc_type = ANY (ARRAY['pdf'::text, 'doc'::text, 'link'::text, 'text'::text]));
