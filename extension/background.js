@@ -16,15 +16,17 @@ chrome.storage.local.get(['recordingState'], (data) => {
   }
 });
 
+// Open recorder window when extension icon is clicked (no popup)
+chrome.action.onClicked.addListener(() => {
+  openRecorderWindow();
+});
+
 // Track recorder window closing
 chrome.windows.onRemoved.addListener((windowId) => {
   if (windowId === recorderWindowId) {
     recorderWindowId = null;
-    // If recording was active, it means user closed the window — treat as stop
     chrome.storage.local.get(['recordingState'], (data) => {
       if (data.recordingState === 'recording') {
-        // The recorder.js will handle cleanup before the window closes
-        // But if it didn't finish uploading, reset state
         setTimeout(() => {
           chrome.storage.local.get(['recordingState'], (d) => {
             if (d.recordingState === 'recording') {
@@ -42,73 +44,54 @@ chrome.windows.onRemoved.addListener((windowId) => {
 // Listen for messages
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'openRecorder') {
-    openRecorderWindow(sendResponse);
+    openRecorderWindow();
+    sendResponse({ success: true });
     return true;
   }
 
   if (msg.action === 'stopCapture') {
-    handleStopCapture(sendResponse);
+    chrome.runtime.sendMessage({ action: 'stopRecording' }).catch(() => {});
+    sendResponse({ success: true });
     return true;
   }
 
   if (msg.action === 'recordingStarted') {
     setBadge('REC');
-    // Relay to popup
-    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   if (msg.action === 'uploadStarted') {
     setBadge('...', '#FF8800');
-    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   if (msg.action === 'uploadComplete') {
     setBadge('');
     recorderWindowId = null;
-    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   if (msg.action === 'uploadError' || msg.action === 'captureError') {
     setBadge('');
     recorderWindowId = null;
-    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 });
 
-async function openRecorderWindow(sendResponse) {
-  try {
-    // If recorder window already exists, focus it
-    if (recorderWindowId) {
-      try {
-        await chrome.windows.update(recorderWindowId, { focused: true });
-        sendResponse({ success: true });
-        return;
-      } catch {
-        recorderWindowId = null;
-      }
+async function openRecorderWindow() {
+  // If recorder window already exists, focus it
+  if (recorderWindowId) {
+    try {
+      await chrome.windows.update(recorderWindowId, { focused: true });
+      return;
+    } catch {
+      recorderWindowId = null;
     }
-
-    const win = await chrome.windows.create({
-      url: chrome.runtime.getURL('recorder.html'),
-      type: 'popup',
-      width: 420,
-      height: 320,
-      focused: true,
-    });
-
-    recorderWindowId = win.id;
-    sendResponse({ success: true });
-  } catch (err) {
-    sendResponse({ success: false, error: err.message });
   }
-}
 
-async function handleStopCapture(sendResponse) {
-  try {
-    // Send stop message to all extension pages (the recorder window will pick it up)
-    chrome.runtime.sendMessage({ action: 'stopRecording' }).catch(() => {});
-    sendResponse({ success: true });
-  } catch (err) {
-    sendResponse({ success: false, error: err.message });
-  }
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL('recorder.html'),
+    type: 'popup',
+    width: 400,
+    height: 580,
+    focused: true,
+  });
+
+  recorderWindowId = win.id;
 }
