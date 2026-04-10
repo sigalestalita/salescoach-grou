@@ -201,9 +201,13 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
           return;
         }
 
-        // signedUrl from createSignedUrl is a relative path like /object/sign/...
-        const fullSignedUrl = `${supabaseUrl}/storage/v1${signedData.signedUrl}`;
-        console.log("Signed URL for AssemblyAI:", fullSignedUrl);
+        // The SDK's signedUrl may be a full URL or relative path
+        const rawSignedUrl = signedData.signedUrl;
+        console.log("Raw signedUrl from SDK:", rawSignedUrl);
+        const fullSignedUrl = rawSignedUrl.startsWith("http")
+          ? rawSignedUrl
+          : `${supabaseUrl}/storage/v1${rawSignedUrl}`;
+        console.log("Final URL for AssemblyAI:", fullSignedUrl);
         const result = await transcribeWithAssemblyAI(fullSignedUrl);
         transcript = result.text;
         speakers = result.speakers;
