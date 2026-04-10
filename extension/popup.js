@@ -11,7 +11,6 @@ const activeRecording = document.getElementById('active-recording');
 const statusDot = document.getElementById('status-dot');
 const uploadStatus = document.getElementById('upload-status');
 const screenStatus = document.getElementById('screen-status');
-const btnShareScreen = document.getElementById('btn-share-screen');
 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
 const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
