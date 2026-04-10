@@ -47,6 +47,7 @@ const MeetingDetail = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [manualTranscript, setManualTranscript] = useState("");
+  const [fileMediaUrl, setFileMediaUrl] = useState<string | null>(null);
 
   const isLinkBased = meeting && !meeting.file_url && !!meeting.youtube_url;
 
