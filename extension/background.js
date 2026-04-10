@@ -13,7 +13,6 @@ async function ensureOffscreen() {
     });
     offscreenCreated = true;
   } catch (e) {
-    // Already exists
     if (!e.message.includes('already exists')) {
       throw e;
     }
@@ -24,7 +23,7 @@ async function ensureOffscreen() {
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'startCapture') {
-    handleStartCapture(sendResponse);
+    handleStartCapture(msg, sendResponse);
     return true; // async response
   }
 
@@ -34,7 +33,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === 'recordingComplete') {
-    // Forward blob URL to popup
     chrome.runtime.sendMessage({
       action: 'recordingReady',
       blobUrl: msg.blobUrl,
@@ -49,14 +47,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-async function handleStartCapture(sendResponse) {
+async function handleStartCapture(msg, sendResponse) {
+  const tabId = msg.tabId;
+
+  if (!tabId) {
+    sendResponse({ success: false, error: 'Tab ID não fornecido' });
+    return;
+  }
+
   try {
-    // Use desktopCapture to let user choose what to share
+    const tab = await chrome.tabs.get(tabId);
+
+    // Respond immediately so the popup knows the selector is opening
+    sendResponse({ success: true });
+
+    // chooseDesktopMedia requires the tab object as second param in MV3
     chrome.desktopCapture.chooseDesktopMedia(
       ['screen', 'window', 'tab'],
-      async (streamId, options) => {
+      tab,
+      async (streamId) => {
         if (!streamId) {
-          sendResponse({ success: false, error: 'Captura cancelada pelo usuário' });
+          // User cancelled the selector
+          chrome.runtime.sendMessage({ action: 'captureError', error: 'Captura cancelada pelo usuário' });
           return;
         }
 
@@ -68,12 +80,11 @@ async function handleStartCapture(sendResponse) {
             action: 'startRecording',
             target: 'offscreen',
             streamId,
-            options,
           });
 
-          sendResponse({ success: true });
+          chrome.runtime.sendMessage({ action: 'captureStarted' });
         } catch (err) {
-          sendResponse({ success: false, error: err.message });
+          chrome.runtime.sendMessage({ action: 'captureError', error: err.message });
         }
       }
     );
