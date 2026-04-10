@@ -47,6 +47,7 @@ const MeetingDetail = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [manualTranscript, setManualTranscript] = useState("");
+  const [fileMediaUrl, setFileMediaUrl] = useState<string | null>(null);
 
   const isLinkBased = meeting && !meeting.file_url && !!meeting.youtube_url;
 
@@ -86,7 +87,16 @@ const MeetingDetail = () => {
       supabase.from("transcriptions").select("*").eq("meeting_id", id!).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("highlights").select("*").eq("meeting_id", id!),
     ]);
-    if (meetingRes.data) setMeeting(meetingRes.data);
+    if (meetingRes.data) {
+      setMeeting(meetingRes.data);
+      // Get signed URL for storage files
+      if (meetingRes.data.file_url && !meetingRes.data.youtube_url) {
+        const { data: signedData } = await supabase.storage
+          .from("meeting-files")
+          .createSignedUrl(meetingRes.data.file_url, 3600); // 1 hour
+        if (signedData?.signedUrl) setFileMediaUrl(signedData.signedUrl);
+      }
+    }
     if (analysisRes.data) setAnalysis(analysisRes.data);
     if (transcriptionRes.data) setTranscription(transcriptionRes.data);
     if (highlightsRes.data) setHighlights(highlightsRes.data);
@@ -169,7 +179,43 @@ const MeetingDetail = () => {
         )}
       </div>
 
-      {/* Video/Audio Player or Link */}
+      {/* Video/Audio Player — Storage file */}
+      {meeting.file_url && !meeting.youtube_url && fileMediaUrl && (() => {
+        const isVideo = meeting.file_type === "webm" || meeting.file_type === "mp4" || meeting.file_url!.endsWith(".webm") || meeting.file_url!.endsWith(".mp4");
+
+        return (
+          <Collapsible defaultOpen>
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <CardHeader className="flex flex-row items-center justify-between py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    {isVideo ? <Video className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    Gravação da Reunião
+                  </CardTitle>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="pt-0">
+                  {isVideo ? (
+                    <video controls className="w-full rounded-md border" preload="metadata">
+                      <source src={fileMediaUrl} type="video/webm" />
+                      Seu navegador não suporta o player de vídeo.
+                    </video>
+                  ) : (
+                    <audio controls className="w-full" preload="metadata">
+                      <source src={fileMediaUrl} type="audio/webm" />
+                      Seu navegador não suporta o player de áudio.
+                    </audio>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        );
+      })()}
+
+      {/* Video/Audio Player — Google Drive link */}
       {meeting.youtube_url && (() => {
         const getGoogleDriveEmbedUrl = (url: string): string | null => {
           let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
