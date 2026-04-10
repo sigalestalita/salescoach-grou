@@ -39,7 +39,6 @@ async function restoreState() {
   } else if (state === 'error') {
     showErrorState(data.uploadError || 'Erro desconhecido');
   }
-  // idle → default form UI already shown
 }
 
 // ── Auth ──
@@ -188,23 +187,37 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     return;
   }
 
-  chrome.runtime.sendMessage({ action: 'startCapture', tabId }, async (response) => {
+  // Save recording state BEFORE sending to background
+  // This way if the popup closes during the desktop selector, state persists
+  startTime = Date.now();
+  await chrome.storage.local.set({
+    recordingState: 'recording',
+    recordingStartTime: startTime,
+  });
+  showActiveRecording();
+
+  chrome.runtime.sendMessage({ action: 'startCapture', tabId }, (response) => {
     if (chrome.runtime.lastError) {
+      // Reset state on error
+      chrome.storage.local.set({ recordingState: 'idle' });
+      chrome.storage.local.remove(['recordingStartTime']);
+      showRecordingUI();
       alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
       return;
     }
-    if (response && response.success) {
-      startTime = Date.now();
-      await chrome.storage.local.set({ recordingStartTime: startTime });
-      showActiveRecording();
-    } else {
+    if (!response || !response.success) {
+      chrome.storage.local.set({ recordingState: 'idle' });
+      chrome.storage.local.remove(['recordingStartTime']);
+      showRecordingUI();
       alert(response?.error || 'Erro ao iniciar gravação. Tente novamente.');
     }
+    // success: state already saved, UI already showing
   });
 });
 
 document.getElementById('btn-stop').addEventListener('click', async () => {
   stopTimer();
+  await chrome.storage.local.set({ recordingState: 'stopping' });
   showUploadingState();
 
   chrome.runtime.sendMessage({ action: 'stopCapture' }, (response) => {
