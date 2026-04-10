@@ -163,13 +163,21 @@ async function addScreenShare(streamId) {
     };
 
     mediaRecorder.onstop = async () => {
+      console.log('Screen+audio recorder stopped, chunks:', recordedChunks.length);
       await setState('stopping');
       chrome.runtime.sendMessage({ action: 'uploadStarted' });
 
+      if (recordedChunks.length === 0) {
+        await setState('error', { uploadError: 'Nenhum dado gravado.' });
+        chrome.runtime.sendMessage({ action: 'uploadError', error: 'Nenhum dado gravado.' });
+        cleanup();
+        return;
+      }
+
       const mimeType = recordedChunks[0]?.type || 'video/webm';
       const blob = new Blob(recordedChunks, { type: mimeType });
+      console.log('Blob created, size:', blob.size, 'type:', blob.type);
       await uploadFromOffscreen(blob);
-
       cleanup();
     };
 
