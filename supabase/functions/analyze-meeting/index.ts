@@ -350,11 +350,15 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       if (rows.length > 0) await supabase.from("highlights").insert(rows);
     }
 
-    await supabase.from("meetings").update({
+    const { error: updateError } = await supabase.from("meetings").update({
       status: "completo",
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
     }).eq("id", meetingId);
+
+    if (updateError) {
+      console.error("Failed to update meeting status:", JSON.stringify(updateError));
+    }
 
     console.log("Meeting processing complete:", meetingId);
   } catch (error) {
