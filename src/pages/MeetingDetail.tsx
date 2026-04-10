@@ -87,7 +87,16 @@ const MeetingDetail = () => {
       supabase.from("transcriptions").select("*").eq("meeting_id", id!).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("highlights").select("*").eq("meeting_id", id!),
     ]);
-    if (meetingRes.data) setMeeting(meetingRes.data);
+    if (meetingRes.data) {
+      setMeeting(meetingRes.data);
+      // Get signed URL for storage files
+      if (meetingRes.data.file_url && !meetingRes.data.youtube_url) {
+        const { data: signedData } = await supabase.storage
+          .from("meeting-files")
+          .createSignedUrl(meetingRes.data.file_url, 3600); // 1 hour
+        if (signedData?.signedUrl) setFileMediaUrl(signedData.signedUrl);
+      }
+    }
     if (analysisRes.data) setAnalysis(analysisRes.data);
     if (transcriptionRes.data) setTranscription(transcriptionRes.data);
     if (highlightsRes.data) setHighlights(highlightsRes.data);
