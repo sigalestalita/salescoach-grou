@@ -314,6 +314,82 @@ const MeetingDetail = () => {
       {/* Analysis results */}
       {analysis && (
         <>
+          {/* Resumo Descritivo da Reunião */}
+          {rawAnalysis?.meeting_summary && (() => {
+            const summary = rawAnalysis.meeting_summary;
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    Resumo da Reunião
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    {summary.company_name && (
+                      <li className="flex items-start gap-2">
+                        <span className="font-medium text-muted-foreground min-w-[140px]">Empresa:</span>
+                        <span>{summary.company_name}</span>
+                      </li>
+                    )}
+                    {summary.company_size && (
+                      <li className="flex items-start gap-2">
+                        <span className="font-medium text-muted-foreground min-w-[140px]">Porte / Colaboradores:</span>
+                        <span>{summary.company_size}</span>
+                      </li>
+                    )}
+                    {summary.participants?.length > 0 && (
+                      <li className="flex items-start gap-2">
+                        <span className="font-medium text-muted-foreground min-w-[140px]">Participantes:</span>
+                        <span>{summary.participants.map((p: any) => `${p.name}${p.role ? ` (${p.role})` : ""}`).join(", ")}</span>
+                      </li>
+                    )}
+                    {summary.identified_pains?.length > 0 && (
+                      <li className="flex items-start gap-2">
+                        <span className="font-medium text-muted-foreground min-w-[140px]">Dores identificadas:</span>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          {summary.identified_pains.map((pain: string, i: number) => (
+                            <li key={i}>{pain}</li>
+                          ))}
+                        </ul>
+                      </li>
+                    )}
+                    {summary.products_presented?.length > 0 && (
+                      <li className="flex items-start gap-2">
+                        <span className="font-medium text-muted-foreground min-w-[140px]">Produtos/Serviços:</span>
+                        <span>{summary.products_presented.join(", ")}</span>
+                      </li>
+                    )}
+                    {summary.proposal_value && (
+                      <li className="flex items-start gap-2">
+                        <span className="font-medium text-muted-foreground min-w-[140px]">Proposta/Valor:</span>
+                        <span>{summary.proposal_value}</span>
+                      </li>
+                    )}
+                    {summary.solution_pain_match?.length > 0 && (
+                      <li className="flex flex-col gap-1">
+                        <span className="font-medium text-muted-foreground">Match Solução x Dor:</span>
+                        <div className="ml-2 space-y-1">
+                          {summary.solution_pain_match.map((match: any, i: number) => (
+                            <div key={i} className="flex items-start gap-2 text-xs bg-muted/50 rounded-md p-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-medium">{match.pain}</span>
+                                <span className="text-muted-foreground"> → </span>
+                                <span className="text-primary font-medium">{match.solution}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </li>
+                    )}
+                  </ul>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Score Geral + Temperatura */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="md:col-span-1">

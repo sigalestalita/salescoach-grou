@@ -265,6 +265,15 @@ RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
   "insights": { "positives": ["..."], "improvements": ["..."], "key_moments": ["..."] },
   "sales_coach": { "next_steps": ["..."], "suggestions": ["..."], "scripts": ["..."] },
   "highlights": [{ "type": "<objecao|sinal_compra|momento_chave|dor|necessidade>", "text": "...", "speaker": "<vendedor|lead>" }],
+  "meeting_summary": {
+    "company_name": "<nome da empresa do lead, se mencionado>",
+    "participants": [{ "name": "<nome>", "role": "<cargo/função>" }],
+    "company_size": "<número de colaboradores ou porte da empresa, se mencionado>",
+    "identified_pains": ["<dor 1>", "<dor 2>", "..."],
+    "products_presented": ["<produto/serviço apresentado 1>", "..."],
+    "proposal_value": "<valor da proposta ou descrição da proposta comercial, se mencionado>",
+    "solution_pain_match": [{ "pain": "<dor identificada>", "solution": "<solução do portfólio que endereça essa dor>" }]
+  },
   "rag_results": { "knowledge_adherence_score": <0-100>, "products_mentioned": ["..."], "missed_opportunities": ["..."], "cross_sell_suggestions": ["..."], "discourse_alignment": "..." }
 }
 
