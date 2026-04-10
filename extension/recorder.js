@@ -1,9 +1,10 @@
-// Sales Coach AI - Recorder Window
-// This runs in a real extension page with full access to getUserMedia and getDisplayMedia.
+// Sales Coach AI - Unified Recorder Window
+// Handles: login, meeting form, recording, and upload — all in one window.
 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
 const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
 
+// ── State ──
 let mediaRecorder = null;
 let recordedChunks = [];
 let screenStream = null;
@@ -12,20 +13,148 @@ let audioContext = null;
 let timerInterval = null;
 let startTime = null;
 
-const initStatus = document.getElementById('init-status');
+// ── DOM refs ──
+const loginSection = document.getElementById('login-section');
+const mainSection = document.getElementById('main-section');
+const formSection = document.getElementById('form-section');
 const recordingView = document.getElementById('recording-view');
 const statusMsg = document.getElementById('status-msg');
+const statusDot = document.getElementById('status-dot');
 const modeLabel = document.getElementById('mode-label');
 const timerEl = document.getElementById('timer');
 
-// Start recording immediately when the window opens
-startRecording();
-
-// Listen for stop command from popup/background
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.action === 'stopRecording') {
-    stopRecording();
+// ── Init ──
+(async () => {
+  const session = await getSession();
+  if (session) {
+    showMainUI();
+    await restoreRecordingState();
+  } else {
+    showLoginUI();
   }
+})();
+
+async function restoreRecordingState() {
+  const data = await chrome.storage.local.get(['recordingState', 'recordingStartTime', 'recordingMode']);
+  const state = data.recordingState || 'idle';
+  if (state === 'uploading' || state === 'stopping') {
+    showStatus('sending', '⏳ Enviando gravação...');
+    formSection.classList.add('hidden');
+  } else if (state === 'done') {
+    showStatus('success', '✅ Gravação enviada! A análise será processada automaticamente.');
+    formSection.classList.add('hidden');
+    setTimeout(resetToForm, 5000);
+  } else if (state === 'error') {
+    const errData = await chrome.storage.local.get(['uploadError']);
+    showStatus('error', '❌ ' + (errData.uploadError || 'Erro desconhecido'));
+    formSection.classList.add('hidden');
+    setTimeout(resetToForm, 6000);
+  }
+  // Note: if state === 'recording' but we just opened the window, the old recording is gone.
+  // Reset to idle.
+  if (state === 'recording') {
+    await chrome.storage.local.set({ recordingState: 'idle' });
+    chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']);
+  }
+}
+
+// ── Auth ──
+function getSession() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['accessToken', 'refreshToken', 'userId'], (data) => {
+      resolve(data.accessToken && data.userId ? data : null);
+    });
+  });
+}
+
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!email || !password) {
+    errorEl.textContent = 'Preencha email e senha';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error_description || data.msg || 'Erro ao fazer login');
+
+    await chrome.storage.local.set({
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      userId: data.user.id,
+      userEmail: email,
+    });
+
+    errorEl.classList.add('hidden');
+    showMainUI();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('btn-logout').addEventListener('click', async () => {
+  await chrome.storage.local.remove(['accessToken', 'refreshToken', 'userId', 'userEmail']);
+  showLoginUI();
+});
+
+// ── UI helpers ──
+function showLoginUI() {
+  loginSection.classList.remove('hidden');
+  mainSection.classList.add('hidden');
+  statusDot.classList.add('offline');
+}
+
+function showMainUI() {
+  loginSection.classList.add('hidden');
+  mainSection.classList.remove('hidden');
+  statusDot.classList.remove('offline');
+  formSection.classList.remove('hidden');
+  recordingView.classList.add('hidden');
+  statusMsg.classList.add('hidden');
+}
+
+function showStatus(type, text) {
+  statusMsg.className = `status ${type}`;
+  statusMsg.textContent = text;
+  statusMsg.classList.remove('hidden');
+}
+
+function resetToForm() {
+  chrome.storage.local.set({ recordingState: 'idle' });
+  chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'uploadError', 'isScreenSharing', 'lastMeetingId']);
+  showMainUI();
+}
+
+// ── Recording ──
+document.getElementById('btn-start').addEventListener('click', async () => {
+  const title = document.getElementById('meeting-title').value.trim();
+  if (!title) {
+    alert('Preencha o título da agenda');
+    return;
+  }
+
+  // Save meeting data
+  const meetingData = {
+    title,
+    meetingType: document.getElementById('meeting-type').value,
+    leadName: document.getElementById('lead-name').value.trim(),
+    leadCompany: document.getElementById('lead-company').value.trim(),
+    leadEmail: document.getElementById('lead-email').value.trim(),
+  };
+  await chrome.storage.local.set({ meetingData });
+
+  // Start recording in this window
+  await startRecording();
 });
 
 document.getElementById('btn-stop').addEventListener('click', () => {
@@ -40,18 +169,16 @@ async function startRecording() {
   try {
     screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
-      audio: true, // Request system audio
+      audio: true,
     });
     hasScreen = true;
     hasSystemAudio = screenStream.getAudioTracks().length > 0;
 
-    // If user stops screen share via browser UI, stop recording
     screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
       stopRecording();
     });
   } catch (err) {
     console.warn('Screen capture denied or failed:', err.message);
-    // Continue with mic-only
   }
 
   // Step 2: Request microphone
@@ -62,18 +189,14 @@ async function startRecording() {
   } catch (err) {
     console.error('Microphone access failed:', err);
     if (!hasScreen) {
-      showError('Não foi possível acessar o microfone nem a tela. Verifique as permissões.');
-      notifyError('Permissões de microfone e tela negadas.');
-      setTimeout(() => window.close(), 5000);
+      showStatus('error', '❌ Não foi possível acessar o microfone nem a tela.');
+      chrome.runtime.sendMessage({ action: 'captureError', error: 'Permissões negadas' }).catch(() => {});
       return;
     }
-    // If we have screen but no mic, proceed with screen-only
   }
 
   if (!screenStream && !micStream) {
-    showError('Nenhuma fonte de áudio ou vídeo disponível.');
-    notifyError('Nenhuma fonte de áudio ou vídeo disponível.');
-    setTimeout(() => window.close(), 5000);
+    showStatus('error', '❌ Nenhuma fonte de áudio ou vídeo disponível.');
     return;
   }
 
@@ -85,7 +208,6 @@ async function startRecording() {
     const micSource = audioContext.createMediaStreamSource(micStream);
     micSource.connect(mixedDest);
   }
-
   if (hasSystemAudio) {
     const systemSource = audioContext.createMediaStreamSource(
       new MediaStream(screenStream.getAudioTracks())
@@ -117,11 +239,11 @@ async function startRecording() {
 
   mediaRecorder.onstop = async () => {
     showStatus('sending', '⏳ Enviando gravação...');
-    notifyUploadStarted();
+    formSection.classList.add('hidden');
+    recordingView.classList.add('hidden');
 
     if (recordedChunks.length === 0) {
-      showError('Nenhum dado gravado.');
-      notifyError('Nenhum dado gravado.');
+      showStatus('error', '❌ Nenhum dado gravado.');
       cleanup();
       return;
     }
@@ -130,12 +252,12 @@ async function startRecording() {
     const blob = new Blob(recordedChunks, { type: blobType });
 
     if (blob.size < 100) {
-      showError('Gravação vazia ou corrompida.');
-      notifyError('Gravação vazia ou corrompida.');
+      showStatus('error', '❌ Gravação vazia ou corrompida.');
       cleanup();
       return;
     }
 
+    chrome.runtime.sendMessage({ action: 'uploadStarted' }).catch(() => {});
     await uploadRecording(blob);
     cleanup();
   };
@@ -144,8 +266,9 @@ async function startRecording() {
 
   // Update UI
   startTime = Date.now();
-  initStatus.classList.add('hidden');
+  formSection.classList.add('hidden');
   recordingView.classList.remove('hidden');
+  statusMsg.classList.add('hidden');
   modeLabel.textContent = isVideo ? '🖥 Tela + 🎙 Áudio' : '🎙 Apenas áudio';
   startTimer();
 
@@ -184,7 +307,6 @@ function cleanup() {
 }
 
 // ── Upload ──
-
 async function refreshAccessToken() {
   try {
     const data = await chrome.storage.local.get(['refreshToken']);
@@ -192,10 +314,9 @@ async function refreshAccessToken() {
 
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
       body: JSON.stringify({ refresh_token: data.refreshToken }),
     });
-
     if (!res.ok) return null;
     const result = await res.json();
     await chrome.storage.local.set({
@@ -221,14 +342,13 @@ async function uploadRecording(blob) {
     if (freshToken) accessToken = freshToken;
 
     if (!accessToken) {
-      showError('Sessão expirada. Faça login novamente.');
-      notifyError('Sessão expirada. Faça login novamente.');
+      showStatus('error', '❌ Sessão expirada. Faça login novamente.');
+      chrome.runtime.sendMessage({ action: 'uploadError', error: 'Sessão expirada' }).catch(() => {});
       return;
     }
 
-    const ext = 'webm';
     const formData = new FormData();
-    formData.append('file', blob, `recording-${Date.now()}.${ext}`);
+    formData.append('file', blob, `recording-${Date.now()}.webm`);
     formData.append('title', meetingData.title || 'Gravação via Extensão');
     formData.append('meeting_type', meetingData.meetingType || 'empresa');
     formData.append('lead_name', meetingData.leadName || '');
@@ -240,8 +360,8 @@ async function uploadRecording(blob) {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/upload-recording`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'apikey': SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+        apikey: SUPABASE_ANON_KEY,
       },
       body: formData,
     });
@@ -256,41 +376,19 @@ async function uploadRecording(blob) {
     await chrome.storage.local.set({ recordingState: 'done', lastMeetingId: result.meetingId });
     await chrome.storage.local.remove(['meetingData']);
 
-    showStatus('success', '✅ Gravação enviada! Fechando...');
+    showStatus('success', '✅ Gravação enviada! A análise será processada automaticamente.');
     chrome.runtime.sendMessage({ action: 'uploadComplete', meetingId: result.meetingId }).catch(() => {});
 
-    setTimeout(() => window.close(), 3000);
+    setTimeout(resetToForm, 5000);
   } catch (err) {
     console.error('Upload error:', err);
-    showError(err.message);
-    notifyError(err.message);
-    setTimeout(() => window.close(), 6000);
+    showStatus('error', '❌ ' + err.message);
+    chrome.runtime.sendMessage({ action: 'uploadError', error: err.message }).catch(() => {});
+    setTimeout(resetToForm, 6000);
   }
 }
 
-// ── UI helpers ──
-
-function showStatus(type, text) {
-  statusMsg.className = `status ${type}`;
-  statusMsg.textContent = text;
-  statusMsg.classList.remove('hidden');
-}
-
-function showError(text) {
-  showStatus('error', '❌ ' + text);
-  chrome.storage.local.set({ recordingState: 'error', uploadError: text });
-}
-
-function notifyError(error) {
-  chrome.runtime.sendMessage({ action: 'captureError', error }).catch(() => {});
-}
-
-function notifyUploadStarted() {
-  chrome.runtime.sendMessage({ action: 'uploadStarted' }).catch(() => {});
-}
-
 // ── Timer ──
-
 function startTimer() {
   stopTimer();
   timerInterval = setInterval(() => {
@@ -305,3 +403,10 @@ function startTimer() {
 function stopTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }
+
+// Listen for stop command from background
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.action === 'stopRecording') {
+    stopRecording();
+  }
+});
