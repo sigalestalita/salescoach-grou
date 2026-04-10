@@ -1,0 +1,1 @@
+UPDATE public.meetings SET status = 'completo', overall_score = 0, temperature = 'congelado' WHERE id = 'a8c5f281-ea13-46f9-9446-a658d8a8e970' AND status = 'analisando';
