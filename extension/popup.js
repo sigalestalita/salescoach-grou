@@ -36,7 +36,7 @@ async function restoreState() {
     'isScreenSharing',
   ]);
   const state = data.recordingState || 'idle';
-  const mode = data.recordingMode || (data.isScreenSharing ? 'screen_audio' : 'audio_only');
+  const mode = data.recordingMode || 'audio_only';
 
   if (state === 'recording') {
     startTime = data.recordingStartTime || Date.now();
@@ -54,11 +54,7 @@ async function restoreState() {
 async function getSession() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['accessToken', 'refreshToken', 'userId'], (data) => {
-      if (data.accessToken && data.userId) {
-        resolve(data);
-      } else {
-        resolve(null);
-      }
+      resolve(data.accessToken && data.userId ? data : null);
     });
   });
 }
@@ -77,18 +73,12 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-      },
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
       body: JSON.stringify({ email, password }),
     });
 
     const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error_description || data.msg || 'Erro ao fazer login');
-    }
+    if (!res.ok) throw new Error(data.error_description || data.msg || 'Erro ao fazer login');
 
     await chrome.storage.local.set({
       accessToken: data.access_token,
@@ -129,27 +119,13 @@ function showRecordingUI() {
   screenStatus.className = 'screen-status sharing';
 }
 
-function showPendingStartState(message) {
-  formSection.classList.add('hidden');
-  activeRecording.classList.add('hidden');
-  uploadStatus.classList.remove('hidden');
-  uploadStatus.className = 'status sending';
-  uploadStatus.textContent = message;
-  stopTimer();
-}
-
 function showActiveRecording(mode = 'screen_audio') {
   formSection.classList.add('hidden');
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
 
-  if (mode === 'audio_only') {
-    screenStatus.textContent = '🎙 Apenas áudio';
-    screenStatus.className = 'screen-status';
-  } else {
-    screenStatus.textContent = '🖥 Tela + 🎙 Áudio';
-    screenStatus.className = 'screen-status sharing';
-  }
+  screenStatus.textContent = mode === 'audio_only' ? '🎙 Apenas áudio' : '🖥 Tela + 🎙 Áudio';
+  screenStatus.className = mode === 'audio_only' ? 'screen-status' : 'screen-status sharing';
 
   startTimer();
 }
@@ -191,36 +167,6 @@ function showErrorState(errorMsg) {
   }, 8000);
 }
 
-function getPermissionErrorMessage(err) {
-  const message = err?.message || '';
-
-  if (err?.name === 'NotAllowedError' || /permission dismissed/i.test(message)) {
-    return 'Permissão de microfone dispensada. Clique em Permitir no navegador e tente novamente.';
-  }
-
-  if (err?.name === 'NotFoundError') {
-    return 'Nenhum microfone foi encontrado.';
-  }
-
-  return message || 'Erro ao solicitar acesso ao microfone.';
-}
-
-async function ensureMicrophoneAccess() {
-  let tempStream = null;
-
-  try {
-    tempStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-    });
-  } catch (err) {
-    throw new Error(getPermissionErrorMessage(err));
-  } finally {
-    if (tempStream) {
-      tempStream.getTracks().forEach((track) => track.stop());
-    }
-  }
-}
-
 // ── Recording ──
 document.getElementById('btn-start').addEventListener('click', async () => {
   const title = document.getElementById('meeting-title').value.trim();
@@ -237,34 +183,18 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     leadEmail: document.getElementById('lead-email').value.trim(),
   };
 
-  try {
-    showPendingStartState('🎙 Autorize o microfone para continuar...');
-    await ensureMicrophoneAccess();
-    await chrome.storage.local.set({ meetingData });
-  } catch (err) {
-    await chrome.storage.local.set({ recordingState: 'error', uploadError: err.message });
-    showErrorState(err.message);
-    return;
-  }
+  await chrome.storage.local.set({ meetingData });
 
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tabId = tabs.length > 0 ? tabs[0].id : null;
-
-  if (!tabId) {
-    showErrorState('Erro: nenhuma aba ativa encontrada.');
-    return;
-  }
-
-  showPendingStartState('🖥 Selecione a tela na janela do navegador para iniciar...');
-  chrome.runtime.sendMessage({ action: 'startFullRecording', tabId }, (response) => {
+  // Open the recorder window — it handles all media capture
+  chrome.runtime.sendMessage({ action: 'openRecorder' }, (response) => {
     if (chrome.runtime.lastError) {
-      showErrorState('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
+      showErrorState('Erro ao abrir gravador: ' + chrome.runtime.lastError.message);
       return;
     }
-
     if (!response || !response.success) {
-      showErrorState(response?.error || 'Erro ao iniciar gravação.');
+      showErrorState(response?.error || 'Erro ao abrir gravador.');
     }
+    // Popup can close — recorder window stays open
   });
 });
 
@@ -280,36 +210,24 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
   });
 });
 
-// Listen for messages from background/offscreen
+// Listen for messages from background/recorder
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'recordingStarted') {
     startTime = msg.startTime || Date.now();
     showActiveRecording(msg.mode || 'screen_audio');
   }
-
   if (msg.action === 'captureError') {
     stopTimer();
     chrome.storage.local.set({ recordingState: 'error', uploadError: msg.error || 'Erro na gravação.' });
     chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing', 'recordingMode']);
     showErrorState(msg.error || 'Erro na gravação.');
   }
-
-  if (msg.action === 'screenShareStarted') {
-    // no-op, screen is always on
-  }
-
-  if (msg.action === 'screenShareError') {
-    // no-op
-  }
-
   if (msg.action === 'uploadStarted') {
     showUploadingState();
   }
-
   if (msg.action === 'uploadComplete') {
     showDoneState();
   }
-
   if (msg.action === 'uploadError') {
     showErrorState(msg.error || 'Erro desconhecido');
   }
@@ -329,8 +247,5 @@ function startTimer() {
 }
 
 function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }
