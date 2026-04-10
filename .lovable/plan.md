@@ -1,44 +1,41 @@
 
 
-## Plano: Corrigir botão "Iniciar Gravação" da extensão Chrome
+## Plano: Persistir estado da gravação e upload na extensão Chrome
 
-### Problema Identificado
+### Problema
+O popup perde o estado ao ser fechado/reaberto porque usa apenas `isRecording` como flag. Não há distinção entre "gravando", "parando", "enviando" ou "concluído", e o cronômetro reinicia.
 
-Há **3 bugs** no código da extensão que impedem o funcionamento:
+### Solução: Máquina de estados persistida no `chrome.storage.local`
 
-1. **`chrome.desktopCapture.chooseDesktopMedia` precisa receber a aba de origem como segundo parâmetro.** Sem isso, a API falha silenciosamente no Manifest V3. A assinatura correta é `chooseDesktopMedia(sources, targetTab, callback)`.
+Estados: `idle` | `recording` | `stopping` | `uploading` | `done` | `error`
 
-2. **O callback de `chooseDesktopMedia` recebe apenas `streamId`, não `(streamId, options)`.** O segundo parâmetro não existe nessa API.
+### Mudanças por arquivo
 
-3. **O `sendResponse` é chamado dentro de um callback assíncrono aninhado**, mas o canal de mensagem já pode estar fechado quando `chooseDesktopMedia` retorna. O popup nunca recebe a resposta e não muda de estado.
+**`extension/offscreen.js`**
+- Ao iniciar gravação: salvar `recordingState: 'recording'` no storage
+- Ao parar (onstop): salvar `recordingState: 'stopping'`, depois `'uploading'`
+- Ao concluir upload: salvar `recordingState: 'done'` + `lastMeetingId`
+- Ao erro: salvar `recordingState: 'error'` + `uploadError`
+- Remover a limpeza de `isRecording`/`recordingStartTime` e usar `recordingState` em vez disso
 
-### Solução
+**`extension/popup.js`**
+- No `DOMContentLoaded`, ler `recordingState` e `recordingStartTime` do storage
+- Restaurar a UI conforme o estado:
+  - `recording` → mostrar cronômetro (usando `recordingStartTime` salvo)
+  - `stopping`/`uploading` → mostrar status "Enviando..."
+  - `done` → mostrar "Gravação enviada!" por 5s, depois voltar a idle
+  - `error` → mostrar mensagem de erro salva
+- Ao clicar "Iniciar": salvar `recordingState: 'recording'` + `recordingStartTime`
+- Ao clicar "Parar": salvar `recordingState: 'stopping'`
+- Continuar ouvindo mensagens do offscreen para atualizar UI em tempo real
+- Remover referências a `isRecording` (substituído por `recordingState`)
 
-**`extension/popup.js`** — ao clicar "Iniciar Gravação":
-- Obter a aba ativa com `chrome.tabs.query({ active: true, currentWindow: true })` 
-- Enviar o `tabId` junto na mensagem `startCapture`
-- Após enviar a mensagem, já trocar a UI para "gravando" (otimista), pois o seletor de tela aparecerá em seguida
+**`extension/background.js`**
+- Sem mudanças estruturais necessárias
 
-**`extension/background.js`** — `handleStartCapture`:
-- Receber o `tabId` da mensagem
-- Buscar o tab object com `chrome.tabs.get(tabId)`
-- Passar o tab como segundo argumento: `chrome.desktopCapture.chooseDesktopMedia(['screen', 'window', 'tab'], tab, callback)`
-- Corrigir assinatura do callback para receber apenas `streamId`
-- Responder com `sendResponse({ success: true })` **antes** do callback do desktopCapture (indicando que o seletor foi aberto)
-- Usar uma mensagem separada para notificar o popup sobre sucesso/falha da captura
-
-**`extension/manifest.json`** — adicionar permissão `"tabs"` (necessária para `chrome.tabs.query`).
-
-**`extension/offscreen.js`** — sem alterações necessárias.
-
-### Mudanças por Arquivo
-
-| Arquivo | Mudança |
-|---------|---------|
-| `extension/manifest.json` | Adicionar `"tabs"` às permissions |
-| `extension/popup.js` | Enviar `tabId` com a mensagem; ouvir mensagem de resultado da captura |
-| `extension/background.js` | Usar `tab` no `chooseDesktopMedia`; corrigir callback; responder antes do seletor |
-
-### Re-empacotar
+**Re-empacotar**
 - Recriar `public/sales-coach-extension.zip` com os arquivos atualizados
+
+### Resultado
+O cronômetro persiste ao fechar/reabrir o popup. O status de upload é visível mesmo após sair e voltar. Ao concluir, o popup mostra a confirmação corretamente.
 
