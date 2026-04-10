@@ -27,7 +27,7 @@ serve(async (req) => {
     // Admin client for data queries (bypasses RLS)
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { context, pains, audienceType, offerType, selectedServices } = await req.json();
+    const { context, pains, audienceType, offerType, selectedServices, selectedDocIds } = await req.json();
 
     // Fetch knowledge base for context
     const [docsRes, itemsRes] = await Promise.all([
