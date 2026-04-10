@@ -79,7 +79,11 @@ async function uploadToAssemblyAI(fileData: Blob): Promise<string> {
   console.log("Uploading file to AssemblyAI...");
   const res = await fetch("https://api.assemblyai.com/v2/upload", {
     method: "POST",
-    headers: { Authorization: apiKey, "Transfer-Encoding": "chunked" },
+    headers: {
+      Authorization: apiKey,
+      "Content-Type": "application/octet-stream",
+      "Transfer-Encoding": "chunked",
+    },
     body: fileData,
   });
   if (!res.ok) {
