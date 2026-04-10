@@ -46,6 +46,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.action === 'uploadStarted') {
+    setBadge('...', '#FF8800');
+  }
+
+  if (msg.action === 'uploadComplete') {
+    setBadge('');
+  }
+
+  if (msg.action === 'uploadError' || msg.action === 'captureError') {
+    setBadge('');
+  }
+
   if (msg.action === 'recordingComplete') {
     chrome.runtime.sendMessage({
       action: 'recordingReady',
@@ -97,6 +109,7 @@ async function handleStartCapture(msg, sendResponse) {
           });
 
           chrome.runtime.sendMessage({ action: 'captureStarted' });
+          setBadge('REC');
         } catch (err) {
           chrome.runtime.sendMessage({ action: 'captureError', error: err.message });
         }
