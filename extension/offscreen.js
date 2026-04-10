@@ -254,6 +254,7 @@ async function uploadFromOffscreen(blob) {
     formData.append('lead_company', meetingData.leadCompany || '');
     formData.append('lead_email', meetingData.leadEmail || '');
 
+    console.log('Sending to upload-recording endpoint...');
     const res = await fetch(`${SUPABASE_URL}/functions/v1/upload-recording`, {
       method: 'POST',
       headers: {
@@ -263,10 +264,12 @@ async function uploadFromOffscreen(blob) {
       body: formData,
     });
 
+    console.log('Upload response status:', res.status);
     const result = await res.json();
+    console.log('Upload response:', JSON.stringify(result));
 
     if (!res.ok) {
-      throw new Error(result.error || 'Erro no upload');
+      throw new Error(result.error || `Erro no upload (status ${res.status})`);
     }
 
     await setState('done', { lastMeetingId: result.meetingId });
