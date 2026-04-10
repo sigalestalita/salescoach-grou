@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLoginUI();
   }
 
-  // Check if already recording
   chrome.storage.local.get(['isRecording', 'recordingStartTime'], (data) => {
     if (data.isRecording) {
       startTime = data.recordingStartTime;
@@ -133,12 +132,24 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     leadEmail: document.getElementById('lead-email').value.trim(),
   };
 
-  // Save meeting data
   await chrome.storage.local.set({ meetingData });
 
-  // Request desktop capture from background
-  chrome.runtime.sendMessage({ action: 'startCapture' }, (response) => {
+  // Get the active tab to pass to desktopCapture
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabId = tabs.length > 0 ? tabs[0].id : null;
+
+  if (!tabId) {
+    alert('Erro: nenhuma aba ativa encontrada.');
+    return;
+  }
+
+  chrome.runtime.sendMessage({ action: 'startCapture', tabId }, (response) => {
+    if (chrome.runtime.lastError) {
+      alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
+      return;
+    }
     if (response && response.success) {
+      // Optimistically show recording UI — the screen selector will open
       startTime = Date.now();
       chrome.storage.local.set({ isRecording: true, recordingStartTime: startTime });
       showActiveRecording();
@@ -160,7 +171,6 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
     if (response && response.success && response.blob) {
       await uploadRecording(response.blob);
     } else if (response && response.success) {
-      // Blob will come via a separate message
       uploadStatus.textContent = '⏳ Processando gravação...';
     } else {
       uploadStatus.className = 'status error';
@@ -169,10 +179,18 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
   });
 });
 
-// Listen for recording blob from background
+// Listen for messages from background
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'recordingReady' && msg.blobUrl) {
     handleRecordingBlob(msg.blobUrl);
+  }
+
+  if (msg.action === 'captureError') {
+    // User cancelled or capture failed — revert UI
+    stopTimer();
+    chrome.storage.local.remove(['isRecording', 'recordingStartTime']);
+    showRecordingUI();
+    alert(msg.error || 'Erro na captura de tela.');
   }
 });
 
