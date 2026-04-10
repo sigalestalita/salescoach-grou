@@ -318,7 +318,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       return;
     }
 
-    await supabase.from("analysis_results").insert({
+    const { error: insertError } = await supabase.from("analysis_results").insert({
       meeting_id: meetingId,
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
@@ -333,6 +333,12 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       raw_analysis: analysisData,
       model_used: "google/gemini-2.5-flash",
     });
+
+    if (insertError) {
+      console.error("Failed to insert analysis_results:", JSON.stringify(insertError));
+      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      return;
+    }
 
     if (analysisData.highlights && Array.isArray(analysisData.highlights)) {
       const rows = analysisData.highlights.map((h: any) => ({
