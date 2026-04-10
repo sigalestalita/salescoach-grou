@@ -64,6 +64,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     startMicOnlyRecording();
   }
 
+  if (msg.action === 'startFullRecording') {
+    startFullRecording(msg.streamId);
+  }
+
   if (msg.action === 'addScreenShare') {
     addScreenShare(msg.streamId);
   }
