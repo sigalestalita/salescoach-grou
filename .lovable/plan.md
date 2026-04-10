@@ -1,41 +1,29 @@
 
 
-## Plano: Persistir estado da gravação e upload na extensão Chrome
+## Fix: Extension recording fails with DOMException
 
-### Problema
-O popup perde o estado ao ser fechado/reaberto porque usa apenas `isRecording` como flag. Não há distinção entre "gravando", "parando", "enviando" ou "concluído", e o cronômetro reinicia.
+### Root Cause
 
-### Solução: Máquina de estados persistida no `chrome.storage.local`
+Two issues identified from the screenshots:
 
-Estados: `idle` | `recording` | `stopping` | `uploading` | `done` | `error`
+1. **`audioCapture` is invalid for extensions** -- it's only for Chrome Apps. This causes a warning and doesn't grant mic permissions.
 
-### Mudanças por arquivo
+2. **Offscreen document created with only `USER_MEDIA` reason** -- but `startFullRecording` uses `chromeMediaSource: 'desktop'` constraints which require `DISPLAY_MEDIA` reason. Without it, the `getUserMedia` call throws a DOMException.
 
-**`extension/offscreen.js`**
-- Ao iniciar gravação: salvar `recordingState: 'recording'` no storage
-- Ao parar (onstop): salvar `recordingState: 'stopping'`, depois `'uploading'`
-- Ao concluir upload: salvar `recordingState: 'done'` + `lastMeetingId`
-- Ao erro: salvar `recordingState: 'error'` + `uploadError`
-- Remover a limpeza de `isRecording`/`recordingStartTime` e usar `recordingState` em vez disso
+### Changes
 
-**`extension/popup.js`**
-- No `DOMContentLoaded`, ler `recordingState` e `recordingStartTime` do storage
-- Restaurar a UI conforme o estado:
-  - `recording` → mostrar cronômetro (usando `recordingStartTime` salvo)
-  - `stopping`/`uploading` → mostrar status "Enviando..."
-  - `done` → mostrar "Gravação enviada!" por 5s, depois voltar a idle
-  - `error` → mostrar mensagem de erro salva
-- Ao clicar "Iniciar": salvar `recordingState: 'recording'` + `recordingStartTime`
-- Ao clicar "Parar": salvar `recordingState: 'stopping'`
-- Continuar ouvindo mensagens do offscreen para atualizar UI em tempo real
-- Remover referências a `isRecording` (substituído por `recordingState`)
+**`extension/manifest.json`**
+- Remove `audioCapture` from permissions (invalid for extensions)
 
 **`extension/background.js`**
-- Sem mudanças estruturais necessárias
+- Change offscreen creation reasons from `['USER_MEDIA']` to `['USER_MEDIA', 'DISPLAY_MEDIA']`
 
-**Re-empacotar**
-- Recriar `public/sales-coach-extension.zip` com os arquivos atualizados
+**`extension/offscreen.js`**
+- In `startFullRecording`, add fallback: if screen capture with `chromeMediaSource: 'desktop'` fails (DOMException), fall back to mic-only recording so the meeting is still captured
+- Improve error message to distinguish between screen capture failure and mic failure
 
-### Resultado
-O cronômetro persiste ao fechar/reabrir o popup. O status de upload é visível mesmo após sair e voltar. Ao concluir, o popup mostra a confirmação corretamente.
+**Re-package** `public/sales-coach-extension.zip`
+
+### Result
+Screen + mic recording will work when the browser supports desktop capture from offscreen documents. If it fails (e.g., Arc browser restrictions), the extension gracefully falls back to mic-only recording instead of showing an error.
 
