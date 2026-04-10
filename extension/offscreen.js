@@ -153,50 +153,66 @@ async function startFullRecording(streamId) {
       audio: { echoCancellation: true, noiseSuppression: true },
     });
 
-    // Get screen + system audio
-    screenStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: streamId,
+    // Try to get screen + system audio
+    let screenCaptureSuccess = false;
+    try {
+      screenStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: streamId,
+          },
         },
-      },
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: streamId,
-          maxWidth: 1920,
-          maxHeight: 1080,
-          maxFrameRate: 15,
+        video: {
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: streamId,
+            maxWidth: 1920,
+            maxHeight: 1080,
+            maxFrameRate: 15,
+          },
         },
-      },
-    });
+      });
+      screenCaptureSuccess = true;
+    } catch (screenErr) {
+      console.warn('Screen capture failed, falling back to mic-only:', screenErr.message);
+    }
 
-    // Mix mic + system audio
+    // Mix audio
     audioContext = new AudioContext();
     mixedDest = audioContext.createMediaStreamDestination();
 
     const micSource = audioContext.createMediaStreamSource(micStream);
     micSource.connect(mixedDest);
 
-    const systemAudioTracks = screenStream.getAudioTracks();
-    if (systemAudioTracks.length > 0) {
-      const systemSource = audioContext.createMediaStreamSource(
-        new MediaStream(systemAudioTracks)
-      );
-      systemSource.connect(mixedDest);
+    if (screenCaptureSuccess && screenStream) {
+      const systemAudioTracks = screenStream.getAudioTracks();
+      if (systemAudioTracks.length > 0) {
+        const systemSource = audioContext.createMediaStreamSource(
+          new MediaStream(systemAudioTracks)
+        );
+        systemSource.connect(mixedDest);
+      }
+
+      // Combined stream: screen video + mixed audio
+      currentCombinedStream = new MediaStream([
+        ...screenStream.getVideoTracks(),
+        ...mixedDest.stream.getAudioTracks(),
+      ]);
+    } else {
+      // Mic-only fallback
+      currentCombinedStream = new MediaStream([
+        ...mixedDest.stream.getAudioTracks(),
+      ]);
     }
 
-    // Combined stream: screen video + mixed audio
-    currentCombinedStream = new MediaStream([
-      ...screenStream.getVideoTracks(),
-      ...mixedDest.stream.getAudioTracks(),
-    ]);
+    const isVideo = screenCaptureSuccess && screenStream && screenStream.getVideoTracks().length > 0;
+    const mimeType = isVideo ? 'video/webm;codecs=vp8,opus' : 'audio/webm;codecs=opus';
 
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(currentCombinedStream, {
-      mimeType: 'video/webm;codecs=vp8,opus',
-      videoBitsPerSecond: 1000000,
+      mimeType,
+      ...(isVideo ? { videoBitsPerSecond: 1000000 } : {}),
     });
 
     mediaRecorder.ondataavailable = (e) => {
@@ -206,7 +222,7 @@ async function startFullRecording(streamId) {
     };
 
     mediaRecorder.onstop = async () => {
-      console.log('Full recorder stopped, chunks:', recordedChunks.length);
+      console.log('Recorder stopped, chunks:', recordedChunks.length);
       await setState('stopping');
       chrome.runtime.sendMessage({ action: 'uploadStarted' });
 
@@ -217,8 +233,8 @@ async function startFullRecording(streamId) {
         return;
       }
 
-      const mimeType = recordedChunks[0]?.type || 'video/webm';
-      const blob = new Blob(recordedChunks, { type: mimeType });
+      const blobType = recordedChunks[0]?.type || mimeType;
+      const blob = new Blob(recordedChunks, { type: blobType });
       console.log('Blob created, size:', blob.size, 'type:', blob.type);
 
       if (blob.size < 100) {
@@ -234,10 +250,12 @@ async function startFullRecording(streamId) {
 
     mediaRecorder.start(1000);
     await setState('recording');
-    await safeStorageSet({ isScreenSharing: true });
-    console.log('Full recording started (screen + mic)');
+    if (screenCaptureSuccess) {
+      await safeStorageSet({ isScreenSharing: true });
+    }
+    console.log(screenCaptureSuccess ? 'Full recording started (screen + mic)' : 'Recording started (mic-only fallback)');
   } catch (err) {
-    console.error('Failed to start full recording:', err);
+    console.error('Failed to start recording:', err);
     await setState('error', { uploadError: 'Erro ao iniciar gravação: ' + err.message });
     chrome.runtime.sendMessage({
       action: 'captureError',

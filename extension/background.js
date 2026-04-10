@@ -22,8 +22,8 @@ async function ensureOffscreen() {
   try {
     await chrome.offscreen.createDocument({
       url: 'offscreen.html',
-      reasons: ['USER_MEDIA'],
-      justification: 'Recording audio and optionally screen for meeting analysis',
+      reasons: ['USER_MEDIA', 'DISPLAY_MEDIA'],
+      justification: 'Recording audio and screen for meeting analysis',
     });
     offscreenCreated = true;
   } catch (e) {
