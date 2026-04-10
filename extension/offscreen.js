@@ -193,19 +193,56 @@ function stopRecording() {
   }
 }
 
+async function refreshAccessToken() {
+  try {
+    const data = await chrome.storage.local.get(['refreshToken']);
+    if (!data.refreshToken) return null;
+
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ refresh_token: data.refreshToken }),
+    });
+
+    if (!res.ok) return null;
+
+    const result = await res.json();
+    await chrome.storage.local.set({
+      accessToken: result.access_token,
+      refreshToken: result.refresh_token,
+    });
+    console.log('Token refreshed successfully');
+    return result.access_token;
+  } catch (err) {
+    console.error('Token refresh failed:', err);
+    return null;
+  }
+}
+
 async function uploadFromOffscreen(blob) {
   await setState('uploading');
 
   try {
-    const data = await chrome.storage.local.get(['accessToken', 'meetingData']);
-    const accessToken = data.accessToken;
+    const data = await chrome.storage.local.get(['accessToken', 'refreshToken', 'meetingData']);
+    let accessToken = data.accessToken;
     const meetingData = data.meetingData || {};
+
+    // Try to refresh token before upload
+    const freshToken = await refreshAccessToken();
+    if (freshToken) {
+      accessToken = freshToken;
+    }
 
     if (!accessToken) {
       await setState('error', { uploadError: 'Sessão expirada. Faça login novamente.' });
       chrome.runtime.sendMessage({ action: 'uploadError', error: 'Sessão expirada. Faça login novamente.' });
       return;
     }
+
+    console.log('Starting upload, blob size:', blob.size, 'type:', blob.type);
 
     const isVideo = blob.type.includes('video');
     const ext = isVideo ? 'webm' : 'webm';
@@ -217,6 +254,7 @@ async function uploadFromOffscreen(blob) {
     formData.append('lead_company', meetingData.leadCompany || '');
     formData.append('lead_email', meetingData.leadEmail || '');
 
+    console.log('Sending to upload-recording endpoint...');
     const res = await fetch(`${SUPABASE_URL}/functions/v1/upload-recording`, {
       method: 'POST',
       headers: {
@@ -226,10 +264,12 @@ async function uploadFromOffscreen(blob) {
       body: formData,
     });
 
+    console.log('Upload response status:', res.status);
     const result = await res.json();
+    console.log('Upload response:', JSON.stringify(result));
 
     if (!res.ok) {
-      throw new Error(result.error || 'Erro no upload');
+      throw new Error(result.error || `Erro no upload (status ${res.status})`);
     }
 
     await setState('done', { lastMeetingId: result.meetingId });
