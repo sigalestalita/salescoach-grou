@@ -24,13 +24,16 @@
     .field input:focus, .field select:focus { border-color: #60a5fa; }
 
     /* Buttons */
-    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-bottom: 6px; }
     .btn-primary { background: #3b82f6; color: white; }
     .btn-primary:hover { background: #2563eb; }
     .btn-danger { background: #ef4444; color: white; }
     .btn-danger:hover { background: #dc2626; }
     .btn-success { background: #22c55e; color: white; }
     .btn-success:hover { background: #16a34a; }
+    .btn-outline { background: transparent; border: 1px solid #334155; color: #94a3b8; }
+    .btn-outline:hover { border-color: #60a5fa; color: #60a5fa; }
+    .btn-outline.active { border-color: #22c55e; color: #22c55e; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* Recording */
@@ -38,6 +41,9 @@
     .recording-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
     .pulse { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .screen-status { text-align: center; font-size: 12px; color: #64748b; margin-bottom: 8px; }
+    .screen-status.sharing { color: #22c55e; }
 
     /* Status */
     .status { text-align: center; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; }
@@ -71,10 +77,6 @@
         <label>Senha</label>
         <input type="password" id="login-password" placeholder="Sua senha">
       </div>
-      <div class="field">
-        <label>URL do Sales Coach</label>
-        <input type="url" id="app-url" placeholder="https://salescoach-grou.lovable.app">
-      </div>
       <button class="btn btn-primary" id="btn-login">Entrar</button>
       <div id="login-error" class="status error hidden"></div>
     </div>
@@ -106,7 +108,7 @@
           <label>Email do Lead</label>
           <input type="email" id="lead-email" placeholder="email@empresa.com">
         </div>
-        <button class="btn btn-primary" id="btn-start">🔴 Iniciar Gravação</button>
+        <button class="btn btn-primary" id="btn-start">🎙 Iniciar Gravação</button>
       </div>
 
       <!-- Active recording -->
@@ -116,6 +118,8 @@
           <span>Gravando...</span>
         </div>
         <div class="timer" id="timer">00:00:00</div>
+        <div class="screen-status" id="screen-status">🎙 Apenas áudio</div>
+        <button class="btn btn-outline" id="btn-share-screen">🖥 Compartilhar Tela</button>
         <button class="btn btn-danger" id="btn-stop">⏹ Parar e Enviar</button>
       </div>
 
