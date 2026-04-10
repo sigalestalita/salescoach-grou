@@ -1,6 +1,6 @@
 // Sales Coach AI - Background Service Worker
 
-let offscreenCreated = false;
+let recorderWindowId = null;
 
 function setBadge(text, color = '#FF0000') {
   chrome.action.setBadgeText({ text });
@@ -16,38 +16,33 @@ chrome.storage.local.get(['recordingState'], (data) => {
   }
 });
 
-// Ensure offscreen document exists
-async function ensureOffscreen() {
-  if (offscreenCreated) return;
-  try {
-    await chrome.offscreen.createDocument({
-      url: 'offscreen.html',
-      reasons: ['USER_MEDIA', 'DISPLAY_MEDIA'],
-      justification: 'Recording audio and screen for meeting analysis',
+// Track recorder window closing
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === recorderWindowId) {
+    recorderWindowId = null;
+    // If recording was active, it means user closed the window — treat as stop
+    chrome.storage.local.get(['recordingState'], (data) => {
+      if (data.recordingState === 'recording') {
+        // The recorder.js will handle cleanup before the window closes
+        // But if it didn't finish uploading, reset state
+        setTimeout(() => {
+          chrome.storage.local.get(['recordingState'], (d) => {
+            if (d.recordingState === 'recording') {
+              chrome.storage.local.set({ recordingState: 'idle' });
+              chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']);
+              setBadge('');
+            }
+          });
+        }, 2000);
+      }
     });
-    offscreenCreated = true;
-  } catch (e) {
-    if (!e.message.includes('already exists')) {
-      throw e;
-    }
-    offscreenCreated = true;
   }
-}
+});
 
 // Listen for messages
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action === 'startMicRecording') {
-    handleStartMicRecording(sendResponse);
-    return true;
-  }
-
-  if (msg.action === 'startFullRecording') {
-    handleStartFullRecording(msg, sendResponse);
-    return true;
-  }
-
-  if (msg.action === 'startScreenShare') {
-    handleStartScreenShare(msg, sendResponse);
+  if (msg.action === 'openRecorder') {
+    openRecorderWindow(sendResponse);
     return true;
   }
 
@@ -56,138 +51,53 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.action === 'recordingStarted') {
+    setBadge('REC');
+    // Relay to popup
+    chrome.runtime.sendMessage(msg).catch(() => {});
+  }
+
   if (msg.action === 'uploadStarted') {
     setBadge('...', '#FF8800');
+    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   if (msg.action === 'uploadComplete') {
     setBadge('');
+    recorderWindowId = null;
+    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 
   if (msg.action === 'uploadError' || msg.action === 'captureError') {
     setBadge('');
-  }
-
-  if (msg.action === 'screenShareStarted') {
-    // badge stays REC
-  }
-
-  if (msg.action === 'offscreenClosed') {
-    offscreenCreated = false;
-    return false;
-  }
-
-  // Storage proxy for offscreen document (Arc browser compatibility)
-  if (msg.action === 'storageSet') {
-    chrome.storage.local.set(msg.data);
-    return false;
-  }
-
-  if (msg.action === 'storageGet') {
-    chrome.storage.local.get(msg.keys, (result) => {
-      sendResponse(result);
-    });
-    return true; // async response
-  }
-
-  if (msg.action === 'storageRemove') {
-    chrome.storage.local.remove(msg.keys);
-    return false;
+    recorderWindowId = null;
+    chrome.runtime.sendMessage(msg).catch(() => {});
   }
 });
 
-async function handleStartMicRecording(sendResponse) {
+async function openRecorderWindow(sendResponse) {
   try {
-    await ensureOffscreen();
+    // If recorder window already exists, focus it
+    if (recorderWindowId) {
+      try {
+        await chrome.windows.update(recorderWindowId, { focused: true });
+        sendResponse({ success: true });
+        return;
+      } catch {
+        recorderWindowId = null;
+      }
+    }
 
-    chrome.runtime.sendMessage({
-      action: 'startMicRecording',
-      target: 'offscreen',
+    const win = await chrome.windows.create({
+      url: chrome.runtime.getURL('recorder.html'),
+      type: 'popup',
+      width: 420,
+      height: 320,
+      focused: true,
     });
 
-    setBadge('REC');
+    recorderWindowId = win.id;
     sendResponse({ success: true });
-  } catch (err) {
-    sendResponse({ success: false, error: err.message });
-  }
-}
-
-async function handleStartFullRecording(msg, sendResponse) {
-  const tabId = msg.tabId;
-  if (!tabId) {
-    sendResponse({ success: false, error: 'Tab ID não fornecido' });
-    return;
-  }
-
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    sendResponse({ success: true });
-
-    chrome.desktopCapture.chooseDesktopMedia(
-      ['screen', 'window', 'tab'],
-      tab,
-      async (streamId) => {
-        if (!streamId) {
-          chrome.runtime.sendMessage({ action: 'captureError', error: 'Compartilhamento de tela cancelado.' });
-          chrome.storage.local.set({ recordingState: 'idle' });
-          chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing', 'recordingMode']);
-          return;
-        }
-
-        try {
-          await ensureOffscreen();
-          chrome.runtime.sendMessage({
-            action: 'startFullRecording',
-            target: 'offscreen',
-            streamId,
-          });
-          setBadge('REC');
-        } catch (err) {
-          chrome.runtime.sendMessage({ action: 'captureError', error: err.message });
-        }
-      }
-    );
-  } catch (err) {
-    sendResponse({ success: false, error: err.message });
-  }
-}
-
-async function handleStartScreenShare(msg, sendResponse) {
-  const tabId = msg.tabId;
-
-  if (!tabId) {
-    sendResponse({ success: false, error: 'Tab ID não fornecido' });
-    return;
-  }
-
-  try {
-    const tab = await chrome.tabs.get(tabId);
-
-    // Respond immediately so popup knows the selector is opening
-    sendResponse({ success: true });
-
-    chrome.desktopCapture.chooseDesktopMedia(
-      ['screen', 'window', 'tab'],
-      tab,
-      async (streamId) => {
-        if (!streamId) {
-          chrome.runtime.sendMessage({ action: 'screenShareError', error: 'Compartilhamento cancelado.' });
-          return;
-        }
-
-        try {
-          await ensureOffscreen();
-
-          chrome.runtime.sendMessage({
-            action: 'addScreenShare',
-            target: 'offscreen',
-            streamId,
-          });
-        } catch (err) {
-          chrome.runtime.sendMessage({ action: 'screenShareError', error: err.message });
-        }
-      }
-    );
   } catch (err) {
     sendResponse({ success: false, error: err.message });
   }
@@ -195,10 +105,8 @@ async function handleStartScreenShare(msg, sendResponse) {
 
 async function handleStopCapture(sendResponse) {
   try {
-    chrome.runtime.sendMessage({
-      action: 'stopRecording',
-      target: 'offscreen',
-    });
+    // Send stop message to all extension pages (the recorder window will pick it up)
+    chrome.runtime.sendMessage({ action: 'stopRecording' }).catch(() => {});
     sendResponse({ success: true });
   } catch (err) {
     sendResponse({ success: false, error: err.message });
