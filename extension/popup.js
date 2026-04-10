@@ -118,28 +118,13 @@ function showRecordingUI() {
   uploadStatus.classList.add('hidden');
 }
 
-function showActiveRecording(isSharing = false) {
+function showActiveRecording() {
   formSection.classList.add('hidden');
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
-  updateScreenStatus(isSharing);
+  screenStatus.textContent = '🖥 Tela + 🎙 Áudio';
+  screenStatus.className = 'screen-status sharing';
   startTimer();
-}
-
-function updateScreenStatus(isSharing) {
-  if (isSharing) {
-    screenStatus.textContent = '🖥 Tela compartilhada';
-    screenStatus.className = 'screen-status sharing';
-    btnShareScreen.textContent = '✅ Tela compartilhada';
-    btnShareScreen.classList.add('active');
-    btnShareScreen.disabled = true;
-  } else {
-    screenStatus.textContent = '🎙 Apenas áudio';
-    screenStatus.className = 'screen-status';
-    btnShareScreen.textContent = '🖥 Compartilhar Tela';
-    btnShareScreen.classList.remove('active');
-    btnShareScreen.disabled = false;
-  }
 }
 
 function showUploadingState() {
