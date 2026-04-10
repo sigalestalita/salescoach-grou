@@ -241,12 +241,22 @@ CONTEXTO:
 - Vendedor está conversando com o lead: ${meeting.lead_name || "desconhecido"} da empresa ${meeting.lead_company || "desconhecida"}
 - Título da reunião: ${meeting.title}
 ${knowledgeSection}
+
+CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (baseado na metodologia NATO/BANT da empresa):
+
+A temperatura DEVE ser classificada em uma das 5 categorias abaixo, usando EXATAMENTE estes valores:
+- "muito_quente": Preenchem todos os requisitos NATO/BANT (venda imediata). Score BANT 4 critérios atendidos. Budget confirmado, decisor presente, necessidade clara e urgente, timeline < 30 dias.
+- "quente": Preenchem todos os requisitos NATO/BANT (prontos para venda, com fechamento em até 90 dias). Score BANT 3-4 critérios. Budget provável, acesso ao decisor, necessidade validada, timeline < 90 dias.
+- "morno": Têm necessidade, mas talvez não tenham orçamento ou urgência imediata (vão para nutrição). Score BANT 2-3 critérios. Budget incerto, influenciador identificado, dor reconhecida mas sem urgência, timeline 3-9 meses.
+- "frio": Sem demanda clara definida, falta urgência e prioridade; prospect que pode aquecer com conteúdo a longo prazo. Score BANT 1-2 critérios. Sem orçamento definido, sem acesso ao decisor, dor genérica, timeline > 9 meses.
+- "congelado": Não têm perfil para o nosso negócio (devem ser descartados). Score BANT 0-1 critério. Sem orçamento e sem previsão, sem acesso ao decisor, não reconhece problema, fora do radar (>12 meses).
+
 RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
 {
   "overall_score": <número de 0 a 100>,
   "overall_score_reason": "<explicação breve de 1-2 frases justificando o score geral>",
-  "temperature": "<frio|morno|quente>",
-  "temperature_reason": "<explicação breve de 1-2 frases justificando a temperatura>",
+  "temperature": "<congelado|frio|morno|quente|muito_quente>",
+  "temperature_reason": "<explicação breve de 1-2 frases justificando a temperatura com base nos critérios NATO/BANT acima>",
   "bant_score": { "budget": { "score": <0-25>, "reason": "<justificativa>" }, "authority": { "score": <0-25>, "reason": "<justificativa>" }, "need": { "score": <0-25>, "reason": "<justificativa>" }, "timeline": { "score": <0-25>, "reason": "<justificativa>" } },
   "meddic_score": { "metrics": { "score": <0-17>, "reason": "<justificativa>" }, "economic_buyer": { "score": <0-17>, "reason": "<justificativa>" }, "decision_criteria": { "score": <0-17>, "reason": "<justificativa>" }, "decision_process": { "score": <0-17>, "reason": "<justificativa>" }, "identify_pain": { "score": <0-17>, "reason": "<justificativa>" }, "champion": { "score": <0-17>, "reason": "<justificativa>" } },
   "spin_score": { "situacao": { "score": <0-25>, "reason": "<justificativa>" }, "problema": { "score": <0-25>, "reason": "<justificativa>" }, "implicacao": { "score": <0-25>, "reason": "<justificativa>" }, "necessidade": { "score": <0-25>, "reason": "<justificativa>" } },
@@ -258,7 +268,10 @@ RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
   "rag_results": { "knowledge_adherence_score": <0-100>, "products_mentioned": ["..."], "missed_opportunities": ["..."], "cross_sell_suggestions": ["..."], "discourse_alignment": "..." }
 }
 
-IMPORTANTE: Para cada sub-métrica de BANT, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
+IMPORTANTE: 
+- Para cada sub-métrica de BANT, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
+- A temperatura DEVE seguir rigorosamente os critérios NATO/BANT descritos acima. Cruze o score BANT com os critérios de qualificação para determinar a temperatura correta.
+- Na justificativa da temperatura, mencione quantos critérios BANT foram atendidos e quais.
 
 Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use a base de conhecimento para enriquecer sua análise e preencher o campo rag_results com detalhes." : " Se não houver base de conhecimento disponível, preencha rag_results como null."}`;
 
