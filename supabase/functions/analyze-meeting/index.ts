@@ -203,41 +203,28 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       transcript = result.text;
       speakers = result.speakers;
     } else if (meeting.file_url) {
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
+
+      const { data: fileData, error: fileError } = await supabase.storage
+        .from("meeting-files").download(meeting.file_url);
+
+      if (fileError || !fileData) {
+        console.error("Failed to download file:", fileError);
+        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        return;
+      }
+
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
 
       const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
       if (assemblyKey) {
-        // Generate a signed URL so AssemblyAI can fetch the file directly
-        const { data: signedData, error: signError } = await supabase.storage
-          .from("meeting-files")
-          .createSignedUrl(meeting.file_url, 3600);
-
-        if (signError || !signedData?.signedUrl) {
-          console.error("Failed to create signed URL:", signError);
-          await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-          return;
-        }
-
-        // The SDK's signedUrl may be a full URL or relative path
-        const rawSignedUrl = signedData.signedUrl;
-        console.log("Raw signedUrl from SDK:", rawSignedUrl);
-        const fullSignedUrl = rawSignedUrl.startsWith("http")
-          ? rawSignedUrl
-          : `${supabaseUrl}/storage/v1${rawSignedUrl}`;
-        console.log("Final URL for AssemblyAI:", fullSignedUrl);
-        const result = await transcribeWithAssemblyAI(fullSignedUrl);
+        // Upload file directly to AssemblyAI (handles any format including webm video)
+        const uploadUrl = await uploadToAssemblyAI(fileData);
+        const result = await transcribeWithAssemblyAI(uploadUrl);
         transcript = result.text;
         speakers = result.speakers;
       } else {
         // Fallback to Groq/OpenAI (only works with pure audio files)
-        const { data: fileData, error: fileError } = await supabase.storage
-          .from("meeting-files").download(meeting.file_url);
-
-        if (fileError || !fileData) {
-          await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-          return;
-        }
-
         const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
         transcript = await transcribeWithGroq(fileData, fileName);
       }
