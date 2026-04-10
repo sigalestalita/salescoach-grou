@@ -11,7 +11,6 @@ const activeRecording = document.getElementById('active-recording');
 const statusDot = document.getElementById('status-dot');
 const uploadStatus = document.getElementById('upload-status');
 const screenStatus = document.getElementById('screen-status');
-const btnShareScreen = document.getElementById('btn-share-screen');
 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
 const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
@@ -33,7 +32,7 @@ async function restoreState() {
 
   if (state === 'recording') {
     startTime = data.recordingStartTime;
-    showActiveRecording(data.isScreenSharing || false);
+    showActiveRecording();
   } else if (state === 'stopping' || state === 'uploading') {
     showUploadingState();
   } else if (state === 'done') {
@@ -119,28 +118,13 @@ function showRecordingUI() {
   uploadStatus.classList.add('hidden');
 }
 
-function showActiveRecording(isSharing = false) {
+function showActiveRecording() {
   formSection.classList.add('hidden');
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
-  updateScreenStatus(isSharing);
+  screenStatus.textContent = '🖥 Tela + 🎙 Áudio';
+  screenStatus.className = 'screen-status sharing';
   startTimer();
-}
-
-function updateScreenStatus(isSharing) {
-  if (isSharing) {
-    screenStatus.textContent = '🖥 Tela compartilhada';
-    screenStatus.className = 'screen-status sharing';
-    btnShareScreen.textContent = '✅ Tela compartilhada';
-    btnShareScreen.classList.add('active');
-    btnShareScreen.disabled = true;
-  } else {
-    screenStatus.textContent = '🎙 Apenas áudio';
-    screenStatus.className = 'screen-status';
-    btnShareScreen.textContent = '🖥 Compartilhar Tela';
-    btnShareScreen.classList.remove('active');
-    btnShareScreen.disabled = false;
-  }
 }
 
 function showUploadingState() {
@@ -198,35 +182,7 @@ document.getElementById('btn-start').addEventListener('click', async () => {
 
   await chrome.storage.local.set({ meetingData });
 
-  // Save recording state immediately
-  startTime = Date.now();
-  await chrome.storage.local.set({
-    recordingState: 'recording',
-    recordingStartTime: startTime,
-    isScreenSharing: false,
-  });
-  showActiveRecording(false);
-
-  // Tell background to start mic-only recording
-  chrome.runtime.sendMessage({ action: 'startMicRecording' }, (response) => {
-    if (chrome.runtime.lastError) {
-      chrome.storage.local.set({ recordingState: 'idle' });
-      chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing']);
-      showRecordingUI();
-      alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
-      return;
-    }
-    if (!response || !response.success) {
-      chrome.storage.local.set({ recordingState: 'idle' });
-      chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing']);
-      showRecordingUI();
-      alert(response?.error || 'Erro ao iniciar gravação. Verifique permissão do microfone.');
-    }
-  });
-});
-
-// ── Share Screen (optional, mid-session) ──
-btnShareScreen.addEventListener('click', async () => {
+  // Get active tab for screen capture
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tabId = tabs.length > 0 ? tabs[0].id : null;
 
@@ -235,24 +191,28 @@ btnShareScreen.addEventListener('click', async () => {
     return;
   }
 
-  btnShareScreen.disabled = true;
-  btnShareScreen.textContent = '⏳ Selecionando...';
-
-  chrome.runtime.sendMessage({ action: 'startScreenShare', tabId }, (response) => {
+  // Start screen+mic recording in one step
+  chrome.runtime.sendMessage({ action: 'startFullRecording', tabId }, (response) => {
     if (chrome.runtime.lastError) {
-      btnShareScreen.disabled = false;
-      btnShareScreen.textContent = '🖥 Compartilhar Tela';
-      alert('Erro: ' + chrome.runtime.lastError.message);
+      alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
       return;
     }
     if (!response || !response.success) {
-      btnShareScreen.disabled = false;
-      btnShareScreen.textContent = '🖥 Compartilhar Tela';
-      alert(response?.error || 'Erro ao compartilhar tela.');
+      alert(response?.error || 'Erro ao iniciar gravação.');
+      return;
     }
-    // Success will come via message 'screenShareStarted'
+    // Screen picker is opening — UI will update when recording actually starts
+    startTime = Date.now();
+    chrome.storage.local.set({
+      recordingState: 'recording',
+      recordingStartTime: startTime,
+      isScreenSharing: true,
+    });
+    showActiveRecording(true);
   });
 });
+
+// Screen share button removed - screen capture is now automatic
 
 document.getElementById('btn-stop').addEventListener('click', async () => {
   stopTimer();
@@ -277,15 +237,11 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg.action === 'screenShareStarted') {
-    chrome.storage.local.set({ isScreenSharing: true });
-    updateScreenStatus(true);
+    // no-op, screen is always on
   }
 
   if (msg.action === 'screenShareError') {
-    btnShareScreen.disabled = false;
-    btnShareScreen.textContent = '🖥 Compartilhar Tela';
-    // Don't stop recording, just notify
-    alert(msg.error || 'Não foi possível compartilhar a tela. A gravação de áudio continua.');
+    // no-op
   }
 
   if (msg.action === 'uploadStarted') {
