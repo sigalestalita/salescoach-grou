@@ -198,35 +198,7 @@ document.getElementById('btn-start').addEventListener('click', async () => {
 
   await chrome.storage.local.set({ meetingData });
 
-  // Save recording state immediately
-  startTime = Date.now();
-  await chrome.storage.local.set({
-    recordingState: 'recording',
-    recordingStartTime: startTime,
-    isScreenSharing: false,
-  });
-  showActiveRecording(false);
-
-  // Tell background to start mic-only recording
-  chrome.runtime.sendMessage({ action: 'startMicRecording' }, (response) => {
-    if (chrome.runtime.lastError) {
-      chrome.storage.local.set({ recordingState: 'idle' });
-      chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing']);
-      showRecordingUI();
-      alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
-      return;
-    }
-    if (!response || !response.success) {
-      chrome.storage.local.set({ recordingState: 'idle' });
-      chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing']);
-      showRecordingUI();
-      alert(response?.error || 'Erro ao iniciar gravação. Verifique permissão do microfone.');
-    }
-  });
-});
-
-// ── Share Screen (optional, mid-session) ──
-btnShareScreen.addEventListener('click', async () => {
+  // Get active tab for screen capture
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tabId = tabs.length > 0 ? tabs[0].id : null;
 
@@ -235,24 +207,28 @@ btnShareScreen.addEventListener('click', async () => {
     return;
   }
 
-  btnShareScreen.disabled = true;
-  btnShareScreen.textContent = '⏳ Selecionando...';
-
-  chrome.runtime.sendMessage({ action: 'startScreenShare', tabId }, (response) => {
+  // Start screen+mic recording in one step
+  chrome.runtime.sendMessage({ action: 'startFullRecording', tabId }, (response) => {
     if (chrome.runtime.lastError) {
-      btnShareScreen.disabled = false;
-      btnShareScreen.textContent = '🖥 Compartilhar Tela';
-      alert('Erro: ' + chrome.runtime.lastError.message);
+      alert('Erro ao iniciar gravação: ' + chrome.runtime.lastError.message);
       return;
     }
     if (!response || !response.success) {
-      btnShareScreen.disabled = false;
-      btnShareScreen.textContent = '🖥 Compartilhar Tela';
-      alert(response?.error || 'Erro ao compartilhar tela.');
+      alert(response?.error || 'Erro ao iniciar gravação.');
+      return;
     }
-    // Success will come via message 'screenShareStarted'
+    // Screen picker is opening — UI will update when recording actually starts
+    startTime = Date.now();
+    chrome.storage.local.set({
+      recordingState: 'recording',
+      recordingStartTime: startTime,
+      isScreenSharing: true,
+    });
+    showActiveRecording(true);
   });
 });
+
+// Screen share button removed - screen capture is now automatic
 
 document.getElementById('btn-stop').addEventListener('click', async () => {
   stopTimer();
