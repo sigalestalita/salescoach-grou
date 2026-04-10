@@ -146,7 +146,107 @@ async function startMicOnlyRecording() {
   }
 }
 
-async function addScreenShare(streamId) {
+async function startFullRecording(streamId) {
+  try {
+    // Get mic
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+
+    // Get screen + system audio
+    screenStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: streamId,
+        },
+      },
+      video: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: streamId,
+          maxWidth: 1920,
+          maxHeight: 1080,
+          maxFrameRate: 15,
+        },
+      },
+    });
+
+    // Mix mic + system audio
+    audioContext = new AudioContext();
+    mixedDest = audioContext.createMediaStreamDestination();
+
+    const micSource = audioContext.createMediaStreamSource(micStream);
+    micSource.connect(mixedDest);
+
+    const systemAudioTracks = screenStream.getAudioTracks();
+    if (systemAudioTracks.length > 0) {
+      const systemSource = audioContext.createMediaStreamSource(
+        new MediaStream(systemAudioTracks)
+      );
+      systemSource.connect(mixedDest);
+    }
+
+    // Combined stream: screen video + mixed audio
+    currentCombinedStream = new MediaStream([
+      ...screenStream.getVideoTracks(),
+      ...mixedDest.stream.getAudioTracks(),
+    ]);
+
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(currentCombinedStream, {
+      mimeType: 'video/webm;codecs=vp8,opus',
+      videoBitsPerSecond: 1000000,
+    });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        recordedChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      console.log('Full recorder stopped, chunks:', recordedChunks.length);
+      await setState('stopping');
+      chrome.runtime.sendMessage({ action: 'uploadStarted' });
+
+      if (recordedChunks.length === 0) {
+        await setState('error', { uploadError: 'Nenhum dado gravado.' });
+        chrome.runtime.sendMessage({ action: 'uploadError', error: 'Nenhum dado gravado.' });
+        cleanup();
+        return;
+      }
+
+      const mimeType = recordedChunks[0]?.type || 'video/webm';
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      console.log('Blob created, size:', blob.size, 'type:', blob.type);
+
+      if (blob.size < 100) {
+        await setState('error', { uploadError: 'Gravação vazia ou corrompida.' });
+        chrome.runtime.sendMessage({ action: 'uploadError', error: 'Gravação vazia ou corrompida.' });
+        cleanup();
+        return;
+      }
+
+      await uploadFromOffscreen(blob);
+      cleanup();
+    };
+
+    mediaRecorder.start(1000);
+    await setState('recording');
+    await safeStorageSet({ isScreenSharing: true });
+    console.log('Full recording started (screen + mic)');
+  } catch (err) {
+    console.error('Failed to start full recording:', err);
+    await setState('error', { uploadError: 'Erro ao iniciar gravação: ' + err.message });
+    chrome.runtime.sendMessage({
+      action: 'captureError',
+      error: 'Erro ao iniciar gravação: ' + err.message,
+    });
+  }
+}
+
+
   try {
     screenStream = await navigator.mediaDevices.getUserMedia({
       audio: {
