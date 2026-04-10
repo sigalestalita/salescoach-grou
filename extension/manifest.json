@@ -8,7 +8,8 @@
     "tabCapture",
     "storage",
     "offscreen",
-    "tabs"
+    "tabs",
+    "audioCapture"
   ],
   "action": {
     "default_popup": "popup.html",
