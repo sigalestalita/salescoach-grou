@@ -42,12 +42,31 @@ serve(async (req) => {
 
     // Build services context when relevant
     let servicesContext = "";
-    if (offerType !== "pda" && selectedServices && selectedServices.length > 0) {
-      const allItems = itemsRes.data || [];
-      const matchedServices = allItems.filter((i: any) => selectedServices.includes(i.name));
-      servicesContext = matchedServices
-        .map((s: any) => `- ${s.name}: ${s.description || 'sem descrição'}${s.metadata ? ` | Detalhes: ${JSON.stringify(s.metadata)}` : ''}`)
-        .join("\n");
+    if (offerType !== "pda") {
+      // Try matching from knowledge_items first
+      if (selectedServices && selectedServices.length > 0) {
+        const allItems = itemsRes.data || [];
+        const matchedServices = allItems.filter((i: any) => selectedServices.includes(i.name));
+        if (matchedServices.length > 0) {
+          servicesContext = matchedServices
+            .map((s: any) => `- ${s.name}: ${s.description || 'sem descrição'}${s.metadata ? ` | Detalhes: ${JSON.stringify(s.metadata)}` : ''}`)
+            .join("\n");
+        }
+      }
+
+      // Fallback: fetch from knowledge_documents if selectedDocIds provided
+      if (!servicesContext && selectedDocIds && selectedDocIds.length > 0) {
+        const { data: selectedDocs } = await supabase
+          .from("knowledge_documents")
+          .select("title, extracted_content, category")
+          .in("id", selectedDocIds);
+
+        if (selectedDocs && selectedDocs.length > 0) {
+          servicesContext = selectedDocs
+            .map((d: any) => `- ${d.title}: ${(d.extracted_content || '').slice(0, 800)}`)
+            .join("\n\n");
+        }
+      }
     }
 
     // Fetch recent high-scoring analyses for learning
