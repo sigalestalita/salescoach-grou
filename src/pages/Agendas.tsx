@@ -76,9 +76,11 @@ const statusColors: Record<string, string> = {
 };
 
 const tempLabels: Record<string, string> = {
+  congelado: "🧊 Congelado",
   frio: "❄️ Frio",
   morno: "🌤️ Morno",
   quente: "🔥 Quente",
+  muito_quente: "🔥🔥 Muito Quente",
 };
 
 const Agendas = () => {
