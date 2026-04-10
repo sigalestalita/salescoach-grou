@@ -1,8 +1,5 @@
 // Sales Coach AI - Chrome Extension Popup
 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
-const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
-
 let timerInterval = null;
 let startTime = null;
 
@@ -13,6 +10,9 @@ const formSection = document.getElementById('form-section');
 const activeRecording = document.getElementById('active-recording');
 const statusDot = document.getElementById('status-dot');
 const uploadStatus = document.getElementById('upload-status');
+
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
+const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
@@ -47,7 +47,6 @@ async function getSession() {
 document.getElementById('btn-login').addEventListener('click', async () => {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
-  const appUrl = document.getElementById('app-url').value.trim() || 'https://salescoach-grou.lovable.app';
   const errorEl = document.getElementById('login-error');
 
   if (!email || !password) {
@@ -77,7 +76,6 @@ document.getElementById('btn-login').addEventListener('click', async () => {
       refreshToken: data.refresh_token,
       userId: data.user.id,
       userEmail: email,
-      appUrl,
     });
 
     errorEl.classList.add('hidden');
@@ -134,7 +132,6 @@ document.getElementById('btn-start').addEventListener('click', async () => {
 
   await chrome.storage.local.set({ meetingData });
 
-  // Get the active tab to pass to desktopCapture
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const tabId = tabs.length > 0 ? tabs[0].id : null;
 
@@ -149,7 +146,6 @@ document.getElementById('btn-start').addEventListener('click', async () => {
       return;
     }
     if (response && response.success) {
-      // Optimistically show recording UI — the screen selector will open
       startTime = Date.now();
       chrome.storage.local.set({ isRecording: true, recordingStartTime: startTime });
       showActiveRecording();
@@ -167,11 +163,9 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
   uploadStatus.textContent = '⏳ Parando gravação e enviando...';
   activeRecording.classList.add('hidden');
 
-  chrome.runtime.sendMessage({ action: 'stopCapture' }, async (response) => {
-    if (response && response.success && response.blob) {
-      await uploadRecording(response.blob);
-    } else if (response && response.success) {
-      uploadStatus.textContent = '⏳ Processando gravação...';
+  chrome.runtime.sendMessage({ action: 'stopCapture' }, (response) => {
+    if (response && response.success) {
+      uploadStatus.textContent = '⏳ Processando e enviando gravação...';
     } else {
       uploadStatus.className = 'status error';
       uploadStatus.textContent = '❌ Erro ao parar gravação: ' + (response?.error || 'desconhecido');
@@ -179,76 +173,32 @@ document.getElementById('btn-stop').addEventListener('click', async () => {
   });
 });
 
-// Listen for messages from background
+// Listen for messages from background/offscreen
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.action === 'recordingReady' && msg.blobUrl) {
-    handleRecordingBlob(msg.blobUrl);
-  }
-
   if (msg.action === 'captureError') {
-    // User cancelled or capture failed — revert UI
     stopTimer();
     chrome.storage.local.remove(['isRecording', 'recordingStartTime']);
     showRecordingUI();
     alert(msg.error || 'Erro na captura de tela.');
   }
-});
 
-async function handleRecordingBlob(blobUrl) {
-  try {
-    const res = await fetch(blobUrl);
-    const blob = await res.blob();
-    await uploadRecording(blob);
-  } catch (err) {
-    uploadStatus.className = 'status error';
-    uploadStatus.textContent = '❌ Erro ao processar gravação: ' + err.message;
+  if (msg.action === 'uploadStarted') {
+    uploadStatus.classList.remove('hidden');
+    uploadStatus.className = 'status sending';
+    uploadStatus.textContent = '⏳ Enviando gravação ao servidor...';
   }
-}
 
-async function uploadRecording(blob) {
-  uploadStatus.className = 'status sending';
-  uploadStatus.textContent = '⏳ Enviando gravação... (0%)';
-
-  try {
-    const session = await getSession();
-    const meetingData = await new Promise((resolve) => {
-      chrome.storage.local.get(['meetingData'], (d) => resolve(d.meetingData || {}));
-    });
-
-    const formData = new FormData();
-    formData.append('file', blob, `recording-${Date.now()}.webm`);
-    formData.append('title', meetingData.title || 'Gravação via Extensão');
-    formData.append('meeting_type', meetingData.meetingType || 'empresa');
-    formData.append('lead_name', meetingData.leadName || '');
-    formData.append('lead_company', meetingData.leadCompany || '');
-    formData.append('lead_email', meetingData.leadEmail || '');
-
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/upload-recording`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.accessToken}`,
-        'apikey': SUPABASE_ANON_KEY,
-      },
-      body: formData,
-    });
-
-    const result = await res.json();
-
-    if (!res.ok) {
-      throw new Error(result.error || 'Erro no upload');
-    }
-
+  if (msg.action === 'uploadComplete') {
     uploadStatus.className = 'status success';
     uploadStatus.textContent = '✅ Gravação enviada! A análise será processada automaticamente.';
-
-    await chrome.storage.local.remove(['isRecording', 'recordingStartTime', 'meetingData']);
-
     setTimeout(() => showRecordingUI(), 5000);
-  } catch (err) {
-    uploadStatus.className = 'status error';
-    uploadStatus.textContent = '❌ Erro no envio: ' + err.message;
   }
-}
+
+  if (msg.action === 'uploadError') {
+    uploadStatus.className = 'status error';
+    uploadStatus.textContent = '❌ Erro no envio: ' + (msg.error || 'desconhecido');
+  }
+});
 
 // ── Timer ──
 function startTimer() {
