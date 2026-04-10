@@ -2,6 +2,20 @@
 
 let offscreenCreated = false;
 
+function setBadge(text, color = '#FF0000') {
+  chrome.action.setBadgeText({ text });
+  chrome.action.setBadgeBackgroundColor({ color });
+}
+
+// Restore badge on service worker startup
+chrome.storage.local.get(['recordingState'], (data) => {
+  if (data.recordingState === 'recording') {
+    setBadge('REC');
+  } else if (data.recordingState === 'uploading' || data.recordingState === 'stopping') {
+    setBadge('...', '#FF8800');
+  }
+});
+
 // Ensure offscreen document exists
 async function ensureOffscreen() {
   if (offscreenCreated) return;
@@ -30,6 +44,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === 'stopCapture') {
     handleStopCapture(sendResponse);
     return true;
+  }
+
+  if (msg.action === 'uploadStarted') {
+    setBadge('...', '#FF8800');
+  }
+
+  if (msg.action === 'uploadComplete') {
+    setBadge('');
+  }
+
+  if (msg.action === 'uploadError' || msg.action === 'captureError') {
+    setBadge('');
   }
 
   if (msg.action === 'recordingComplete') {
@@ -83,6 +109,7 @@ async function handleStartCapture(msg, sendResponse) {
           });
 
           chrome.runtime.sendMessage({ action: 'captureStarted' });
+          setBadge('REC');
         } catch (err) {
           chrome.runtime.sendMessage({ action: 'captureError', error: err.message });
         }
