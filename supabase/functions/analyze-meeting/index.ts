@@ -201,8 +201,9 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
           return;
         }
 
-        const fullSignedUrl = `${supabaseUrl}${signedData.signedUrl}`;
-        console.log("Using AssemblyAI for storage file via signed URL");
+        // signedUrl from createSignedUrl is a relative path like /object/sign/...
+        const fullSignedUrl = `${supabaseUrl}/storage/v1${signedData.signedUrl}`;
+        console.log("Signed URL for AssemblyAI:", fullSignedUrl);
         const result = await transcribeWithAssemblyAI(fullSignedUrl);
         transcript = result.text;
         speakers = result.speakers;
