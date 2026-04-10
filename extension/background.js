@@ -130,7 +130,7 @@ async function handleStartFullRecording(msg, sendResponse) {
         if (!streamId) {
           chrome.runtime.sendMessage({ action: 'captureError', error: 'Compartilhamento de tela cancelado.' });
           chrome.storage.local.set({ recordingState: 'idle' });
-          chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing']);
+          chrome.storage.local.remove(['recordingStartTime', 'isScreenSharing', 'recordingMode']);
           return;
         }
 
