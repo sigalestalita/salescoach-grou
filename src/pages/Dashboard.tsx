@@ -319,7 +319,7 @@ const Dashboard = () => {
               <Thermometer className="h-4 w-4" />
               Temperatura das Agendas
             </CardTitle>
-            <CardDescription>Distribuição Frio / Morno / Quente</CardDescription>
+            <CardDescription>Distribuição NATO/BANT: Congelado → Muito Quente</CardDescription>
           </CardHeader>
           <CardContent className="h-64">
             {data.tempDistribution.length > 0 ? (
