@@ -74,6 +74,27 @@ async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: strin
   throw new Error("AssemblyAI: transcription timed out after 30 minutes");
 }
 
+async function uploadToAssemblyAI(fileData: Blob): Promise<string> {
+  const apiKey = Deno.env.get("ASSEMBLYAI_API_KEY")!;
+  console.log("Uploading file to AssemblyAI...");
+  const res = await fetch("https://api.assemblyai.com/v2/upload", {
+    method: "POST",
+    headers: {
+      Authorization: apiKey,
+      "Content-Type": "application/octet-stream",
+      "Transfer-Encoding": "chunked",
+    },
+    body: fileData,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`AssemblyAI upload failed: ${err}`);
+  }
+  const { upload_url } = await res.json();
+  console.log("AssemblyAI upload complete:", upload_url);
+  return upload_url;
+}
+
 async function transcribeWithGroq(fileData: Blob, fileName: string): Promise<string> {
   const groqKey = Deno.env.get("GROQ_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
@@ -186,36 +207,28 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       transcript = result.text;
       speakers = result.speakers;
     } else if (meeting.file_url) {
+      await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
+
+      const { data: fileData, error: fileError } = await supabase.storage
+        .from("meeting-files").download(meeting.file_url);
+
+      if (fileError || !fileData) {
+        console.error("Failed to download file:", fileError);
+        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        return;
+      }
+
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
 
       const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
       if (assemblyKey) {
-        // Generate a signed URL so AssemblyAI can fetch the file directly
-        const { data: signedData, error: signError } = await supabase.storage
-          .from("meeting-files")
-          .createSignedUrl(meeting.file_url, 3600);
-
-        if (signError || !signedData?.signedUrl) {
-          console.error("Failed to create signed URL:", signError);
-          await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-          return;
-        }
-
-        const fullSignedUrl = `${supabaseUrl}/storage/v1${signedData.signedUrl}`;
-        console.log("Using AssemblyAI for storage file via signed URL");
-        const result = await transcribeWithAssemblyAI(fullSignedUrl);
+        // Upload file directly to AssemblyAI (handles any format including webm video)
+        const uploadUrl = await uploadToAssemblyAI(fileData);
+        const result = await transcribeWithAssemblyAI(uploadUrl);
         transcript = result.text;
         speakers = result.speakers;
       } else {
         // Fallback to Groq/OpenAI (only works with pure audio files)
-        const { data: fileData, error: fileError } = await supabase.storage
-          .from("meeting-files").download(meeting.file_url);
-
-        if (fileError || !fileData) {
-          await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
-          return;
-        }
-
         const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
         transcript = await transcribeWithGroq(fileData, fileName);
       }
