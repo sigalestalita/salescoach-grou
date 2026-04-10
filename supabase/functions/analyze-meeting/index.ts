@@ -74,6 +74,23 @@ async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: strin
   throw new Error("AssemblyAI: transcription timed out after 30 minutes");
 }
 
+async function uploadToAssemblyAI(fileData: Blob): Promise<string> {
+  const apiKey = Deno.env.get("ASSEMBLYAI_API_KEY")!;
+  console.log("Uploading file to AssemblyAI...");
+  const res = await fetch("https://api.assemblyai.com/v2/upload", {
+    method: "POST",
+    headers: { Authorization: apiKey, "Transfer-Encoding": "chunked" },
+    body: fileData,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`AssemblyAI upload failed: ${err}`);
+  }
+  const { upload_url } = await res.json();
+  console.log("AssemblyAI upload complete:", upload_url);
+  return upload_url;
+}
+
 async function transcribeWithGroq(fileData: Blob, fileName: string): Promise<string> {
   const groqKey = Deno.env.get("GROQ_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
