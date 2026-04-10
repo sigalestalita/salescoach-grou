@@ -23,7 +23,7 @@ async function ensureOffscreen() {
     await chrome.offscreen.createDocument({
       url: 'offscreen.html',
       reasons: ['USER_MEDIA'],
-      justification: 'Recording screen and audio for meeting analysis',
+      justification: 'Recording audio and optionally screen for meeting analysis',
     });
     offscreenCreated = true;
   } catch (e) {
@@ -34,11 +34,16 @@ async function ensureOffscreen() {
   }
 }
 
-// Listen for messages from popup
+// Listen for messages
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action === 'startCapture') {
-    handleStartCapture(msg, sendResponse);
-    return true; // async response
+  if (msg.action === 'startMicRecording') {
+    handleStartMicRecording(sendResponse);
+    return true;
+  }
+
+  if (msg.action === 'startScreenShare') {
+    handleStartScreenShare(msg, sendResponse);
+    return true;
   }
 
   if (msg.action === 'stopCapture') {
@@ -58,13 +63,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     setBadge('');
   }
 
-  if (msg.action === 'recordingComplete') {
-    chrome.runtime.sendMessage({
-      action: 'recordingReady',
-      blobUrl: msg.blobUrl,
-    });
-    sendResponse({ success: true });
-    return false;
+  if (msg.action === 'screenShareStarted') {
+    // badge stays REC
   }
 
   if (msg.action === 'offscreenClosed') {
@@ -73,7 +73,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-async function handleStartCapture(msg, sendResponse) {
+async function handleStartMicRecording(sendResponse) {
+  try {
+    await ensureOffscreen();
+
+    chrome.runtime.sendMessage({
+      action: 'startMicRecording',
+      target: 'offscreen',
+    });
+
+    setBadge('REC');
+    sendResponse({ success: true });
+  } catch (err) {
+    sendResponse({ success: false, error: err.message });
+  }
+}
+
+async function handleStartScreenShare(msg, sendResponse) {
   const tabId = msg.tabId;
 
   if (!tabId) {
@@ -84,34 +100,28 @@ async function handleStartCapture(msg, sendResponse) {
   try {
     const tab = await chrome.tabs.get(tabId);
 
-    // Respond immediately so the popup knows the selector is opening
+    // Respond immediately so popup knows the selector is opening
     sendResponse({ success: true });
 
-    // chooseDesktopMedia requires the tab object as second param in MV3
     chrome.desktopCapture.chooseDesktopMedia(
       ['screen', 'window', 'tab'],
       tab,
       async (streamId) => {
         if (!streamId) {
-          // User cancelled the selector
-          chrome.runtime.sendMessage({ action: 'captureError', error: 'Captura cancelada pelo usuário' });
+          chrome.runtime.sendMessage({ action: 'screenShareError', error: 'Compartilhamento cancelado.' });
           return;
         }
 
         try {
           await ensureOffscreen();
 
-          // Send stream ID to offscreen document to start recording
           chrome.runtime.sendMessage({
-            action: 'startRecording',
+            action: 'addScreenShare',
             target: 'offscreen',
             streamId,
           });
-
-          chrome.runtime.sendMessage({ action: 'captureStarted' });
-          setBadge('REC');
         } catch (err) {
-          chrome.runtime.sendMessage({ action: 'captureError', error: err.message });
+          chrome.runtime.sendMessage({ action: 'screenShareError', error: err.message });
         }
       }
     );

@@ -5,14 +5,21 @@ const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
 
 let mediaRecorder = null;
 let recordedChunks = [];
-let mediaStream = null;
 let micStream = null;
+let screenStream = null;
+let audioContext = null;
+let mixedDest = null;
+let currentCombinedStream = null;
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.target !== 'offscreen') return;
 
-  if (msg.action === 'startRecording') {
-    startRecording(msg.streamId);
+  if (msg.action === 'startMicRecording') {
+    startMicOnlyRecording();
+  }
+
+  if (msg.action === 'addScreenShare') {
+    addScreenShare(msg.streamId);
   }
 
   if (msg.action === 'stopRecording') {
@@ -24,9 +31,62 @@ async function setState(state, extras = {}) {
   await chrome.storage.local.set({ recordingState: state, ...extras });
 }
 
-async function startRecording(streamId) {
+async function startMicOnlyRecording() {
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+
+    // Set up audio context for mixing (will add screen audio later if needed)
+    audioContext = new AudioContext();
+    mixedDest = audioContext.createMediaStreamDestination();
+
+    const micSource = audioContext.createMediaStreamSource(micStream);
+    micSource.connect(mixedDest);
+
+    // Start with audio-only recording
+    currentCombinedStream = new MediaStream([
+      ...mixedDest.stream.getAudioTracks(),
+    ]);
+
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(currentCombinedStream, {
+      mimeType: 'audio/webm;codecs=opus',
+    });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        recordedChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      await setState('stopping');
+      chrome.runtime.sendMessage({ action: 'uploadStarted' });
+
+      const mimeType = recordedChunks[0]?.type || 'audio/webm';
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      await uploadFromOffscreen(blob);
+
+      cleanup();
+    };
+
+    mediaRecorder.start(1000);
+    await setState('recording');
+    console.log('Mic-only recording started');
+  } catch (err) {
+    console.error('Failed to start mic recording:', err);
+    await setState('error', { uploadError: 'Permissão de microfone negada. Verifique as configurações do navegador.' });
+    chrome.runtime.sendMessage({
+      action: 'captureError',
+      error: 'Permissão de microfone negada.',
+    });
+  }
+}
+
+async function addScreenShare(streamId) {
+  try {
+    screenStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
           chromeMediaSource: 'desktop',
@@ -44,40 +104,36 @@ async function startRecording(streamId) {
       },
     });
 
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+    // Add system audio to the mix
+    const systemAudioTracks = screenStream.getAudioTracks();
+    if (systemAudioTracks.length > 0 && audioContext && mixedDest) {
+      const systemSource = audioContext.createMediaStreamSource(
+        new MediaStream(systemAudioTracks)
+      );
+      systemSource.connect(mixedDest);
+    }
+
+    // Stop current recorder, keep chunks
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      // Wait for the stop event to fire and collect remaining chunks
+      await new Promise(resolve => {
+        const origOnStop = mediaRecorder.onstop;
+        mediaRecorder.onstop = (e) => {
+          // Don't upload yet, just collect chunks
+          resolve();
+        };
       });
-    } catch (e) {
-      console.log('Microphone not available, recording system audio only');
     }
 
-    let combinedStream;
-    if (micStream) {
-      const audioContext = new AudioContext();
-      const dest = audioContext.createMediaStreamDestination();
+    // Create new combined stream with video + mixed audio
+    currentCombinedStream = new MediaStream([
+      ...screenStream.getVideoTracks(),
+      ...mixedDest.stream.getAudioTracks(),
+    ]);
 
-      const systemAudioTracks = mediaStream.getAudioTracks();
-      if (systemAudioTracks.length > 0) {
-        const systemSource = audioContext.createMediaStreamSource(
-          new MediaStream(systemAudioTracks)
-        );
-        systemSource.connect(dest);
-      }
-
-      const micSource = audioContext.createMediaStreamSource(micStream);
-      micSource.connect(dest);
-
-      combinedStream = new MediaStream([
-        ...mediaStream.getVideoTracks(),
-        ...dest.stream.getAudioTracks(),
-      ]);
-    } else {
-      combinedStream = mediaStream;
-    }
-
-    recordedChunks = [];
-    mediaRecorder = new MediaRecorder(combinedStream, {
+    // Start new recorder with video+audio
+    mediaRecorder = new MediaRecorder(currentCombinedStream, {
       mimeType: 'video/webm;codecs=vp8,opus',
       videoBitsPerSecond: 1000000,
     });
@@ -92,31 +148,42 @@ async function startRecording(streamId) {
       await setState('stopping');
       chrome.runtime.sendMessage({ action: 'uploadStarted' });
 
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const mimeType = recordedChunks[0]?.type || 'video/webm';
+      const blob = new Blob(recordedChunks, { type: mimeType });
       await uploadFromOffscreen(blob);
 
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((t) => t.stop());
-        mediaStream = null;
-      }
-      if (micStream) {
-        micStream.getTracks().forEach((t) => t.stop());
-        micStream = null;
-      }
-      recordedChunks = [];
+      cleanup();
     };
 
     mediaRecorder.start(1000);
-    await setState('recording');
-    console.log('Recording started');
+    await chrome.storage.local.set({ isScreenSharing: true });
+    chrome.runtime.sendMessage({ action: 'screenShareStarted' });
+    console.log('Screen share added to recording');
   } catch (err) {
-    console.error('Failed to start recording:', err);
-    await setState('error', { uploadError: err.message });
+    console.error('Failed to add screen share:', err);
     chrome.runtime.sendMessage({
-      action: 'recordingError',
+      action: 'screenShareError',
       error: err.message,
     });
   }
+}
+
+function cleanup() {
+  if (micStream) {
+    micStream.getTracks().forEach((t) => t.stop());
+    micStream = null;
+  }
+  if (screenStream) {
+    screenStream.getTracks().forEach((t) => t.stop());
+    screenStream = null;
+  }
+  if (audioContext) {
+    audioContext.close().catch(() => {});
+    audioContext = null;
+  }
+  mixedDest = null;
+  currentCombinedStream = null;
+  recordedChunks = [];
 }
 
 function stopRecording() {
@@ -140,8 +207,10 @@ async function uploadFromOffscreen(blob) {
       return;
     }
 
+    const isVideo = blob.type.includes('video');
+    const ext = isVideo ? 'webm' : 'webm';
     const formData = new FormData();
-    formData.append('file', blob, `recording-${Date.now()}.webm`);
+    formData.append('file', blob, `recording-${Date.now()}.${ext}`);
     formData.append('title', meetingData.title || 'Gravação via Extensão');
     formData.append('meeting_type', meetingData.meetingType || 'empresa');
     formData.append('lead_name', meetingData.leadName || '');
