@@ -61,13 +61,31 @@ async function startMicOnlyRecording() {
     };
 
     mediaRecorder.onstop = async () => {
+      console.log('MediaRecorder stopped, chunks:', recordedChunks.length);
       await setState('stopping');
       chrome.runtime.sendMessage({ action: 'uploadStarted' });
 
+      if (recordedChunks.length === 0) {
+        console.error('No audio data recorded');
+        await setState('error', { uploadError: 'Nenhum dado de áudio gravado.' });
+        chrome.runtime.sendMessage({ action: 'uploadError', error: 'Nenhum dado de áudio gravado.' });
+        cleanup();
+        return;
+      }
+
       const mimeType = recordedChunks[0]?.type || 'audio/webm';
       const blob = new Blob(recordedChunks, { type: mimeType });
-      await uploadFromOffscreen(blob);
+      console.log('Blob created, size:', blob.size, 'type:', blob.type);
 
+      if (blob.size < 100) {
+        console.error('Blob too small:', blob.size);
+        await setState('error', { uploadError: 'Gravação vazia ou corrompida.' });
+        chrome.runtime.sendMessage({ action: 'uploadError', error: 'Gravação vazia ou corrompida.' });
+        cleanup();
+        return;
+      }
+
+      await uploadFromOffscreen(blob);
       cleanup();
     };
 
