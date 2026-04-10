@@ -2,6 +2,20 @@
 
 let offscreenCreated = false;
 
+function setBadge(text, color = '#FF0000') {
+  chrome.action.setBadgeText({ text });
+  chrome.action.setBadgeBackgroundColor({ color });
+}
+
+// Restore badge on service worker startup
+chrome.storage.local.get(['recordingState'], (data) => {
+  if (data.recordingState === 'recording') {
+    setBadge('REC');
+  } else if (data.recordingState === 'uploading' || data.recordingState === 'stopping') {
+    setBadge('...', '#FF8800');
+  }
+});
+
 // Ensure offscreen document exists
 async function ensureOffscreen() {
   if (offscreenCreated) return;
