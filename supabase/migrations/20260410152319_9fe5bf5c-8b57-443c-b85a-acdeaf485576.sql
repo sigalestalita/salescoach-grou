@@ -1,0 +1,2 @@
+ALTER TABLE public.analysis_results DROP CONSTRAINT analysis_results_temperature_check;
+ALTER TABLE public.analysis_results ADD CONSTRAINT analysis_results_temperature_check CHECK (temperature = ANY (ARRAY['congelado'::text, 'frio'::text, 'morno'::text, 'quente'::text, 'muito_quente'::text]));
