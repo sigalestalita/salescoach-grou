@@ -32,7 +32,7 @@ async function restoreState() {
 
   if (state === 'recording') {
     startTime = data.recordingStartTime;
-    showActiveRecording(data.isScreenSharing || false);
+    showActiveRecording();
   } else if (state === 'stopping' || state === 'uploading') {
     showUploadingState();
   } else if (state === 'done') {
@@ -237,15 +237,11 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg.action === 'screenShareStarted') {
-    chrome.storage.local.set({ isScreenSharing: true });
-    updateScreenStatus(true);
+    // no-op, screen is always on
   }
 
   if (msg.action === 'screenShareError') {
-    btnShareScreen.disabled = false;
-    btnShareScreen.textContent = '🖥 Compartilhar Tela';
-    // Don't stop recording, just notify
-    alert(msg.error || 'Não foi possível compartilhar a tela. A gravação de áudio continua.');
+    // no-op
   }
 
   if (msg.action === 'uploadStarted') {
