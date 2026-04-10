@@ -245,8 +245,7 @@ async function startFullRecording(streamId) {
     });
   }
 }
-
-
+async function addScreenShare(streamId) {
   try {
     screenStream = await navigator.mediaDevices.getUserMedia({
       audio: {
