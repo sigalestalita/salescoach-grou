@@ -1,74 +1,36 @@
 
 
-## Complete Extension Refactor — Fix Recording Failures
+## Problem
 
-### Root Cause (confirmed via Chrome documentation and bug reports)
+The extension successfully uploads the `.webm` recording and creates the meeting, but the **analysis fails** because Groq's Whisper API rejects the file with `"could not process file - is it a valid media file?"`.
 
-Two **known Chrome MV3 limitations** make the current architecture impossible to work:
+The root cause: the extension records **video+audio as webm** (with VP8+Opus codecs). Groq's Whisper API expects pure audio files and cannot process video containers.
 
-1. **`desktopCapture.chooseDesktopMedia` streamId cannot be used in offscreen documents.** The streamId from `desktopCapture` is bound to the context that called the API (the service worker), and cannot be consumed by `getUserMedia` in a different context (the offscreen document). This causes "DOMException: Invalid state".
+## Solution
 
-2. **`getUserMedia({ audio })` for microphone always fails in offscreen documents.** The microphone permission is stuck in "prompt" state in offscreen context, and since there's no user gesture, it's auto-dismissed with "Permission dismissed". This is a confirmed Chrome bug with no fix.
+Use **AssemblyAI** (which already works for Google Drive URLs) for storage-uploaded files too. Instead of downloading the file and sending it to Groq, generate a **signed URL** from Supabase Storage and pass it directly to AssemblyAI's API — it handles webm, video containers, and all common formats natively.
 
-### Solution: Replace offscreen with a recorder window
+## Changes
 
-Instead of an offscreen document, open a **small Chrome window** (`recorder.html`) that acts as the recording page. This is the approach recommended by Chrome's official docs for pre-Chrome-116 and is the most reliable across all Chromium browsers:
+### 1. `supabase/functions/analyze-meeting/index.ts`
 
-- A real extension page has full access to `getUserMedia` (mic) and `getDisplayMedia` (screen + system audio)
-- It stays open during the meeting (unlike the popup)
-- It has a real user gesture context, so all permissions work
+Modify the `file_url` branch (~lines 166-177) to:
+- Generate a signed URL for the storage file (using `supabase.storage.from("meeting-files").createSignedUrl(...)`)
+- Pass the signed URL to `transcribeWithAssemblyAI()` instead of downloading and sending to Groq
+- Keep the Groq/OpenAI path as a fallback only if AssemblyAI key is not available
 
-### Architecture
-
-```text
-popup.html                recorder.html (new window)
-┌─────────────┐           ┌──────────────────────┐
-│ Login        │           │ Timer display         │
-│ Meeting form │──opens──▶ │ getDisplayMedia()     │
-│ Start button │           │ getUserMedia(mic)     │
-└─────────────┘           │ MediaRecorder         │
-                          │ Upload on stop        │
-      background.js       └──────────────────────┘
-      (message relay,            │
-       badge updates)            │
-                                 ▼
-                          upload-recording edge fn
+The flow becomes:
+```
+file_url → create signed URL → AssemblyAI (with speaker diarization) → transcript
 ```
 
-### File Changes
+This is simpler, more reliable, and gives speaker diarization for extension recordings too.
 
-**DELETE**: `extension/offscreen.html`, `extension/offscreen.js` — no longer needed
+### 2. Re-trigger the stuck meeting
 
-**NEW**: `extension/recorder.html` + `extension/recorder.js`
-- Small window (400x200) with timer, status, and stop button
-- On load: calls `getDisplayMedia({ video: true, audio: true })` for screen + system audio
-- Then calls `getUserMedia({ audio: true })` for microphone
-- Mixes both audio streams via AudioContext
-- Records via MediaRecorder
-- On stop: uploads to the edge function
-- Includes all the upload logic (token refresh, error handling)
+Reset the "Reunião com a Apple" meeting status and re-trigger analysis so it processes with the new code.
 
-**EDIT**: `extension/manifest.json`
-- Remove `offscreen` permission (no longer needed)
-- Remove `desktopCapture` permission (using web API instead)
-- Keep `tabCapture`, `storage`, `tabs`
+### 3. Repackage extension ZIP
 
-**EDIT**: `extension/background.js`
-- Remove all offscreen document logic
-- On `startRecording` message: open `recorder.html` as a small window via `chrome.windows.create`
-- On `stopCapture` message: send stop message to recorder window
-- Keep badge management and storage proxy
-
-**EDIT**: `extension/popup.js`
-- Remove `ensureMicrophoneAccess()` (no longer needed — recorder window handles it)
-- Start button sends message to background which opens the recorder window
-- Remove screen share logic
-
-**REPACKAGE**: `public/sales-coach-extension.zip`
-
-### Why This Works
-- `getDisplayMedia` works in any extension page with a user gesture (the page opening IS the gesture context)
-- `getUserMedia` for microphone works in real extension pages (not offscreen)
-- The recorder window stays open during recording (unlike popup which closes on blur)
-- Works across Chrome, Arc, Edge, Brave, and all Chromium browsers
+No extension changes needed — the fix is entirely server-side.
 
