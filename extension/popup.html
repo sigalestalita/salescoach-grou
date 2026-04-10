@@ -2,50 +2,37 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sales Coach AI</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      width: 100%; min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f172a; color: #e2e8f0;
-    }
-    .container { padding: 20px; max-width: 400px; margin: 0 auto; }
-    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    body { width: 360px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .container { padding: 16px; }
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
     .header h1 { font-size: 16px; font-weight: 700; color: #60a5fa; }
     .header .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
     .header .dot.offline { background: #ef4444; }
-
-    /* Form fields */
-    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
     .field label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
     .field input, .field select { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
     .field input:focus, .field select:focus { border-color: #60a5fa; }
-
-    /* Buttons */
     .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-bottom: 6px; }
     .btn-primary { background: #3b82f6; color: white; }
     .btn-primary:hover { background: #2563eb; }
     .btn-danger { background: #ef4444; color: white; }
     .btn-danger:hover { background: #dc2626; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* Recording */
-    .recording-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
-    .pulse { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; animation: pulse 1.5s infinite; }
+    .recording-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px; }
+    .pulse { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .timer { text-align: center; font-size: 36px; font-weight: 700; color: #f87171; margin: 12px 0; font-variant-numeric: tabular-nums; }
-    .mode-label { text-align: center; font-size: 12px; color: #22c55e; margin-bottom: 16px; }
-
-    /* Status */
-    .status { text-align: center; padding: 12px; border-radius: 8px; margin-top: 12px; font-size: 13px; }
+    .timer { text-align: center; font-size: 28px; font-weight: 700; color: #f87171; margin: 8px 0; font-variant-numeric: tabular-nums; }
+    .screen-status { text-align: center; font-size: 12px; color: #22c55e; margin-bottom: 8px; }
+    .status { text-align: center; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; }
     .status.sending { background: #1e3a5f; color: #60a5fa; }
     .status.success { background: #14532d; color: #4ade80; }
     .status.error { background: #450a0a; color: #fca5a5; }
-    .status.info { background: #1e293b; color: #94a3b8; }
-
-    .separator { height: 1px; background: #334155; margin: 12px 0; }
-    .logout-link { font-size: 11px; color: #64748b; text-align: center; cursor: pointer; margin-top: 8px; }
+    .separator { height: 1px; background: #334155; margin: 10px 0; }
+    .logout-link { font-size: 11px; color: #64748b; text-align: center; cursor: pointer; }
     .logout-link:hover { color: #94a3b8; }
     .hidden { display: none !important; }
   </style>
@@ -57,7 +44,7 @@
       <div class="dot" id="status-dot"></div>
     </div>
 
-    <!-- Login Section -->
+    <!-- Login -->
     <div id="login-section">
       <h2 style="font-size:14px;color:#94a3b8;margin-bottom:12px;">Faça login para começar</h2>
       <div class="field">
@@ -72,9 +59,9 @@
       <div id="login-error" class="status error hidden"></div>
     </div>
 
-    <!-- Main Section (form + recording) -->
-    <div id="main-section" class="hidden">
-      <!-- Meeting form -->
+    <!-- Main -->
+    <div id="recording-section" class="hidden">
+      <!-- Form -->
       <div id="form-section">
         <div class="field">
           <label>Título da Agenda</label>
@@ -102,25 +89,24 @@
         <button class="btn btn-primary" id="btn-start">🎙 Iniciar Gravação (Tela + Áudio)</button>
       </div>
 
-      <!-- Active recording view -->
-      <div id="recording-view" class="hidden">
+      <!-- Active recording -->
+      <div id="active-recording" class="hidden">
         <div class="recording-indicator">
           <div class="pulse"></div>
           <span>Gravando...</span>
         </div>
         <div class="timer" id="timer">00:00:00</div>
-        <div class="mode-label" id="mode-label">🖥 Tela + 🎙 Áudio</div>
+        <div class="screen-status" id="screen-status">🖥 Tela + 🎙 Áudio</div>
         <button class="btn btn-danger" id="btn-stop">⏹ Parar e Enviar</button>
       </div>
 
-      <!-- Status messages -->
-      <div id="status-msg" class="status hidden"></div>
+      <!-- Status -->
+      <div id="upload-status" class="hidden"></div>
 
       <div class="separator"></div>
       <div class="logout-link" id="btn-logout">Sair da conta</div>
     </div>
   </div>
-
-  <script src="recorder.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>
