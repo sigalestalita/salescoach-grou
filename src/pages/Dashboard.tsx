@@ -28,9 +28,11 @@ interface SellerOption {
 }
 
 const TEMP_COLORS: Record<string, string> = {
+  muito_quente: "hsl(0 85% 45%)",
   quente: "hsl(var(--destructive))",
   morno: "hsl(var(--warning, 38 92% 50%))",
   frio: "hsl(var(--info, 210 100% 50%))",
+  congelado: "hsl(220 15% 60%)",
 };
 
 const Dashboard = () => {
@@ -99,17 +101,19 @@ const Dashboard = () => {
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : null;
 
       // Temperature distribution
-      const tempCounts = { quente: 0, morno: 0, frio: 0 };
+      const tempCounts: Record<string, number> = { muito_quente: 0, quente: 0, morno: 0, frio: 0, congelado: 0 };
       for (const m of completed) {
         if (m.temperature && m.temperature in tempCounts) {
-          tempCounts[m.temperature as keyof typeof tempCounts]++;
+          tempCounts[m.temperature]++;
         }
       }
-      const hotRate = completedMeetings > 0 ? Math.round((tempCounts.quente / completedMeetings) * 100) : 0;
+      const hotRate = completedMeetings > 0 ? Math.round(((tempCounts.quente + tempCounts.muito_quente) / completedMeetings) * 100) : 0;
       const tempDistribution = [
+        { name: "Muito Quente", value: tempCounts.muito_quente, color: TEMP_COLORS.muito_quente },
         { name: "Quente", value: tempCounts.quente, color: TEMP_COLORS.quente },
         { name: "Morno", value: tempCounts.morno, color: TEMP_COLORS.morno },
         { name: "Frio", value: tempCounts.frio, color: TEMP_COLORS.frio },
+        { name: "Congelado", value: tempCounts.congelado, color: TEMP_COLORS.congelado },
       ].filter(t => t.value > 0);
 
       // Seller ranking (only when viewing all)

@@ -138,9 +138,11 @@ const MeetingDetail = () => {
   const rawAnalysis = analysis?.raw_analysis as any;
 
   const tempColors: Record<string, string> = {
+    congelado: "bg-muted/30 text-muted-foreground border-muted/30",
     frio: "bg-info/10 text-info border-info/20",
     morno: "bg-warning/10 text-warning border-warning/20",
     quente: "bg-destructive/10 text-destructive border-destructive/20",
+    muito_quente: "bg-destructive/20 text-destructive border-destructive/40",
   };
 
   return (
@@ -335,16 +337,16 @@ const MeetingDetail = () => {
 
             <Card className={meeting.temperature ? tempColors[meeting.temperature] : ""}>
               <CardHeader className="pb-2">
-               <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className="text-sm flex items-center gap-2">
                   <Thermometer className="h-4 w-4" />
                   Temperatura
-                  <MetricTooltip text="Indica a probabilidade de fechamento: Frio = lead não engajado ou sem interesse claro; Morno = interesse demonstrado mas sem urgência; Quente = lead com necessidade clara, urgência e autoridade para decidir." />
+                  <MetricTooltip text="Classificação NATO/BANT: Congelado = sem perfil para o negócio; Frio = sem demanda clara; Morno = necessidade sem urgência; Quente = prontos para venda em até 90 dias; Muito Quente = venda imediata." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-center capitalize">
                   {meeting.temperature
-                    ? { frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente" }[meeting.temperature]
+                    ? { congelado: "🧊 Congelado", frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente", muito_quente: "🔥🔥 Muito Quente" }[meeting.temperature] || meeting.temperature
                     : "--"}
                 </div>
                 {rawAnalysis?.temperature_reason && (
