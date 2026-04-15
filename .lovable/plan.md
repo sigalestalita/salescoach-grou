@@ -1,36 +1,55 @@
 
 
-## Problem
+## Importação em Lote de Gravações do Google Drive
 
-The extension successfully uploads the `.webm` recording and creates the meeting, but the **analysis fails** because Groq's Whisper API rejects the file with `"could not process file - is it a valid media file?"`.
+### Problema
+Atualmente, cada gravação do Google Drive precisa ser adicionada manualmente com um link individual. Quando o usuário tem uma pasta inteira com várias gravações, isso é trabalhoso e lento.
 
-The root cause: the extension records **video+audio as webm** (with VP8+Opus codecs). Groq's Whisper API expects pure audio files and cannot process video containers.
+### Solução
+Criar uma funcionalidade de "Importar Pasta do Drive" que:
+1. Recebe o link de uma pasta do Google Drive
+2. Lista todos os arquivos de áudio/vídeo da pasta via API do Google Drive
+3. Cria automaticamente uma agenda para cada arquivo encontrado
+4. Inicia a análise de todas em sequência
 
-## Solution
+**Requisito**: A pasta precisa estar compartilhada como "Qualquer pessoa com o link" (mesmo requisito atual para links individuais).
 
-Use **AssemblyAI** (which already works for Google Drive URLs) for storage-uploaded files too. Instead of downloading the file and sending it to Groq, generate a **signed URL** from Supabase Storage and pass it directly to AssemblyAI's API — it handles webm, video containers, and all common formats natively.
+### Mudanças
 
-## Changes
+#### 1. Nova Edge Function: `supabase/functions/import-drive-folder/index.ts`
+- Recebe o link da pasta do Google Drive e metadata (seller_id, meeting_type)
+- Extrai o folder ID do link
+- Usa a Google Drive API pública (`https://www.googleapis.com/drive/v3/files?q='FOLDER_ID'+in+parents`) com a API Key do Google para listar arquivos
+- Filtra apenas arquivos de mídia (mp3, mp4, webm, wav, m4a, ogg, etc.)
+- Para cada arquivo encontrado:
+  - Cria um registro na tabela `meetings` com o link direto do arquivo como `youtube_url`
+  - Dispara a função `analyze-meeting` para processar
+- Retorna a lista de reuniões criadas
 
-### 1. `supabase/functions/analyze-meeting/index.ts`
+#### 2. Secret necessária: `GOOGLE_API_KEY`
+- Uma API Key simples do Google Cloud (não OAuth) é suficiente para listar arquivos em pastas públicas
+- Será solicitada ao usuário antes da implementação
 
-Modify the `file_url` branch (~lines 166-177) to:
-- Generate a signed URL for the storage file (using `supabase.storage.from("meeting-files").createSignedUrl(...)`)
-- Pass the signed URL to `transcribeWithAssemblyAI()` instead of downloading and sending to Groq
-- Keep the Groq/OpenAI path as a fallback only if AssemblyAI key is not available
+#### 3. UI: Novo botão "Importar Pasta" na página Agendas (`src/pages/Agendas.tsx`)
+- Adiciona um novo Dialog com campos:
+  - Link da pasta do Google Drive
+  - Tipo de reunião (empresa/individual)
+  - Vendedor responsável
+- Mostra progresso da importação (quantos arquivos encontrados, quantos criados)
+- Após importação, atualiza a lista de agendas automaticamente
 
-The flow becomes:
+#### 4. Fluxo visual
+```text
+[Botão "Importar Pasta"] → Dialog com link da pasta
+  → Edge Function lista arquivos na pasta
+  → Cria N agendas automaticamente
+  → Dispara análise para cada uma
+  → Usuário vê todas na lista com status "transcrevendo"
 ```
-file_url → create signed URL → AssemblyAI (with speaker diarization) → transcript
-```
 
-This is simpler, more reliable, and gives speaker diarization for extension recordings too.
-
-### 2. Re-trigger the stuck meeting
-
-Reset the "Reunião com a Apple" meeting status and re-trigger analysis so it processes with the new code.
-
-### 3. Repackage extension ZIP
-
-No extension changes needed — the fix is entirely server-side.
+### Detalhes Técnicos
+- A Google Drive API v3 permite listar arquivos em pastas públicas usando apenas uma API Key (sem OAuth)
+- O endpoint usado será: `GET https://www.googleapis.com/drive/v3/files?q='{folderId}'+in+parents&key={apiKey}&fields=files(id,name,mimeType)`
+- Cada arquivo será convertido para o link de download direto que o `analyze-meeting` já sabe processar
+- O processamento será sequencial (um por vez) para não sobrecarregar a transcrição
 
