@@ -14,7 +14,8 @@ interface DashboardData {
   hotRate: number;
   tempDistribution: { name: string; value: number; color: string }[];
   sellerRanking: { name: string; avgScore: number; meetings: number }[];
-  scoreEvolution: { date: string; score: number }[];
+  scoreEvolution: Record<string, any>[];
+  scoreEvolutionSellers: string[];
   avgBant: { key: string; label: string; avg: number }[];
   avgMeddic: { key: string; label: string; avg: number }[];
   avgSpin: { key: string; label: string; avg: number }[];
