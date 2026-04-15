@@ -332,7 +332,7 @@ const Dashboard = () => {
               <TrendingUp className="h-4 w-4" />
               Evolução de Scores
             </CardTitle>
-            <CardDescription>{isFiltered ? "Score mensal individual" : "Score médio mensal do time"}</CardDescription>
+            <CardDescription>{isFiltered ? "Score mensal individual" : "Comparativo de scores médios por executivo"}</CardDescription>
           </CardHeader>
           <CardContent className="h-64">
             {data.scoreEvolution.length > 0 ? (
@@ -342,7 +342,20 @@ const Dashboard = () => {
                   <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} className="text-xs" tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="score" stroke="hsl(24, 95%, 53%)" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                  {data.scoreEvolutionSellers.length > 0 ? (
+                    <>
+                      <Legend />
+                      {data.scoreEvolutionSellers.map((sid, idx) => {
+                        const sellerName = sellers.find(s => s.id === sid)?.name || sid.slice(0, 8);
+                        const colors = ["hsl(24, 95%, 53%)", "hsl(200, 80%, 50%)", "hsl(150, 70%, 45%)", "hsl(280, 70%, 55%)", "hsl(340, 75%, 50%)", "hsl(60, 80%, 45%)", "hsl(180, 60%, 45%)", "hsl(30, 90%, 45%)"];
+                        return (
+                          <Line key={sid} type="monotone" dataKey={sid} stroke={colors[idx % colors.length]} strokeWidth={2} dot={{ r: 3 }} name={sellerName} connectNulls />
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <Line type="monotone" dataKey="score" stroke="hsl(24, 95%, 53%)" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
