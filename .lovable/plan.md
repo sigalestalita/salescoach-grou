@@ -1,55 +1,54 @@
 
 
-## Importação em Lote de Gravações do Google Drive
+## Importação em Lote do Google Drive — Sem API Key do Google
 
-### Problema
-Atualmente, cada gravação do Google Drive precisa ser adicionada manualmente com um link individual. Quando o usuário tem uma pasta inteira com várias gravações, isso é trabalhoso e lento.
+### Abordagem
 
-### Solução
-Criar uma funcionalidade de "Importar Pasta do Drive" que:
-1. Recebe o link de uma pasta do Google Drive
-2. Lista todos os arquivos de áudio/vídeo da pasta via API do Google Drive
-3. Cria automaticamente uma agenda para cada arquivo encontrado
-4. Inicia a análise de todas em sequência
+Em vez de usar a Google Drive API (que exige uma API Key), o usuário cola o link da pasta do Google Drive e o sistema apresenta um campo de texto onde ele cola **múltiplos links de arquivos** de uma vez. Alternativamente, podemos fazer scraping da página pública da pasta para extrair os IDs dos arquivos.
 
-**Requisito**: A pasta precisa estar compartilhada como "Qualquer pessoa com o link" (mesmo requisito atual para links individuais).
+A abordagem mais confiável e sem dependência externa: **importação por lista de links**.
+
+### Como funciona
+
+1. Novo botão "Importar em Lote" na página Agendas
+2. Abre um Dialog com um campo de texto grande (textarea)
+3. O usuário cola vários links do Google Drive (um por linha)
+4. Opcionalmente define tipo de reunião e vendedor
+5. O sistema cria uma agenda para cada link e dispara a análise automaticamente
+6. Mostra progresso: quantos foram criados e status de cada um
 
 ### Mudanças
 
-#### 1. Nova Edge Function: `supabase/functions/import-drive-folder/index.ts`
-- Recebe o link da pasta do Google Drive e metadata (seller_id, meeting_type)
-- Extrai o folder ID do link
-- Usa a Google Drive API pública (`https://www.googleapis.com/drive/v3/files?q='FOLDER_ID'+in+parents`) com a API Key do Google para listar arquivos
-- Filtra apenas arquivos de mídia (mp3, mp4, webm, wav, m4a, ogg, etc.)
-- Para cada arquivo encontrado:
-  - Cria um registro na tabela `meetings` com o link direto do arquivo como `youtube_url`
-  - Dispara a função `analyze-meeting` para processar
-- Retorna a lista de reuniões criadas
+#### 1. UI: Novo botão e Dialog em `src/pages/Agendas.tsx`
+- Botão "Importar em Lote" ao lado do botão existente de criar agenda
+- Dialog com:
+  - Textarea para colar múltiplos links (um por linha)
+  - Select de tipo de reunião
+  - Select de vendedor (se admin)
+- Validação: extrai file IDs dos links, ignora linhas vazias/inválidas
+- Cria cada meeting via Supabase e dispara `analyze-meeting` para cada uma
+- Barra de progresso mostrando quantas foram processadas
 
-#### 2. Secret necessária: `GOOGLE_API_KEY`
-- Uma API Key simples do Google Cloud (não OAuth) é suficiente para listar arquivos em pastas públicas
-- Será solicitada ao usuário antes da implementação
+#### 2. Nova Edge Function: `supabase/functions/import-bulk-meetings/index.ts`
+- Recebe array de links do Google Drive + metadata (seller_id, meeting_type)
+- Para cada link válido:
+  - Extrai o file ID
+  - Cria registro na tabela `meetings` com `youtube_url` = link do Drive
+  - Dispara `analyze-meeting` sequencialmente
+- Retorna lista de meetings criadas com status
 
-#### 3. UI: Novo botão "Importar Pasta" na página Agendas (`src/pages/Agendas.tsx`)
-- Adiciona um novo Dialog com campos:
-  - Link da pasta do Google Drive
-  - Tipo de reunião (empresa/individual)
-  - Vendedor responsável
-- Mostra progresso da importação (quantos arquivos encontrados, quantos criados)
-- Após importação, atualiza a lista de agendas automaticamente
-
-#### 4. Fluxo visual
+#### 3. Fluxo
 ```text
-[Botão "Importar Pasta"] → Dialog com link da pasta
-  → Edge Function lista arquivos na pasta
-  → Cria N agendas automaticamente
-  → Dispara análise para cada uma
+[Botão "Importar em Lote"] → Dialog com textarea
+  → Usuário cola 10 links do Drive (um por linha)
+  → Edge Function cria 10 agendas
+  → Dispara análise para cada uma sequencialmente
   → Usuário vê todas na lista com status "transcrevendo"
 ```
 
-### Detalhes Técnicos
-- A Google Drive API v3 permite listar arquivos em pastas públicas usando apenas uma API Key (sem OAuth)
-- O endpoint usado será: `GET https://www.googleapis.com/drive/v3/files?q='{folderId}'+in+parents&key={apiKey}&fields=files(id,name,mimeType)`
-- Cada arquivo será convertido para o link de download direto que o `analyze-meeting` já sabe processar
-- O processamento será sequencial (um por vez) para não sobrecarregar a transcrição
+### Vantagens
+- Zero dependência de API Key do Google
+- Funciona com o fluxo de análise já existente (AssemblyAI + Drive links)
+- Simples e confiável
+- Usuário pode copiar links rapidamente do Drive
 
