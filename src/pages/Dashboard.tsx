@@ -135,21 +135,63 @@ const Dashboard = () => {
 
       const activeSellers = selectedSeller === "all" ? sellerData.size : (sellerData.size > 0 ? 1 : 0);
 
-      // Score evolution (by month)
-      const monthlyScores = new Map<string, number[]>();
+      // Score evolution (by month) — per seller when unfiltered
+      const meetingSellerMap = new Map<string, string>();
+      for (const m of allMeetings) {
+        meetingSellerMap.set(m.id, m.seller_id);
+      }
+
+      // Group scores by month+seller
+      const monthSellerScores = new Map<string, Map<string, number[]>>();
+      const allMonths = new Set<string>();
       for (const a of uniqueAnalyses) {
         if (a.overall_score == null) continue;
         const date = new Date(a.created_at);
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        if (!monthlyScores.has(key)) monthlyScores.set(key, []);
-        monthlyScores.get(key)!.push(Number(a.overall_score));
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        allMonths.add(monthKey);
+        const sellerId = meetingSellerMap.get(a.meeting_id) || "unknown";
+        if (!monthSellerScores.has(monthKey)) monthSellerScores.set(monthKey, new Map());
+        const sellerMap = monthSellerScores.get(monthKey)!;
+        if (!sellerMap.has(sellerId)) sellerMap.set(sellerId, []);
+        sellerMap.get(sellerId)!.push(Number(a.overall_score));
       }
-      const scoreEvolution = Array.from(monthlyScores.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, s]) => ({
-          date: new Date(date + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-          score: Math.round(s.reduce((a, b) => a + b, 0) / s.length),
-        }));
+
+      const sortedMonths = Array.from(allMonths).sort();
+      const involvedSellers = new Set<string>();
+      for (const sm of monthSellerScores.values()) {
+        for (const sid of sm.keys()) involvedSellers.add(sid);
+      }
+
+      let scoreEvolution: Record<string, any>[];
+      let scoreEvolutionSellers: string[];
+
+      if (selectedSeller === "all" && involvedSellers.size > 1) {
+        // Multi-seller: one line per seller
+        scoreEvolutionSellers = Array.from(involvedSellers);
+        scoreEvolution = sortedMonths.map(month => {
+          const row: Record<string, any> = {
+            date: new Date(month + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+          };
+          const sellerMap = monthSellerScores.get(month);
+          for (const sid of scoreEvolutionSellers) {
+            const scores = sellerMap?.get(sid);
+            row[sid] = scores ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+          }
+          return row;
+        });
+      } else {
+        // Single seller or filtered: single line
+        scoreEvolutionSellers = [];
+        scoreEvolution = sortedMonths.map(month => {
+          const sellerMap = monthSellerScores.get(month)!;
+          const all: number[] = [];
+          for (const scores of sellerMap.values()) all.push(...scores);
+          return {
+            date: new Date(month + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+            score: Math.round(all.reduce((a, b) => a + b, 0) / all.length),
+          };
+        });
+      }
 
       // Average framework scores
       const avgBant = computeAvgFramework(uniqueAnalyses, "bant_score", [
