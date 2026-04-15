@@ -246,19 +246,26 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
     } else if (meeting.youtube_url) {
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
-      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
-      const audioUrl = driveFileId
-        ? getGoogleDriveDirectUrl(driveFileId)
-        : meeting.youtube_url;
-
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-
       const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
       if (!assemblyKey) {
         throw new Error("ASSEMBLYAI_API_KEY não configurada. Necessária para transcrever arquivos externos.");
       }
 
-      const result = await transcribeWithAssemblyAI(audioUrl);
+      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
+      let assemblyAudioUrl: string;
+
+      if (driveFileId) {
+        // Download from Google Drive server-side to handle confirmation pages
+        const fileBlob = await downloadFromGoogleDrive(driveFileId);
+        await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+        assemblyAudioUrl = await uploadToAssemblyAI(fileBlob);
+      } else {
+        // Non-Drive URL: pass directly to AssemblyAI
+        await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+        assemblyAudioUrl = meeting.youtube_url;
+      }
+
+      const result = await transcribeWithAssemblyAI(assemblyAudioUrl);
       transcript = result.text;
       speakers = result.speakers;
     } else if (meeting.file_url) {
