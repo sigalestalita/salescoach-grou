@@ -283,7 +283,8 @@ ${transcript}
 CONTEXTO:
 - Vendedor está conversando com o lead: ${meeting.lead_name || "desconhecido"} da empresa ${meeting.lead_company || "desconhecida"}
 - Título da reunião: ${meeting.title}
-${knowledgeSection}
+- Tipo de reunião: ${meeting.meeting_type || "empresa"}
+${consultoriaSection}${knowledgeSection}
 
 CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (baseado na metodologia NATO/BANT da empresa):
 
