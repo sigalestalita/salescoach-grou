@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare } from "lucide-react";
@@ -14,7 +15,8 @@ interface DashboardData {
   hotRate: number;
   tempDistribution: { name: string; value: number; color: string }[];
   sellerRanking: { name: string; avgScore: number; meetings: number }[];
-  scoreEvolution: { date: string; score: number }[];
+  scoreEvolution: Record<string, any>[];
+  scoreEvolutionSellers: string[];
   avgBant: { key: string; label: string; avg: number }[];
   avgMeddic: { key: string; label: string; avg: number }[];
   avgSpin: { key: string; label: string; avg: number }[];
@@ -134,21 +136,63 @@ const Dashboard = () => {
 
       const activeSellers = selectedSeller === "all" ? sellerData.size : (sellerData.size > 0 ? 1 : 0);
 
-      // Score evolution (by month)
-      const monthlyScores = new Map<string, number[]>();
+      // Score evolution (by month) — per seller when unfiltered
+      const meetingSellerMap = new Map<string, string>();
+      for (const m of allMeetings) {
+        meetingSellerMap.set(m.id, m.seller_id);
+      }
+
+      // Group scores by month+seller
+      const monthSellerScores = new Map<string, Map<string, number[]>>();
+      const allMonths = new Set<string>();
       for (const a of uniqueAnalyses) {
         if (a.overall_score == null) continue;
         const date = new Date(a.created_at);
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        if (!monthlyScores.has(key)) monthlyScores.set(key, []);
-        monthlyScores.get(key)!.push(Number(a.overall_score));
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+        allMonths.add(monthKey);
+        const sellerId = meetingSellerMap.get(a.meeting_id) || "unknown";
+        if (!monthSellerScores.has(monthKey)) monthSellerScores.set(monthKey, new Map());
+        const sellerMap = monthSellerScores.get(monthKey)!;
+        if (!sellerMap.has(sellerId)) sellerMap.set(sellerId, []);
+        sellerMap.get(sellerId)!.push(Number(a.overall_score));
       }
-      const scoreEvolution = Array.from(monthlyScores.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, s]) => ({
-          date: new Date(date + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-          score: Math.round(s.reduce((a, b) => a + b, 0) / s.length),
-        }));
+
+      const sortedMonths = Array.from(allMonths).sort();
+      const involvedSellers = new Set<string>();
+      for (const sm of monthSellerScores.values()) {
+        for (const sid of sm.keys()) involvedSellers.add(sid);
+      }
+
+      let scoreEvolution: Record<string, any>[];
+      let scoreEvolutionSellers: string[];
+
+      if (selectedSeller === "all" && involvedSellers.size > 1) {
+        // Multi-seller: one line per seller
+        scoreEvolutionSellers = Array.from(involvedSellers);
+        scoreEvolution = sortedMonths.map(month => {
+          const row: Record<string, any> = {
+            date: new Date(month + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+          };
+          const sellerMap = monthSellerScores.get(month);
+          for (const sid of scoreEvolutionSellers) {
+            const scores = sellerMap?.get(sid);
+            row[sid] = scores ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+          }
+          return row;
+        });
+      } else {
+        // Single seller or filtered: single line
+        scoreEvolutionSellers = [];
+        scoreEvolution = sortedMonths.map(month => {
+          const sellerMap = monthSellerScores.get(month)!;
+          const all: number[] = [];
+          for (const scores of sellerMap.values()) all.push(...scores);
+          return {
+            date: new Date(month + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+            score: Math.round(all.reduce((a, b) => a + b, 0) / all.length),
+          };
+        });
+      }
 
       // Average framework scores
       const avgBant = computeAvgFramework(uniqueAnalyses, "bant_score", [
@@ -187,7 +231,7 @@ const Dashboard = () => {
 
       setData({
         totalMeetings, completedMeetings, avgScore, hotRate, tempDistribution,
-        sellerRanking, scoreEvolution, avgBant, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
+        sellerRanking, scoreEvolution, scoreEvolutionSellers, avgBant, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
       });
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -288,7 +332,7 @@ const Dashboard = () => {
               <TrendingUp className="h-4 w-4" />
               Evolução de Scores
             </CardTitle>
-            <CardDescription>{isFiltered ? "Score mensal individual" : "Score médio mensal do time"}</CardDescription>
+            <CardDescription>{isFiltered ? "Score mensal individual" : "Comparativo de scores médios por executivo"}</CardDescription>
           </CardHeader>
           <CardContent className="h-64">
             {data.scoreEvolution.length > 0 ? (
@@ -298,7 +342,20 @@ const Dashboard = () => {
                   <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} className="text-xs" tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="score" stroke="hsl(24, 95%, 53%)" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                  {data.scoreEvolutionSellers.length > 0 ? (
+                    <>
+                      <Legend />
+                      {data.scoreEvolutionSellers.map((sid, idx) => {
+                        const sellerName = sellers.find(s => s.id === sid)?.name || sid.slice(0, 8);
+                        const colors = ["hsl(24, 95%, 53%)", "hsl(200, 80%, 50%)", "hsl(150, 70%, 45%)", "hsl(280, 70%, 55%)", "hsl(340, 75%, 50%)", "hsl(60, 80%, 45%)", "hsl(180, 60%, 45%)", "hsl(30, 90%, 45%)"];
+                        return (
+                          <Line key={sid} type="monotone" dataKey={sid} stroke={colors[idx % colors.length]} strokeWidth={2} dot={{ r: 3 }} name={sellerName} connectNulls />
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <Line type="monotone" dataKey="score" stroke="hsl(24, 95%, 53%)" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
