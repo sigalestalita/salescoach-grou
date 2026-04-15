@@ -118,6 +118,12 @@ const Agendas = () => {
     seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkLinks, setBulkLinks] = useState("");
+  const [bulkMeetingType, setBulkMeetingType] = useState("empresa");
+  const [bulkSellerId, setBulkSellerId] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const { user, role } = useAuth();
   const isVendedor = role === "vendedor";
   const { toast } = useToast();
