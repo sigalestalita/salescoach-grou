@@ -555,6 +555,7 @@ const Agendas = () => {
             </form>
           </DialogContent>
         </Dialog>
+          </div>
         )}
       </div>
 
