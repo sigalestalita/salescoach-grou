@@ -341,10 +341,10 @@ const Dashboard = () => {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} className="text-xs" tick={{ fontSize: 11 }} />
-                  <Tooltip />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(222, 47%, 11%)', border: '1px solid hsl(217, 33%, 25%)', borderRadius: '8px', color: '#e2e8f0' }} labelStyle={{ color: '#94a3b8' }} />
                   {data.scoreEvolutionSellers.length > 0 ? (
                     <>
-                      <Legend />
+                      <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                       {data.scoreEvolutionSellers.map((sid, idx) => {
                         const sellerName = sellers.find(s => s.id === sid)?.name || sid.slice(0, 8);
                         const colors = ["hsl(24, 95%, 53%)", "hsl(200, 80%, 50%)", "hsl(150, 70%, 45%)", "hsl(280, 70%, 55%)", "hsl(340, 75%, 50%)", "hsl(60, 80%, 45%)", "hsl(180, 60%, 45%)", "hsl(30, 90%, 45%)"];
