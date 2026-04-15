@@ -20,6 +20,61 @@ function getGoogleDriveDirectUrl(fileId: string): string {
   return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
 }
 
+async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
+  const url = getGoogleDriveDirectUrl(fileId);
+  console.log("Downloading from Google Drive:", url);
+
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  };
+
+  let res = await fetch(url, { headers, redirect: "follow" });
+  let blob = await res.blob();
+
+  // If we got HTML back, it's the confirmation page — extract the real download link
+  if (blob.type?.includes("text/html") || blob.size < 100000) {
+    const text = await blob.text();
+    if (text.includes("virus scan") || text.includes("confirm=") || text.includes("download_warning")) {
+      console.log("Got Google Drive confirmation page, extracting real link...");
+      // Try to find the confirmation form action or direct link
+      const formMatch = text.match(/action="([^"]+)"/);
+      const idMatch = text.match(/confirm=([^&"]+)/);
+      
+      let retryUrl: string;
+      if (formMatch) {
+        retryUrl = formMatch[1].replace(/&amp;/g, "&");
+        if (!retryUrl.startsWith("http")) {
+          retryUrl = `https://drive.usercontent.google.com${retryUrl}`;
+        }
+      } else if (idMatch) {
+        retryUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=${idMatch[1]}`;
+      } else {
+        // Last resort: try with uuid cookie approach
+        retryUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+      }
+
+      console.log("Retrying download with:", retryUrl);
+      res = await fetch(retryUrl, { headers, redirect: "follow" });
+      blob = await res.blob();
+
+      if (blob.type?.includes("text/html")) {
+        // Final fallback: try the /uc endpoint
+        const ucUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+        console.log("Still HTML, trying /uc endpoint:", ucUrl);
+        res = await fetch(ucUrl, { headers, redirect: "follow" });
+        blob = await res.blob();
+
+        if (blob.type?.includes("text/html")) {
+          throw new Error(`Google Drive retornou HTML mesmo após tentativas de confirmação. O arquivo pode não estar compartilhado publicamente. File ID: ${fileId}`);
+        }
+      }
+    }
+  }
+
+  console.log(`Google Drive download complete: ${blob.size} bytes, type: ${blob.type}`);
+  return blob;
+}
+
 // ── Transcription providers ──
 
 async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: string; speakers: any[] | null }> {
@@ -191,19 +246,26 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
     } else if (meeting.youtube_url) {
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
-      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
-      const audioUrl = driveFileId
-        ? getGoogleDriveDirectUrl(driveFileId)
-        : meeting.youtube_url;
-
-      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-
       const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
       if (!assemblyKey) {
         throw new Error("ASSEMBLYAI_API_KEY não configurada. Necessária para transcrever arquivos externos.");
       }
 
-      const result = await transcribeWithAssemblyAI(audioUrl);
+      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
+      let assemblyAudioUrl: string;
+
+      if (driveFileId) {
+        // Download from Google Drive server-side to handle confirmation pages
+        const fileBlob = await downloadFromGoogleDrive(driveFileId);
+        await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+        assemblyAudioUrl = await uploadToAssemblyAI(fileBlob);
+      } else {
+        // Non-Drive URL: pass directly to AssemblyAI
+        await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+        assemblyAudioUrl = meeting.youtube_url;
+      }
+
+      const result = await transcribeWithAssemblyAI(assemblyAudioUrl);
       transcript = result.text;
       speakers = result.speakers;
     } else if (meeting.file_url) {
