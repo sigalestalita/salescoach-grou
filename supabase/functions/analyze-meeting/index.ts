@@ -254,6 +254,16 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
     console.log(`Knowledge base: ${hasKnowledge ? "found content" : "empty"}`);
 
     // Build analysis prompt with knowledge base
+    // Add consulting-specific pricing context
+    const consultoriaSection = meeting.meeting_type === "consultoria"
+      ? `\nCONTEXTO DE PREÇOS PARA CONSULTORIA:
+- Esta é uma reunião de CONSULTORIA. Use as tabelas "Créditos PDA - Consultoria" (para clientes existentes/recargas) e "Programa de Partners" (para novos clientes) ao avaliar propostas de valor e oportunidades.
+- NÃO use a tabela de Licenças PDA para empresas neste contexto.
+- Créditos PDA - Consultoria = recargas para consultores já clientes.
+- Programa de Partners = entrada de novos consultores com pacotes de licenças (Bronze a Safira).
+- Avalie se o vendedor apresentou a faixa correta do programa com base no perfil do prospect.\n`
+      : "";
+
     const knowledgeSection = hasKnowledge
       ? `\nBASE DE CONHECIMENTO DA EMPRESA:
 ${knowledgeContext}
