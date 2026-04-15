@@ -24,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   Plus,
   Upload,
@@ -37,6 +39,7 @@ import {
   Trash2,
   RotateCcw,
   MoreVertical,
+  FileStack,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -115,6 +118,12 @@ const Agendas = () => {
     seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkLinks, setBulkLinks] = useState("");
+  const [bulkMeetingType, setBulkMeetingType] = useState("empresa");
+  const [bulkSellerId, setBulkSellerId] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const { user, role } = useAuth();
   const isVendedor = role === "vendedor";
   const { toast } = useToast();
@@ -275,6 +284,55 @@ const Agendas = () => {
     }
   };
 
+  const handleBulkImport = async () => {
+    if (!user) return;
+    const lines = bulkLinks
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && (l.includes("drive.google.com") || l.includes("youtube.com") || l.includes("youtu.be")));
+
+    if (lines.length === 0) {
+      toast({ title: "Nenhum link válido", description: "Cole links do Google Drive ou YouTube, um por linha.", variant: "destructive" });
+      return;
+    }
+
+    setBulkImporting(true);
+    setBulkProgress({ current: 0, total: lines.length });
+
+    try {
+      const { data, error } = await supabase.functions.invoke("import-bulk-meetings", {
+        body: {
+          links: lines,
+          meeting_type: bulkMeetingType,
+          seller_id: bulkSellerId || user.id,
+        },
+      });
+
+      if (error) throw error;
+
+      const successCount = data.results?.filter((r: any) => r.status === "processing" || r.status === "created_no_analysis").length || 0;
+      const errorCount = data.results?.filter((r: any) => r.status === "error").length || 0;
+
+      setBulkProgress({ current: lines.length, total: lines.length });
+
+      toast({
+        title: `Importação concluída`,
+        description: `${successCount} agenda(s) criada(s)${errorCount > 0 ? `, ${errorCount} erro(s)` : ""}. A análise está em andamento.`,
+      });
+
+      setBulkDialogOpen(false);
+      setBulkLinks("");
+      setBulkMeetingType("empresa");
+      setBulkSellerId("");
+      fetchMeetings();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setBulkImporting(false);
+      setBulkProgress({ current: 0, total: 0 });
+    }
+  };
+
   const filtered = meetings.filter((m) => {
     const matchesSearch =
       m.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -293,6 +351,71 @@ const Agendas = () => {
           <p className="text-muted-foreground">{isVendedor ? "Visualize suas reuniões e análises" : "Gerencie e analise suas reuniões comerciais"}</p>
         </div>
         {!isVendedor && (
+          <div className="flex gap-2">
+            <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <FileStack className="h-4 w-4 mr-2" />
+                  Importar em Lote
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Importar em Lote</DialogTitle>
+                  <DialogDescription>Cole vários links do Google Drive ou YouTube, um por linha</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Links (um por linha)</Label>
+                    <Textarea
+                      value={bulkLinks}
+                      onChange={(e) => setBulkLinks(e.target.value)}
+                      placeholder={"https://drive.google.com/file/d/...\nhttps://drive.google.com/file/d/...\nhttps://youtube.com/watch?v=..."}
+                      rows={8}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {bulkLinks.split("\n").filter((l) => l.trim().length > 0).length} link(s) detectado(s)
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Tipo</Label>
+                      <Select value={bulkMeetingType} onValueChange={setBulkMeetingType}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="empresa">Empresa</SelectItem>
+                          <SelectItem value="consultoria">Consultoria</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Executivo</Label>
+                      <Select value={bulkSellerId} onValueChange={setBulkSellerId}>
+                        <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                        <SelectContent>
+                          {profiles.map((p) => (
+                            <SelectItem key={p.user_id} value={p.user_id}>
+                              {p.full_name || p.user_id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {bulkImporting && bulkProgress.total > 0 && (
+                    <div className="space-y-2">
+                      <Progress value={(bulkProgress.current / bulkProgress.total) * 100} />
+                      <p className="text-xs text-muted-foreground text-center">
+                        Processando {bulkProgress.current}/{bulkProgress.total}...
+                      </p>
+                    </div>
+                  )}
+                  <Button onClick={handleBulkImport} className="w-full" disabled={bulkImporting}>
+                    {bulkImporting ? "Importando..." : "Importar Todos"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -432,6 +555,7 @@ const Agendas = () => {
             </form>
           </DialogContent>
         </Dialog>
+          </div>
         )}
       </div>
 
