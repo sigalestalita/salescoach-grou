@@ -230,7 +230,7 @@ const Dashboard = () => {
 
       setData({
         totalMeetings, completedMeetings, avgScore, hotRate, tempDistribution,
-        sellerRanking, scoreEvolution, avgBant, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
+        sellerRanking, scoreEvolution, scoreEvolutionSellers, avgBant, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
       });
     } catch (err) {
       console.error("Dashboard fetch error:", err);
