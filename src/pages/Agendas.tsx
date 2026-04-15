@@ -24,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   Plus,
   Upload,
@@ -37,6 +39,7 @@ import {
   Trash2,
   RotateCcw,
   MoreVertical,
+  FileStack,
 } from "lucide-react";
 import {
   DropdownMenu,
