@@ -1,54 +1,51 @@
 
 
-## Importação em Lote do Google Drive — Sem API Key do Google
+## Adicionar Tabelas de Preços de Consultoria à Base de Conhecimento
 
-### Abordagem
+### Problema
+A IA usa a mesma tabela de preços para todos os tipos de reunião. Reuniões de consultoria têm tabelas de preços diferentes (Créditos PDA - Consultoria para clientes existentes e Programa de Partners para novos clientes), mas a IA não tem essa informação.
 
-Em vez de usar a Google Drive API (que exige uma API Key), o usuário cola o link da pasta do Google Drive e o sistema apresenta um campo de texto onde ele cola **múltiplos links de arquivos** de uma vez. Alternativamente, podemos fazer scraping da página pública da pasta para extrair os IDs dos arquivos.
+### Solução
 
-A abordagem mais confiável e sem dependência externa: **importação por lista de links**.
+Duas mudanças:
 
-### Como funciona
+#### 1. Inserir as tabelas de preços como documentos na base de conhecimento (via migration)
 
-1. Novo botão "Importar em Lote" na página Agendas
-2. Abre um Dialog com um campo de texto grande (textarea)
-3. O usuário cola vários links do Google Drive (um por linha)
-4. Opcionalmente define tipo de reunião e vendedor
-5. O sistema cria uma agenda para cada link e dispara a análise automaticamente
-6. Mostra progresso: quantos foram criados e status de cada um
+Criar dois registros na tabela `knowledge_documents` com `extracted_content` contendo os dados estruturados:
 
-### Mudanças
+**Documento 1: "Créditos PDA - Consultoria (Recargas para clientes existentes)"**
+- Categoria: "Preços Consultoria"
+- Conteúdo extraído com a tabela completa:
+  - Avulso: R$ 294,00 | Recarga Silver: - | Recarga Gold: -
+  - 01 a 09: R$ 240,00 | Silver: - | Gold: -
+  - 10 a 50: R$ 207,00 | Silver: R$ 186,30 | Gold: R$ 144,90
+  - 51 a 100: R$ 194,00 | Silver: R$ 174,60 | Gold: R$ 135,80
+  - Acima 101: R$ 175,00 | Silver: R$ 157,50 | Gold: R$ 122,50
 
-#### 1. UI: Novo botão e Dialog em `src/pages/Agendas.tsx`
-- Botão "Importar em Lote" ao lado do botão existente de criar agenda
-- Dialog com:
-  - Textarea para colar múltiplos links (um por linha)
-  - Select de tipo de reunião
-  - Select de vendedor (se admin)
-- Validação: extrai file IDs dos links, ignora linhas vazias/inválidas
-- Cria cada meeting via Supabase e dispara `analyze-meeting` para cada uma
-- Barra de progresso mostrando quantas foram processadas
+**Documento 2: "Programa de Partners (Novos clientes consultoria)"**
+- Categoria: "Preços Consultoria"
+- Conteúdo com a tabela:
+  - Bronze: 5 créditos, R$ 165/un, Total R$ 660, Recarga 10: R$ 1.320
+  - Prata: 15 créditos, R$ 107,80/un, Total R$ 1.617, Recarga 10: R$ 1.078
+  - Ouro: 50 créditos, R$ 102,30/un, Total R$ 5.115, Recarga 10: R$ 1.023
+  - Esmeralda: 100 créditos, R$ 95,70/un, Total R$ 9.570, Recarga 10: R$ 957
+  - Safira: 250 créditos, R$ 86,90/un, Total R$ 21.725, Recarga 10: R$ 869
 
-#### 2. Nova Edge Function: `supabase/functions/import-bulk-meetings/index.ts`
-- Recebe array de links do Google Drive + metadata (seller_id, meeting_type)
-- Para cada link válido:
-  - Extrai o file ID
-  - Cria registro na tabela `meetings` com `youtube_url` = link do Drive
-  - Dispara `analyze-meeting` sequencialmente
-- Retorna lista de meetings criadas com status
+#### 2. Ajustar o prompt de análise para diferenciar por `meeting_type`
 
-#### 3. Fluxo
-```text
-[Botão "Importar em Lote"] → Dialog com textarea
-  → Usuário cola 10 links do Drive (um por linha)
-  → Edge Function cria 10 agendas
-  → Dispara análise para cada uma sequencialmente
-  → Usuário vê todas na lista com status "transcrevendo"
+No `analyze-meeting/index.ts`, quando `meeting.meeting_type === "consultoria"`, adicionar instrução extra no prompt:
+
+```
+CONTEXTO DE PREÇOS PARA CONSULTORIA:
+- Esta é uma reunião de CONSULTORIA. Use as tabelas "Créditos PDA - Consultoria" (para clientes existentes/recargas) e "Programa de Partners" (para novos clientes) ao avaliar propostas de valor e oportunidades.
+- NÃO use a tabela de Licenças PDA para empresas neste contexto.
+- Créditos PDA - Consultoria = recargas para consultores já clientes.
+- Programa de Partners = entrada de novos consultores com pacotes de licenças (Bronze a Safira).
 ```
 
-### Vantagens
-- Zero dependência de API Key do Google
-- Funciona com o fluxo de análise já existente (AssemblyAI + Drive links)
-- Simples e confiável
-- Usuário pode copiar links rapidamente do Drive
+Isso garante que a IA use as tabelas corretas dependendo do tipo de reunião.
+
+### Arquivos modificados
+- **Migration SQL**: Insere os 2 documentos de preços na `knowledge_documents`
+- **`supabase/functions/analyze-meeting/index.ts`**: Adiciona bloco condicional no prompt quando `meeting_type = "consultoria"`
 
