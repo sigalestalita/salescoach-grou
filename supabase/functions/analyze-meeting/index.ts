@@ -524,7 +524,11 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
     console.log("Meeting processing complete:", meetingId);
   } catch (error) {
     console.error("Processing error:", error);
-    await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido durante o processamento.";
+    await supabase
+      .from("meetings")
+      .update({ status: "erro", error_message: errorMessage })
+      .eq("id", meetingId);
   }
 }
 
