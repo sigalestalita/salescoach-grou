@@ -387,11 +387,17 @@ const MeetingDetail = () => {
               <div className="text-center space-y-2">
                 <div className="text-destructive text-4xl mb-4">⚠️</div>
                 <h3 className="text-lg font-medium text-destructive">Erro no processamento</h3>
-                <p className="text-sm text-muted-foreground">
-                  {isLinkBased
-                    ? 'Não foi possível baixar ou transcrever o arquivo do Google Drive. Confirme o compartilhamento do link, ou cole a transcrição manualmente, e tente novamente.'
-                    : 'Não foi possível concluir a análise. Tente novamente.'}
-                </p>
+                {meeting.error_message ? (
+                  <p className="text-sm text-foreground/90 max-w-xl mx-auto">
+                    {meeting.error_message}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    {isLinkBased
+                      ? 'Não foi possível baixar ou transcrever o arquivo do Google Drive. Confirme o compartilhamento do link, ou cole a transcrição manualmente, e tente novamente.'
+                      : 'Não foi possível concluir a análise. Tente novamente.'}
+                  </p>
+                )}
               </div>
             )}
           </CardContent>
