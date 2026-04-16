@@ -309,10 +309,11 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       let assemblyAudioUrl: string;
 
       if (driveFileId) {
-        // Download from Google Drive server-side to handle confirmation pages
-        const fileBlob = await downloadFromGoogleDrive(driveFileId);
+        // Validate the file is publicly accessible, then pass the URL DIRECTLY to AssemblyAI.
+        // AssemblyAI will download the file from Google's servers itself — this avoids
+        // loading large files (hundreds of MB) into the Edge Function's limited memory.
+        assemblyAudioUrl = await validateGoogleDriveUrl(driveFileId);
         await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-        assemblyAudioUrl = await uploadToAssemblyAI(fileBlob);
       } else {
         // Non-Drive URL: pass directly to AssemblyAI
         await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
