@@ -331,7 +331,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
       if (fileError || !fileData) {
         console.error("Failed to download file:", fileError);
-        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        await supabase.from("meetings").update({
+          status: "erro",
+          error_message: `Falha ao baixar o arquivo do storage: ${fileError?.message || "arquivo não encontrado"}`,
+        }).eq("id", meetingId);
         return;
       }
 
@@ -350,7 +353,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
         transcript = await transcribeWithGroq(fileData, fileName);
       }
     } else {
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: "Nenhum arquivo nem link foi fornecido para esta reunião.",
+      }).eq("id", meetingId);
       return;
     }
 
