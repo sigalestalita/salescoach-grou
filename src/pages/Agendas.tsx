@@ -62,8 +62,15 @@ import type { Tables } from "@/integrations/supabase/types";
 type Meeting = Tables<"meetings">;
 type Profile = Tables<"profiles">;
 
+const PROCESSING_STALE_AFTER_MS = 30 * 60 * 1000;
+
+const isMeetingProcessingStalled = (meeting: Pick<Meeting, "status" | "updated_at">) =>
+  ["baixando", "transcrevendo", "analisando"].includes(meeting.status) &&
+  Date.now() - new Date(meeting.updated_at).getTime() > PROCESSING_STALE_AFTER_MS;
+
 const statusLabels: Record<string, string> = {
   enviado: "Enviado",
+  baixando: "Baixando",
   transcrevendo: "Transcrevendo",
   analisando: "Analisando",
   completo: "Completo",
@@ -72,6 +79,7 @@ const statusLabels: Record<string, string> = {
 
 const statusColors: Record<string, string> = {
   enviado: "bg-muted text-muted-foreground",
+  baixando: "bg-info/10 text-info",
   transcrevendo: "bg-info/10 text-info",
   analisando: "bg-warning/10 text-warning",
   completo: "bg-success/10 text-success",
@@ -619,6 +627,14 @@ const Agendas = () => {
               onClick={() => navigate(`/agendas/${meeting.id}`)}
             >
               <CardContent className="p-4">
+                {(() => {
+                  const isStalled = isMeetingProcessingStalled(meeting);
+                  const statusLabel = isStalled ? "Travado" : (statusLabels[meeting.status] || meeting.status);
+                  const statusClassName = isStalled
+                    ? "bg-destructive/10 text-destructive"
+                    : (statusColors[meeting.status] || "bg-muted text-muted-foreground");
+
+                  return (
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <h3 className="font-semibold">{meeting.title}</h3>
@@ -646,8 +662,8 @@ const Agendas = () => {
                     {meeting.temperature && (
                       <span className="text-sm">{tempLabels[meeting.temperature]}</span>
                     )}
-                    <Badge className={statusColors[meeting.status]}>
-                      {statusLabels[meeting.status]}
+                    <Badge className={statusClassName}>
+                      {statusLabel}
                     </Badge>
                     {!isVendedor && (
                     <DropdownMenu>
@@ -680,6 +696,8 @@ const Agendas = () => {
                     )}
                   </div>
                 </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}

@@ -36,6 +36,20 @@ type AnalysisResult = Tables<"analysis_results">;
 type Transcription = Tables<"transcriptions">;
 type Highlight = Tables<"highlights">;
 
+const processingStatuses = ["baixando", "transcrevendo", "analisando"] as const;
+const PROCESSING_STALE_AFTER_MS = 30 * 60 * 1000;
+
+const isMeetingProcessingStalled = (
+  currentMeeting: Pick<Meeting, "status" | "updated_at"> | null,
+) => {
+  if (!currentMeeting) return false;
+
+  return (
+    processingStatuses.includes(currentMeeting.status as (typeof processingStatuses)[number]) &&
+    Date.now() - new Date(currentMeeting.updated_at).getTime() > PROCESSING_STALE_AFTER_MS
+  );
+};
+
 const MeetingDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -50,6 +64,7 @@ const MeetingDetail = () => {
   const [fileMediaUrl, setFileMediaUrl] = useState<string | null>(null);
 
   const isLinkBased = meeting && !meeting.file_url && !!meeting.youtube_url;
+  const isStaleProcessing = isMeetingProcessingStalled(meeting);
 
   useEffect(() => {
     if (id) fetchData();
@@ -57,28 +72,31 @@ const MeetingDetail = () => {
 
   // Poll for updates when meeting is in a processing state
   useEffect(() => {
-    const processingStatuses = ["baixando", "transcrevendo", "analisando"];
-    if (!meeting || !processingStatuses.includes(meeting.status)) return;
+    if (!meeting || !processingStatuses.includes(meeting.status as (typeof processingStatuses)[number])) return;
+    if (isMeetingProcessingStalled(meeting)) {
+      setProcessing(false);
+      return;
+    }
 
     setProcessing(true);
     const interval = setInterval(async () => {
       const { data: updated } = await supabase
         .from("meetings")
-        .select("status")
+        .select("status, updated_at")
         .eq("id", meeting.id)
         .single();
-      if (updated?.status === "completo" || updated?.status === "erro") {
+
+      if (updated?.status === "completo" || updated?.status === "erro" || isMeetingProcessingStalled(updated)) {
         clearInterval(interval);
         setProcessing(false);
         fetchData();
       } else if (updated?.status && updated.status !== meeting.status) {
-        // Update status to show progress
-        setMeeting((prev) => prev ? { ...prev, status: updated.status } : prev);
+        setMeeting((prev) => prev ? { ...prev, status: updated.status, updated_at: updated.updated_at } : prev);
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [meeting?.id, meeting?.status]);
+  }, [meeting?.id, meeting?.status, meeting?.updated_at]);
 
   const fetchData = async () => {
     const [meetingRes, analysisRes, transcriptionRes, highlightsRes] = await Promise.all([
@@ -171,10 +189,10 @@ const MeetingDetail = () => {
             )}
           </div>
         </div>
-        {meeting.status === "enviado" && (
+        {(meeting.status === "enviado" || meeting.status === "erro" || isStaleProcessing) && (
           <Button onClick={handleAnalyze} disabled={processing || (isLinkBased && !meeting.youtube_url && !manualTranscript.trim())}>
             <Play className="h-4 w-4 mr-2" />
-            {processing ? "Processando..." : "Analisar"}
+            {processing ? "Processando..." : meeting.status === "enviado" ? "Analisar" : "Tentar novamente"}
           </Button>
         )}
       </div>
@@ -269,7 +287,7 @@ const MeetingDetail = () => {
       })()}
 
       {/* Optional manual transcript for link-based meetings */}
-      {isLinkBased && meeting.status === "enviado" && (
+      {isLinkBased && (meeting.status === "enviado" || meeting.status === "erro" || isStaleProcessing) && (
         <Collapsible>
           <Card>
             <CollapsibleTrigger className="w-full">
@@ -304,7 +322,26 @@ const MeetingDetail = () => {
                 <p className="text-sm text-muted-foreground">Clique em "Analisar" para iniciar o processamento com IA</p>
               </div>
             )}
-            {(meeting.status === "baixando" || meeting.status === "transcrevendo" || meeting.status === "analisando") && (() => {
+            {processingStatuses.includes(meeting.status as (typeof processingStatuses)[number]) && (() => {
+              if (isStaleProcessing) {
+                return (
+                  <div className="space-y-4 text-center">
+                    <div className="text-destructive text-4xl">⚠️</div>
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-medium text-destructive">Processamento travado</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Essa reunião ficou parada em <span className="font-medium text-foreground">{meeting.status}</span> por mais de 30 minutos.
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {isLinkBased
+                          ? 'Provável causa: o arquivo do Google Drive não concluiu o download automático. Verifique se ele está compartilhado para qualquer pessoa com o link, ou cole a transcrição manualmente, e clique em "Tentar novamente".'
+                          : 'Provável causa: o arquivo não concluiu o processamento. Clique em "Tentar novamente".'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
               const steps = [
                 { key: "baixando", label: "Baixando arquivo", icon: Download },
                 { key: "transcrevendo", label: "Transcrevendo áudio", icon: Mic },
@@ -347,10 +384,14 @@ const MeetingDetail = () => {
               );
             })()}
             {meeting.status === "erro" && (
-              <div className="text-center">
+              <div className="text-center space-y-2">
                 <div className="text-destructive text-4xl mb-4">⚠️</div>
                 <h3 className="text-lg font-medium text-destructive">Erro no processamento</h3>
-                <p className="text-sm text-muted-foreground">Tente novamente ou entre em contato com o suporte</p>
+                <p className="text-sm text-muted-foreground">
+                  {isLinkBased
+                    ? 'Não foi possível baixar ou transcrever o arquivo do Google Drive. Confirme o compartilhamento do link, ou cole a transcrição manualmente, e tente novamente.'
+                    : 'Não foi possível concluir a análise. Tente novamente.'}
+                </p>
               </div>
             )}
           </CardContent>
