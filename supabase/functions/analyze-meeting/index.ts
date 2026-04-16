@@ -20,6 +20,60 @@ function getGoogleDriveDirectUrl(fileId: string): string {
   return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
 }
 
+/**
+ * Validates whether a Google Drive file is publicly accessible without downloading it.
+ * Uses a Range request (first 1KB) to inspect Content-Type and detect HTML confirmation pages.
+ * Returns the URL to use, or throws with a clear user-facing message.
+ */
+async function validateGoogleDriveUrl(fileId: string): Promise<string> {
+  const url = getGoogleDriveDirectUrl(fileId);
+  console.log("Validating Google Drive URL:", url);
+
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Range: "bytes=0-1023",
+  };
+
+  const res = await fetch(url, { headers, redirect: "follow" });
+  const contentType = res.headers.get("content-type") || "";
+  const contentLength = res.headers.get("content-length") || "?";
+  console.log(`Drive validation: status=${res.status} type=${contentType} length=${contentLength}`);
+
+  if (res.status >= 400) {
+    // drain body
+    try { await res.arrayBuffer(); } catch { /* ignore */ }
+    throw new Error(
+      `Arquivo do Google Drive não está acessível (HTTP ${res.status}). Verifique se o link está compartilhado como "Qualquer pessoa com o link".`,
+    );
+  }
+
+  if (contentType.includes("text/html")) {
+    // It's the confirmation page — file is private or blocked.
+    try { await res.arrayBuffer(); } catch { /* ignore */ }
+    throw new Error(
+      'Arquivo do Google Drive não está acessível publicamente. Abra o link, clique em "Compartilhar" e mude o acesso para "Qualquer pessoa com o link".',
+    );
+  }
+
+  // Drain the small probe body so the connection is released.
+  try { await res.arrayBuffer(); } catch { /* ignore */ }
+
+  // Accept video/*, audio/*, application/octet-stream, or anything non-HTML with a body.
+  const acceptable =
+    contentType.startsWith("video/") ||
+    contentType.startsWith("audio/") ||
+    contentType.includes("octet-stream") ||
+    contentType.includes("mp4") ||
+    contentType.includes("mpeg");
+
+  if (!acceptable) {
+    console.warn(`Drive content-type unusual but proceeding: ${contentType}`);
+  }
+
+  return url;
+}
+
 async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
   const url = getGoogleDriveDirectUrl(fileId);
   console.log("Downloading from Google Drive:", url);
