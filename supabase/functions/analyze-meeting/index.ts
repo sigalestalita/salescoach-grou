@@ -510,7 +510,10 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
 
     if (insertError) {
       console.error("Failed to insert analysis_results:", JSON.stringify(insertError));
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: `Falha ao salvar a análise no banco: ${insertError.message || "erro desconhecido"}`,
+      }).eq("id", meetingId);
       return;
     }
 
@@ -528,6 +531,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       status: "completo",
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
+      error_message: null,
     }).eq("id", meetingId);
 
     if (updateError) {
