@@ -579,12 +579,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+    // Reset error_message on (re)processing dispatch.
+    await supabase.from("meetings").update({
+      status: "transcrevendo",
+      error_message: null,
+    }).eq("id", meetingId);
 
     EdgeRuntime.waitUntil(
       processeMeeting(meetingId, manualTranscript || null).catch((err) => {
         console.error("Background processing failed:", err);
-        supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        const msg = err instanceof Error ? err.message : "Erro inesperado no processamento.";
+        supabase.from("meetings").update({
+          status: "erro",
+          error_message: msg,
+        }).eq("id", meetingId);
       })
     );
 
