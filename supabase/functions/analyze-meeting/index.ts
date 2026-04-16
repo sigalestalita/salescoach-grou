@@ -467,8 +467,12 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
     });
 
     if (!aiRes.ok) {
-      console.error("AI error:", aiRes.status, await aiRes.text());
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      const aiErrText = await aiRes.text();
+      console.error("AI error:", aiRes.status, aiErrText);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: `Falha na análise por IA (HTTP ${aiRes.status}). Tente novamente em alguns minutos.`,
+      }).eq("id", meetingId);
       return;
     }
 
@@ -481,7 +485,10 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       analysisData = JSON.parse(jsonStr);
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: "A IA retornou uma resposta inválida. Tente reprocessar.",
+      }).eq("id", meetingId);
       return;
     }
 
