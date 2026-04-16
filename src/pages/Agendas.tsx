@@ -57,6 +57,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
@@ -662,9 +663,22 @@ const Agendas = () => {
                     {meeting.temperature && (
                       <span className="text-sm">{tempLabels[meeting.temperature]}</span>
                     )}
-                    <Badge className={statusClassName}>
-                      {statusLabel}
-                    </Badge>
+                    {meeting.status === "erro" && meeting.error_message ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Badge className={`${statusClassName} cursor-help`}>
+                            {statusLabel}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-xs text-xs">
+                          <p>{meeting.error_message}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Badge className={statusClassName}>
+                        {statusLabel}
+                      </Badge>
+                    )}
                     {!isVendedor && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

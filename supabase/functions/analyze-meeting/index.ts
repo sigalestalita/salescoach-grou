@@ -20,6 +20,60 @@ function getGoogleDriveDirectUrl(fileId: string): string {
   return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
 }
 
+/**
+ * Validates whether a Google Drive file is publicly accessible without downloading it.
+ * Uses a Range request (first 1KB) to inspect Content-Type and detect HTML confirmation pages.
+ * Returns the URL to use, or throws with a clear user-facing message.
+ */
+async function validateGoogleDriveUrl(fileId: string): Promise<string> {
+  const url = getGoogleDriveDirectUrl(fileId);
+  console.log("Validating Google Drive URL:", url);
+
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    Range: "bytes=0-1023",
+  };
+
+  const res = await fetch(url, { headers, redirect: "follow" });
+  const contentType = res.headers.get("content-type") || "";
+  const contentLength = res.headers.get("content-length") || "?";
+  console.log(`Drive validation: status=${res.status} type=${contentType} length=${contentLength}`);
+
+  if (res.status >= 400) {
+    // drain body
+    try { await res.arrayBuffer(); } catch { /* ignore */ }
+    throw new Error(
+      `Arquivo do Google Drive não está acessível (HTTP ${res.status}). Verifique se o link está compartilhado como "Qualquer pessoa com o link".`,
+    );
+  }
+
+  if (contentType.includes("text/html")) {
+    // It's the confirmation page — file is private or blocked.
+    try { await res.arrayBuffer(); } catch { /* ignore */ }
+    throw new Error(
+      'Arquivo do Google Drive não está acessível publicamente. Abra o link, clique em "Compartilhar" e mude o acesso para "Qualquer pessoa com o link".',
+    );
+  }
+
+  // Drain the small probe body so the connection is released.
+  try { await res.arrayBuffer(); } catch { /* ignore */ }
+
+  // Accept video/*, audio/*, application/octet-stream, or anything non-HTML with a body.
+  const acceptable =
+    contentType.startsWith("video/") ||
+    contentType.startsWith("audio/") ||
+    contentType.includes("octet-stream") ||
+    contentType.includes("mp4") ||
+    contentType.includes("mpeg");
+
+  if (!acceptable) {
+    console.warn(`Drive content-type unusual but proceeding: ${contentType}`);
+  }
+
+  return url;
+}
+
 async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
   const url = getGoogleDriveDirectUrl(fileId);
   console.log("Downloading from Google Drive:", url);
@@ -255,10 +309,11 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       let assemblyAudioUrl: string;
 
       if (driveFileId) {
-        // Download from Google Drive server-side to handle confirmation pages
-        const fileBlob = await downloadFromGoogleDrive(driveFileId);
+        // Validate the file is publicly accessible, then pass the URL DIRECTLY to AssemblyAI.
+        // AssemblyAI will download the file from Google's servers itself — this avoids
+        // loading large files (hundreds of MB) into the Edge Function's limited memory.
+        assemblyAudioUrl = await validateGoogleDriveUrl(driveFileId);
         await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-        assemblyAudioUrl = await uploadToAssemblyAI(fileBlob);
       } else {
         // Non-Drive URL: pass directly to AssemblyAI
         await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
@@ -276,7 +331,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
       if (fileError || !fileData) {
         console.error("Failed to download file:", fileError);
-        await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        await supabase.from("meetings").update({
+          status: "erro",
+          error_message: `Falha ao baixar o arquivo do storage: ${fileError?.message || "arquivo não encontrado"}`,
+        }).eq("id", meetingId);
         return;
       }
 
@@ -295,7 +353,10 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
         transcript = await transcribeWithGroq(fileData, fileName);
       }
     } else {
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: "Nenhum arquivo nem link foi fornecido para esta reunião.",
+      }).eq("id", meetingId);
       return;
     }
 
@@ -406,8 +467,12 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
     });
 
     if (!aiRes.ok) {
-      console.error("AI error:", aiRes.status, await aiRes.text());
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      const aiErrText = await aiRes.text();
+      console.error("AI error:", aiRes.status, aiErrText);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: `Falha na análise por IA (HTTP ${aiRes.status}). Tente novamente em alguns minutos.`,
+      }).eq("id", meetingId);
       return;
     }
 
@@ -420,7 +485,10 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       analysisData = JSON.parse(jsonStr);
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: "A IA retornou uma resposta inválida. Tente reprocessar.",
+      }).eq("id", meetingId);
       return;
     }
 
@@ -442,7 +510,10 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
 
     if (insertError) {
       console.error("Failed to insert analysis_results:", JSON.stringify(insertError));
-      await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+      await supabase.from("meetings").update({
+        status: "erro",
+        error_message: `Falha ao salvar a análise no banco: ${insertError.message || "erro desconhecido"}`,
+      }).eq("id", meetingId);
       return;
     }
 
@@ -460,6 +531,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       status: "completo",
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
+      error_message: null,
     }).eq("id", meetingId);
 
     if (updateError) {
@@ -469,7 +541,11 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
     console.log("Meeting processing complete:", meetingId);
   } catch (error) {
     console.error("Processing error:", error);
-    await supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido durante o processamento.";
+    await supabase
+      .from("meetings")
+      .update({ status: "erro", error_message: errorMessage })
+      .eq("id", meetingId);
   }
 }
 
@@ -503,12 +579,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+    // Reset error_message on (re)processing dispatch.
+    await supabase.from("meetings").update({
+      status: "transcrevendo",
+      error_message: null,
+    }).eq("id", meetingId);
 
     EdgeRuntime.waitUntil(
       processeMeeting(meetingId, manualTranscript || null).catch((err) => {
         console.error("Background processing failed:", err);
-        supabase.from("meetings").update({ status: "erro" }).eq("id", meetingId);
+        const msg = err instanceof Error ? err.message : "Erro inesperado no processamento.";
+        supabase.from("meetings").update({
+          status: "erro",
+          error_message: msg,
+        }).eq("id", meetingId);
       })
     );
 
