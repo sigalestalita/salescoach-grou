@@ -1,0 +1,1 @@
+DELETE FROM public.knowledge_documents WHERE id IN ('1b9a2f81-8d51-4bcf-9133-2579193b57ee','1c0a9dc6-b694-4a22-b91d-ebeda85e5bc3');

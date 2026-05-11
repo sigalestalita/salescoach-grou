@@ -23,7 +23,18 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink, BrainCircuit, Loader2 } from "lucide-react";
+import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink, BrainCircuit, Loader2, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type KnowledgeDoc = Tables<"knowledge_documents">;
@@ -175,6 +186,31 @@ const Conhecimento = () => {
       setItemDialogOpen(false);
       setNewItem({ name: "", item_type: "produto", description: "", category: "" });
       fetchData();
+    }
+  };
+
+  const handleDeleteDoc = async (docId: string, fileUrl: string | null, docType: string) => {
+    try {
+      if (fileUrl && docType !== "link") {
+        await supabase.storage.from("knowledge-files").remove([fileUrl]);
+      }
+      const { error } = await supabase.from("knowledge_documents").delete().eq("id", docId);
+      if (error) throw error;
+      toast({ title: "Documento removido!" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase.from("knowledge_items").delete().eq("id", itemId);
+      if (error) throw error;
+      toast({ title: "Item removido!" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
     }
   };
 
@@ -407,6 +443,29 @@ const Conhecimento = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         {doc.category && <Badge variant="secondary">{doc.category}</Badge>}
+                        {isAdmin && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remover documento?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. O documento "{doc.title}" será removido permanentemente da base de conhecimento.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteDoc(doc.id, doc.file_url, doc.doc_type)}>
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -468,9 +527,34 @@ const Conhecimento = () => {
                 return (
                   <Card key={item.id}>
                     <CardHeader className="pb-2">
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-primary" />
-                        <CardTitle className="text-sm">{item.name}</CardTitle>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Icon className="h-4 w-4 text-primary shrink-0" />
+                          <CardTitle className="text-sm truncate">{item.name}</CardTitle>
+                        </div>
+                        {isAdmin && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remover item?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. "{item.name}" será removido permanentemente.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteItem(item.id)}>
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                       <CardDescription className="text-xs capitalize">{item.item_type}</CardDescription>
                     </CardHeader>
