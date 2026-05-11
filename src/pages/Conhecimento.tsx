@@ -23,7 +23,18 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink, BrainCircuit, Loader2 } from "lucide-react";
+import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink, BrainCircuit, Loader2, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
 
 type KnowledgeDoc = Tables<"knowledge_documents">;
