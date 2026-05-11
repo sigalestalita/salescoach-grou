@@ -189,6 +189,31 @@ const Conhecimento = () => {
     }
   };
 
+  const handleDeleteDoc = async (docId: string, fileUrl: string | null, docType: string) => {
+    try {
+      if (fileUrl && docType !== "link") {
+        await supabase.storage.from("knowledge-files").remove([fileUrl]);
+      }
+      const { error } = await supabase.from("knowledge_documents").delete().eq("id", docId);
+      if (error) throw error;
+      toast({ title: "Documento removido!" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase.from("knowledge_items").delete().eq("id", itemId);
+      if (error) throw error;
+      toast({ title: "Item removido!" });
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  };
+
   const getDocIcon = (docType: string) => {
     if (docType === "link") return ExternalLink;
     if (docType === "texto") return AlignLeft;
