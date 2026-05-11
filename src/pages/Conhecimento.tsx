@@ -527,9 +527,34 @@ const Conhecimento = () => {
                 return (
                   <Card key={item.id}>
                     <CardHeader className="pb-2">
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-primary" />
-                        <CardTitle className="text-sm">{item.name}</CardTitle>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Icon className="h-4 w-4 text-primary shrink-0" />
+                          <CardTitle className="text-sm truncate">{item.name}</CardTitle>
+                        </div>
+                        {isAdmin && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remover item?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. "{item.name}" será removido permanentemente.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteItem(item.id)}>
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                       <CardDescription className="text-xs capitalize">{item.item_type}</CardDescription>
                     </CardHeader>
