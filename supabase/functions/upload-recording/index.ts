@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     const leadName = (formData.get("lead_name") as string) || null;
     const leadCompany = (formData.get("lead_company") as string) || null;
     const leadEmail = (formData.get("lead_email") as string) || null;
+    const existingMeetingId = (formData.get("meeting_id") as string) || null;
 
     if (!file) {
       return new Response(JSON.stringify({ error: "No file provided" }), {
