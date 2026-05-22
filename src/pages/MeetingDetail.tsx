@@ -316,7 +316,7 @@ const MeetingDetail = () => {
       {meeting.status === "ao_vivo" && (
         <LiveMeetingPanel meetingId={meeting.id} />
       )}
-      {meeting.status !== "completo" && (
+      {meeting.status !== "completo" && meeting.status !== "ao_vivo" && (
         <Card>
           <CardContent className="py-8">
             {meeting.status === "enviado" && (
