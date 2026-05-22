@@ -313,6 +313,9 @@ const MeetingDetail = () => {
           </Card>
         </Collapsible>
       )}
+      {meeting.status === "ao_vivo" && (
+        <LiveMeetingPanel meetingId={meeting.id} />
+      )}
       {meeting.status !== "completo" && (
         <Card>
           <CardContent className="py-8">
