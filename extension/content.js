@@ -1,26 +1,32 @@
 // Sales Coach AI - Content Script
-// Injected into the active tab. Creates a floating overlay and handles recording.
+// Floating overlay with: recording controls, live transcription, real-time coaching tips.
 
 (() => {
-  // Prevent double injection
   if (document.getElementById('salescoach-overlay')) {
-    // Already injected, just trigger start
     window.__salescoachStartRecording?.();
     return;
   }
 
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
   const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
+  const SUPABASE_WS = 'wss://xgpfuunmmjkgwjefofcd.functions.supabase.co';
 
   let mediaRecorder = null;
   let recordedChunks = [];
   let screenStream = null;
   let micStream = null;
   let audioContext = null;
+  let liveCtx = null;
+  let liveSource = null;
+  let liveProcessor = null;
+  let liveWS = null;
+  let tipsChannel = null;
+  let supabaseRT = null;
   let timerInterval = null;
   let startTime = null;
+  let meetingId = null;
 
-  // ── Create overlay DOM ──
+  // ── Overlay DOM ──
   const overlay = document.createElement('div');
   overlay.id = 'salescoach-overlay';
   overlay.innerHTML = `
@@ -35,10 +41,20 @@
       <div id="sc-recording" style="display:none;">
         <div class="sc-recording-indicator">
           <div class="sc-pulse"></div>
-          <span>Gravando...</span>
+          <span>Gravando</span>
+          <span id="sc-live-flag" class="sc-live-flag">LIVE</span>
         </div>
         <div class="sc-timer" id="sc-timer">00:00:00</div>
         <div class="sc-mode" id="sc-mode">🖥 Tela + 🎙 Áudio</div>
+
+        <div class="sc-section-title">Dicas ao vivo</div>
+        <div id="sc-tips" class="sc-tips">
+          <div class="sc-tips-empty">Aguardando primeiras falas…</div>
+        </div>
+
+        <div class="sc-section-title">Transcrição</div>
+        <div id="sc-live-text" class="sc-live-text">…</div>
+
         <button class="sc-btn sc-btn-danger" id="sc-btn-stop">⏹ Parar e Enviar</button>
       </div>
       <div id="sc-status-msg" style="display:none;"></div>
@@ -46,7 +62,6 @@
   `;
   document.body.appendChild(overlay);
 
-  // ── DOM refs ──
   const initEl = document.getElementById('sc-init');
   const recordingEl = document.getElementById('sc-recording');
   const statusMsgEl = document.getElementById('sc-status-msg');
@@ -54,50 +69,89 @@
   const modeEl = document.getElementById('sc-mode');
   const stopBtn = document.getElementById('sc-btn-stop');
   const minimizeBtn = document.getElementById('sc-minimize');
+  const tipsEl = document.getElementById('sc-tips');
+  const liveTextEl = document.getElementById('sc-live-text');
+  const liveFlag = document.getElementById('sc-live-flag');
 
-  // ── Minimize toggle ──
   minimizeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     overlay.classList.toggle('minimized');
     minimizeBtn.textContent = overlay.classList.contains('minimized') ? '◻' : '─';
   });
-
   overlay.addEventListener('click', () => {
     if (overlay.classList.contains('minimized')) {
       overlay.classList.remove('minimized');
       minimizeBtn.textContent = '─';
     }
   });
-
-  // ── Stop button ──
   stopBtn.addEventListener('click', () => stopRecording());
 
-  // ── Listen for messages from popup/background ──
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.action === 'startRecording') {
-      startRecording();
-    }
-    if (msg.action === 'stopRecording') {
-      stopRecording();
-    }
+    if (msg.action === 'startRecording') startRecording();
+    if (msg.action === 'stopRecording') stopRecording();
   });
-
-  // Expose for re-injection
   window.__salescoachStartRecording = startRecording;
-
-  // Auto-start when injected
   startRecording();
 
-  // ── Recording logic ──
-  async function startRecording() {
-    let hasScreen = false;
-    let hasSystemAudio = false;
+  // ── Auth helper ──
+  async function refreshAccessToken() {
+    try {
+      const data = await chrome.storage.local.get(['refreshToken']);
+      if (!data.refreshToken) return null;
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: data.refreshToken }),
+      });
+      if (!res.ok) return null;
+      const r = await res.json();
+      chrome.storage.local.set({ accessToken: r.access_token, refreshToken: r.refresh_token });
+      return r.access_token;
+    } catch { return null; }
+  }
 
+  async function getValidToken() {
+    const data = await chrome.storage.local.get(['accessToken']);
+    const fresh = await refreshAccessToken();
+    return fresh || data.accessToken;
+  }
+
+  // ── Pre-create meeting (status=ao_vivo) so live channel works ──
+  async function preCreateMeeting(token, meta) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/meetings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify([{
+        title: meta.title || 'Gravação ao vivo',
+        meeting_type: meta.meetingType || 'empresa',
+        lead_name: meta.leadName || null,
+        lead_company: meta.leadCompany || null,
+        lead_email: meta.leadEmail || null,
+        status: 'ao_vivo',
+        meeting_date: new Date().toISOString(),
+        seller_id: (await chrome.storage.local.get(['userId'])).userId,
+      }]),
+    });
+    if (!res.ok) {
+      console.error('preCreateMeeting failed', await res.text());
+      return null;
+    }
+    const rows = await res.json();
+    return rows?.[0]?.id || null;
+  }
+
+  // ── Recording ──
+  async function startRecording() {
+    let hasScreen = false, hasSystemAudio = false;
     initEl.style.display = '';
     recordingEl.style.display = 'none';
     statusMsgEl.style.display = 'none';
 
-    // Step 1: Screen share
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
@@ -105,47 +159,30 @@
       });
       hasScreen = true;
       hasSystemAudio = screenStream.getAudioTracks().length > 0;
-
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => stopRecording());
-    } catch (err) {
-      console.warn('Screen capture denied:', err.message);
-    }
+    } catch (err) { console.warn('Screen denied:', err.message); }
 
-    // Step 2: Microphone
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
     } catch (err) {
-      console.error('Mic access failed:', err);
       if (!hasScreen) {
-        showStatus('error', '❌ Permissões de microfone e tela negadas.');
-        notifyBackground('captureError', { error: 'Permissões negadas' });
-        autoRemove(6000);
-        return;
+        showStatus('error', '❌ Permissões negadas.');
+        autoRemove(6000); return;
       }
     }
-
     if (!screenStream && !micStream) {
-      showStatus('error', '❌ Nenhuma fonte disponível.');
-      autoRemove(6000);
-      return;
+      showStatus('error', '❌ Nenhuma fonte disponível.'); autoRemove(6000); return;
     }
 
-    // Step 3: Mix audio
     audioContext = new AudioContext();
     const mixedDest = audioContext.createMediaStreamDestination();
-
-    if (micStream) {
-      audioContext.createMediaStreamSource(micStream).connect(mixedDest);
-    }
+    if (micStream) audioContext.createMediaStreamSource(micStream).connect(mixedDest);
     if (hasSystemAudio) {
-      audioContext.createMediaStreamSource(
-        new MediaStream(screenStream.getAudioTracks())
-      ).connect(mixedDest);
+      audioContext.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())).connect(mixedDest);
     }
 
-    // Step 4: Combined stream
     const tracks = [...mixedDest.stream.getAudioTracks()];
     if (hasScreen) tracks.unshift(...screenStream.getVideoTracks());
     const combinedStream = new MediaStream(tracks);
@@ -154,59 +191,50 @@
     const mimeType = isVideo ? 'video/webm;codecs=vp8,opus' : 'audio/webm;codecs=opus';
     const mode = isVideo ? 'screen_audio' : 'audio_only';
 
-    // Step 5: MediaRecorder
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(combinedStream, {
-      mimeType,
-      ...(isVideo ? { videoBitsPerSecond: 1_000_000 } : {}),
+      mimeType, ...(isVideo ? { videoBitsPerSecond: 1_000_000 } : {}),
     });
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordedChunks.push(e.data);
-    };
-
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
       showStatus('sending', '⏳ Enviando gravação...');
       notifyBackground('uploadStarted');
-
-      if (recordedChunks.length === 0) {
-        showStatus('error', '❌ Nenhum dado gravado.');
-        cleanup();
-        autoRemove(6000);
-        return;
-      }
-
+      stopLive();
+      if (recordedChunks.length === 0) { showStatus('error', '❌ Nada gravado.'); cleanup(); autoRemove(6000); return; }
       const blob = new Blob(recordedChunks, { type: recordedChunks[0]?.type || mimeType });
-      if (blob.size < 100) {
-        showStatus('error', '❌ Gravação vazia.');
-        cleanup();
-        autoRemove(6000);
-        return;
-      }
-
+      if (blob.size < 100) { showStatus('error', '❌ Gravação vazia.'); cleanup(); autoRemove(6000); return; }
       await uploadRecording(blob);
       cleanup();
     };
-
     mediaRecorder.start(1000);
 
-    // Update UI
     startTime = Date.now();
     initEl.style.display = 'none';
     recordingEl.style.display = '';
     modeEl.textContent = isVideo ? '🖥 Tela + 🎙 Áudio' : '🎙 Apenas áudio';
     startTimer();
-
-    // Save state
     chrome.storage.local.set({
-      recordingState: 'recording',
-      recordingStartTime: startTime,
-      recordingMode: mode,
-      isScreenSharing: isVideo,
+      recordingState: 'recording', recordingStartTime: startTime,
+      recordingMode: mode, isScreenSharing: isVideo,
     });
-
     notifyBackground('recordingStarted', { mode, startTime });
-    console.log('Sales Coach AI: Recording started -', mode);
+
+    // ── Live coach pipeline ──
+    try {
+      const token = await getValidToken();
+      if (!token) throw new Error('sem token');
+      const data = await chrome.storage.local.get(['meetingData']);
+      meetingId = await preCreateMeeting(token, data.meetingData || {});
+      if (meetingId) {
+        chrome.storage.local.set({ lastMeetingId: meetingId });
+        await startLive(token, meetingId, mixedDest.stream);
+      } else {
+        liveFlag.style.display = 'none';
+      }
+    } catch (e) {
+      console.warn('Live coach off:', e);
+      liveFlag.style.display = 'none';
+    }
   }
 
   function stopRecording() {
@@ -224,66 +252,115 @@
     recordedChunks = [];
   }
 
-  // ── Upload ──
-  async function refreshAccessToken() {
+  // ── Live: WebSocket + PCM streaming + tips realtime ──
+  async function startLive(token, mid, audioOnlyStream) {
+    // 1) Open WS to live-transcribe
+    const wsUrl = `${SUPABASE_WS}/live-transcribe?meetingId=${mid}&token=${encodeURIComponent(token)}`;
+    liveWS = new WebSocket(wsUrl);
+    liveWS.binaryType = 'arraybuffer';
+    liveWS.onopen = () => { liveFlag.classList.add('on'); };
+    liveWS.onerror = () => { liveFlag.classList.remove('on'); };
+    liveWS.onclose = () => { liveFlag.classList.remove('on'); };
+    liveWS.onmessage = (ev) => {
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.kind === 'turn') liveTextEl.textContent = m.text || '…';
+      } catch {}
+    };
+
+    // 2) Capture PCM16 16k mono from mixed audio
+    liveCtx = new AudioContext({ sampleRate: 16000 });
+    liveSource = liveCtx.createMediaStreamSource(audioOnlyStream);
+    liveProcessor = liveCtx.createScriptProcessor(4096, 1, 1);
+    liveSource.connect(liveProcessor);
+    liveProcessor.connect(liveCtx.destination);
+    liveProcessor.onaudioprocess = (e) => {
+      if (!liveWS || liveWS.readyState !== 1) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const pcm = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      liveWS.send(pcm.buffer);
+    };
+
+    // 3) Subscribe to live_tips via Supabase Realtime (lazy-load supabase-js)
     try {
-      const data = await chrome.storage.local.get(['refreshToken']);
-      if (!data.refreshToken) return null;
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
-        body: JSON.stringify({ refresh_token: data.refreshToken }),
+      const mod = await import('https://esm.sh/@supabase/supabase-js@2.49.1?bundle');
+      supabaseRT = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        realtime: { params: { eventsPerSecond: 5 } },
       });
-      if (!res.ok) return null;
-      const result = await res.json();
-      chrome.storage.local.set({ accessToken: result.access_token, refreshToken: result.refresh_token });
-      return result.access_token;
-    } catch { return null; }
+      await supabaseRT.realtime.setAuth(token);
+      tipsChannel = supabaseRT
+        .channel(`tips-${mid}`)
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'live_tips', filter: `meeting_id=eq.${mid}` },
+          (payload) => addTip(payload.new))
+        .subscribe();
+    } catch (e) { console.warn('Realtime fail:', e); }
   }
 
+  function stopLive() {
+    try { liveWS && liveWS.send(JSON.stringify({ action: 'terminate' })); } catch {}
+    try { liveWS && liveWS.close(); } catch {}
+    try { liveProcessor && liveProcessor.disconnect(); } catch {}
+    try { liveSource && liveSource.disconnect(); } catch {}
+    try { liveCtx && liveCtx.close(); } catch {}
+    try { tipsChannel && supabaseRT.removeChannel(tipsChannel); } catch {}
+    liveWS = liveProcessor = liveSource = liveCtx = tipsChannel = supabaseRT = null;
+  }
+
+  function addTip(tip) {
+    if (tipsEl.querySelector('.sc-tips-empty')) tipsEl.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = `sc-tip sc-tip-${tip.urgencia || 'media'}`;
+    card.innerHTML = `
+      <div class="sc-tip-head">
+        <span class="sc-tip-cat">${escape(tip.categoria || 'dica')}</span>
+        <span class="sc-tip-urg">${escape(tip.urgencia || 'media')}</span>
+      </div>
+      <div class="sc-tip-title">${escape(tip.titulo || '')}</div>
+      ${tip.acao ? `<div class="sc-tip-action">${escape(tip.acao)}</div>` : ''}
+    `;
+    tipsEl.prepend(card);
+    while (tipsEl.children.length > 5) tipsEl.removeChild(tipsEl.lastChild);
+  }
+  function escape(s) { return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  // ── Upload ──
   async function uploadRecording(blob) {
     chrome.storage.local.set({ recordingState: 'uploading' });
-
     try {
-      const data = await chrome.storage.local.get(['accessToken', 'meetingData']);
-      let accessToken = data.accessToken;
-      const meetingData = data.meetingData || {};
-
-      const freshToken = await refreshAccessToken();
-      if (freshToken) accessToken = freshToken;
-
-      if (!accessToken) {
-        showStatus('error', '❌ Sessão expirada. Faça login novamente.');
-        notifyBackground('uploadError', { error: 'Sessão expirada' });
-        autoRemove(6000);
-        return;
-      }
+      const data = await chrome.storage.local.get(['meetingData']);
+      const meta = data.meetingData || {};
+      const token = await getValidToken();
+      if (!token) { showStatus('error', '❌ Sessão expirada.'); notifyBackground('uploadError', { error: 'Sessão expirada' }); autoRemove(6000); return; }
 
       const formData = new FormData();
       formData.append('file', blob, `recording-${Date.now()}.webm`);
-      formData.append('title', meetingData.title || 'Gravação via Extensão');
-      formData.append('meeting_type', meetingData.meetingType || 'empresa');
-      formData.append('lead_name', meetingData.leadName || '');
-      formData.append('lead_company', meetingData.leadCompany || '');
-      formData.append('lead_email', meetingData.leadEmail || '');
+      formData.append('title', meta.title || 'Gravação via Extensão');
+      formData.append('meeting_type', meta.meetingType || 'empresa');
+      formData.append('lead_name', meta.leadName || '');
+      formData.append('lead_company', meta.leadCompany || '');
+      formData.append('lead_email', meta.leadEmail || '');
+      if (meetingId) formData.append('meeting_id', meetingId);
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/upload-recording`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
+        headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
         body: formData,
       });
-
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || `Erro (status ${res.status})`);
 
       chrome.storage.local.set({ recordingState: 'done', lastMeetingId: result.meetingId });
       chrome.storage.local.remove(['meetingData']);
-
-      showStatus('success', '✅ Gravação enviada! A análise será processada automaticamente.');
+      showStatus('success', '✅ Gravação enviada! Análise em curso.');
       notifyBackground('uploadComplete', { meetingId: result.meetingId });
       autoRemove(5000);
     } catch (err) {
-      console.error('Upload error:', err);
       showStatus('error', '❌ ' + err.message);
       notifyBackground('uploadError', { error: err.message });
       autoRemove(6000);
@@ -298,11 +375,9 @@
     statusMsgEl.className = `sc-status ${type}`;
     statusMsgEl.textContent = text;
   }
-
   function notifyBackground(action, extra = {}) {
     chrome.runtime.sendMessage({ action, ...extra }).catch(() => {});
   }
-
   function autoRemove(delay) {
     setTimeout(() => {
       overlay.remove();
@@ -310,19 +385,15 @@
       chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']);
     }, delay);
   }
-
   function startTimer() {
     stopTimer();
     timerInterval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
-      const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
-      const s = String(elapsed % 60).padStart(2, '0');
+      const e = Math.floor((Date.now() - startTime) / 1000);
+      const h = String(Math.floor(e / 3600)).padStart(2, '0');
+      const m = String(Math.floor((e % 3600) / 60)).padStart(2, '0');
+      const s = String(e % 60).padStart(2, '0');
       timerEl.textContent = `${h}:${m}:${s}`;
     }, 1000);
   }
-
-  function stopTimer() {
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  }
+  function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
 })();
