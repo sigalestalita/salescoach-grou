@@ -11,6 +11,7 @@ import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
+import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 
 const MetricTooltip = ({ text }: { text: string }) => (
   <Tooltip>
@@ -312,7 +313,10 @@ const MeetingDetail = () => {
           </Card>
         </Collapsible>
       )}
-      {meeting.status !== "completo" && (
+      {meeting.status === "ao_vivo" && (
+        <LiveMeetingPanel meetingId={meeting.id} />
+      )}
+      {meeting.status !== "completo" && meeting.status !== "ao_vivo" && (
         <Card>
           <CardContent className="py-8">
             {meeting.status === "enviado" && (

@@ -1,0 +1,146 @@
+// Live transcription relay: browser <-> Edge Function <-> AssemblyAI Streaming v3
+// Browser sends PCM16 16kHz mono frames over WS. We pipe to AssemblyAI,
+// persist final turns to transcription_segments, and trigger live-coach.
+
+import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+
+const ASSEMBLY_KEY = Deno.env.get("ASSEMBLYAI_API_KEY")!;
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+Deno.serve(async (req) => {
+  const url = new URL(req.url);
+  const meetingId = url.searchParams.get("meetingId");
+  const token = url.searchParams.get("token");
+
+  if (!meetingId || !token) {
+    return new Response("missing meetingId or token", { status: 400 });
+  }
+
+  // Validate JWT and meeting ownership
+  const userClient = createClient(SUPABASE_URL, ANON, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: userData, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !userData.user) return new Response("unauthorized", { status: 401 });
+
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+  const { data: meeting } = await admin
+    .from("meetings")
+    .select("id, seller_id")
+    .eq("id", meetingId)
+    .maybeSingle();
+  if (!meeting || meeting.seller_id !== userData.user.id) {
+    return new Response("forbidden", { status: 403 });
+  }
+
+  if (req.headers.get("upgrade") !== "websocket") {
+    return new Response("expected websocket", { status: 426 });
+  }
+
+  const { socket: client, response } = Deno.upgradeWebSocket(req);
+
+  // Connect to AssemblyAI Streaming v3
+  const aaiUrl =
+    "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&language_code=pt";
+  const aai = new WebSocket(aaiUrl, undefined);
+  // AAI uses subprotocol header for auth in some clients; here we pass via first message? v3 uses Authorization header:
+  // Deno WebSocket doesn't accept custom headers, so use temporary token endpoint:
+  // Workaround: request a temporary auth token
+  let aaiReady = false;
+  const pendingFrames: ArrayBuffer[] = [];
+
+  async function getTempToken(): Promise<string> {
+    const r = await fetch(
+      "https://streaming.assemblyai.com/v3/token?expires_in_seconds=600",
+      { headers: { Authorization: ASSEMBLY_KEY } },
+    );
+    const j = await r.json();
+    return j.token;
+  }
+
+  // Re-open with token in querystring
+  aai.close();
+  const tempToken = await getTempToken();
+  const aai2 = new WebSocket(
+    `${aaiUrl}&token=${encodeURIComponent(tempToken)}`,
+  );
+
+  aai2.binaryType = "arraybuffer";
+
+  aai2.onopen = () => {
+    aaiReady = true;
+    for (const f of pendingFrames) aai2.send(f);
+    pendingFrames.length = 0;
+  };
+
+  let lastCoachAt = 0;
+  aai2.onmessage = async (ev) => {
+    try {
+      const msg = JSON.parse(typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data));
+      // v3 events: Begin, Turn, Termination
+      if (msg.type === "Turn") {
+        const text: string = msg.transcript || "";
+        const endOfTurn: boolean = !!msg.end_of_turn;
+        // forward to browser overlay
+        try { client.send(JSON.stringify({ kind: "turn", text, end_of_turn: endOfTurn })); } catch {}
+
+        if (endOfTurn && text.trim().length > 2) {
+          // persist final segment
+          await admin.from("transcription_segments").insert({
+            meeting_id: meetingId,
+            text,
+            is_final: true,
+            speaker: "unknown",
+          });
+          // throttle coach: at most every 12s
+          const now = Date.now();
+          if (now - lastCoachAt > 12_000) {
+            lastCoachAt = now;
+            fetch(`${SUPABASE_URL}/functions/v1/live-coach`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SERVICE_ROLE}`,
+                apikey: ANON,
+              },
+              body: JSON.stringify({ meetingId }),
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch (e) {
+      console.error("aai parse error", e);
+    }
+  };
+
+  aai2.onerror = (e) => {
+    console.error("AAI error", e);
+    try { client.send(JSON.stringify({ kind: "error", message: "transcription_failed" })); } catch {}
+  };
+  aai2.onclose = () => {
+    try { client.close(); } catch {}
+  };
+
+  client.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) {
+      if (aaiReady) aai2.send(ev.data);
+      else pendingFrames.push(ev.data);
+    } else if (typeof ev.data === "string") {
+      // control msg from browser (e.g. terminate)
+      try {
+        const m = JSON.parse(ev.data);
+        if (m.action === "terminate") {
+          aai2.send(JSON.stringify({ type: "Terminate" }));
+        }
+      } catch {}
+    }
+  };
+
+  client.onclose = () => {
+    try { aai2.close(); } catch {}
+  };
+
+  return response;
+});

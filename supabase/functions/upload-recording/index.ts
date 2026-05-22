@@ -45,6 +45,7 @@ Deno.serve(async (req) => {
     const leadName = (formData.get("lead_name") as string) || null;
     const leadCompany = (formData.get("lead_company") as string) || null;
     const leadEmail = (formData.get("lead_email") as string) || null;
+    const existingMeetingId = (formData.get("meeting_id") as string) || null;
 
     if (!file) {
       return new Response(JSON.stringify({ error: "No file provided" }), {
@@ -81,24 +82,44 @@ Deno.serve(async (req) => {
       .eq("user_id", user.id)
       .single();
 
-    // Create meeting record
-    const { data: meeting, error: meetingError } = await adminClient
-      .from("meetings")
-      .insert({
-        title,
-        seller_id: user.id,
-        team_id: profile?.team_id || null,
-        meeting_type: meetingType,
-        lead_name: leadName,
-        lead_company: leadCompany,
-        lead_email: leadEmail,
-        file_url: fileName,
-        file_type: "webm",
-        status: "enviado",
-        meeting_date: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+    // Create OR update meeting record (when extension pre-created it for live mode)
+    let meeting: { id: string } | null = null;
+    let meetingError: unknown = null;
+    if (existingMeetingId) {
+      const upd = await adminClient
+        .from("meetings")
+        .update({
+          file_url: fileName,
+          file_type: "webm",
+          status: "enviado",
+        })
+        .eq("id", existingMeetingId)
+        .eq("seller_id", user.id)
+        .select("id")
+        .single();
+      meeting = upd.data;
+      meetingError = upd.error;
+    } else {
+      const ins = await adminClient
+        .from("meetings")
+        .insert({
+          title,
+          seller_id: user.id,
+          team_id: profile?.team_id || null,
+          meeting_type: meetingType,
+          lead_name: leadName,
+          lead_company: leadCompany,
+          lead_email: leadEmail,
+          file_url: fileName,
+          file_type: "webm",
+          status: "enviado",
+          meeting_date: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      meeting = ins.data;
+      meetingError = ins.error;
+    }
 
     if (meetingError || !meeting) {
       console.error("Meeting creation error:", meetingError);
