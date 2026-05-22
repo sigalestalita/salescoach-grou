@@ -1,1 +1,7 @@
 project_id = "xgpfuunmmjkgwjefofcd"
+
+[functions.live-transcribe]
+verify_jwt = false
+
+[functions.live-coach]
+verify_jwt = false
