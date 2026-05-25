@@ -199,8 +199,8 @@ const Dashboard = () => {
         { key: "budget", label: "Orçamento" },
         { key: "authority", label: "Autoridade" },
         { key: "need", label: "Necessidade" },
-        { key: "timeline", label: "Prazo" },
-      ], 25);
+      ], 33);
+
 
       const avgMeddic = computeAvgFramework(uniqueAnalyses, "meddic_score", [
         { key: "metrics", label: "Métricas" },
@@ -404,7 +404,7 @@ const Dashboard = () => {
 
       {/* Framework Averages */}
       <div className="grid gap-4 md:grid-cols-3 animate-stagger">
-        <FrameworkCard title={isFiltered ? "BANT Individual" : "BANT Médio"} items={data.avgBant} maxValue={25} />
+        <FrameworkCard title={isFiltered ? "BAN Individual" : "BAN Médio"} items={data.avgBant} maxValue={33} />
         <FrameworkCard title={isFiltered ? "MEDDIC Individual" : "MEDDIC Médio"} items={data.avgMeddic} maxValue={17} />
         <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
       </div>

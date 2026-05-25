@@ -557,25 +557,25 @@ const MeetingDetail = () => {
 
           {/* Framework Scores */}
           <div className="grid gap-4 md:grid-cols-3">
-            {/* BANT */}
+            {/* BAN */}
             <Card>
               <CardHeader>
                <CardTitle className="text-sm flex items-center gap-2">
-                  BANT Score
-                  <MetricTooltip text="Framework de qualificação de leads: Budget (orçamento disponível), Authority (poder de decisão do contato), Need (necessidade real do produto/serviço) e Timeline (prazo para decisão). Cada critério vale até 25 pontos." />
+                  BAN Score
+                  <MetricTooltip text="Framework de qualificação de leads adaptado da Grou: Budget (orçamento disponível), Authority (poder de decisão do contato) e Need (necessidade real do produto/serviço). Cada critério vale até 33 pontos. Prazo (Timeline) não é critério qualificatório, pois nosso ciclo de vendas é consultivo e complexo." />
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {bant ? (
-                  ["budget", "authority", "need", "timeline"].map((key) => {
+                  ["budget", "authority", "need"].map((key) => {
                     const { score, reason } = getMetricValue(bant[key]);
                     return (
                       <div key={key} className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="capitalize">{key === "need" ? "Necessidade" : key === "budget" ? "Orçamento" : key === "authority" ? "Autoridade" : "Prazo"}</span>
-                          <span>{score}/25</span>
+                          <span className="capitalize">{key === "need" ? "Necessidade" : key === "budget" ? "Orçamento" : "Autoridade"}</span>
+                          <span>{score}/33</span>
                         </div>
-                        <Progress value={(score / 25) * 100} />
+                        <Progress value={(score / 33) * 100} />
                         {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
                       </div>
                     );
@@ -585,6 +585,7 @@ const MeetingDetail = () => {
                 )}
               </CardContent>
             </Card>
+
 
             {/* MEDDIC */}
             <Card>
