@@ -409,23 +409,25 @@ CONTEXTO:
 - Tipo de reunião: ${meeting.meeting_type || "empresa"}
 ${consultoriaSection}${knowledgeSection}
 
-CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (baseado na metodologia NATO/BANT da empresa):
+CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (metodologia BAN — Budget, Authority, Need — adaptada da Grou):
+
+IMPORTANTE: O ciclo de venda da Grou é consultivo e complexo. NÃO use prazo/timeline/urgência temporal ("quando vai fechar", "em X dias/meses") como critério de qualificação. Avalie APENAS profundidade da dor, clareza da necessidade, orçamento e acesso ao decisor.
 
 A temperatura DEVE ser classificada em uma das 5 categorias abaixo, usando EXATAMENTE estes valores:
-- "muito_quente": Preenchem todos os requisitos NATO/BANT (venda imediata). Score BANT 4 critérios atendidos. Budget confirmado, decisor presente, necessidade clara e urgente, timeline < 30 dias.
-- "quente": Preenchem todos os requisitos NATO/BANT (prontos para venda, com fechamento em até 90 dias). Score BANT 3-4 critérios. Budget provável, acesso ao decisor, necessidade validada, timeline < 90 dias.
-- "morno": Têm necessidade, mas talvez não tenham orçamento ou urgência imediata (vão para nutrição). Score BANT 2-3 critérios. Budget incerto, influenciador identificado, dor reconhecida mas sem urgência, timeline 3-9 meses.
-- "frio": Sem demanda clara definida, falta urgência e prioridade; prospect que pode aquecer com conteúdo a longo prazo. Score BANT 1-2 critérios. Sem orçamento definido, sem acesso ao decisor, dor genérica, timeline > 9 meses.
-- "congelado": Não têm perfil para o nosso negócio (devem ser descartados). Score BANT 0-1 critério. Sem orçamento e sem previsão, sem acesso ao decisor, não reconhece problema, fora do radar (>12 meses).
+- "muito_quente": Os 3 critérios BAN plenamente atendidos. Budget confirmado, decisor presente, dor urgente e quantificada, próximo passo de proposta acordado.
+- "quente": 3 critérios BAN atendidos com alguma ressalva. Budget provável, acesso ao decisor, necessidade validada com dor reconhecida.
+- "morno": 2 critérios BAN atendidos. Necessidade identificada, mas budget incerto OU sem acesso direto ao decisor; dor reconhecida sem priorização.
+- "frio": 1 critério BAN atendido. Dor genérica, sem orçamento definido, sem acesso ao decisor; precisa de nutrição.
+- "congelado": 0-1 critério BAN. Sem perfil para o negócio (descartar).
 
 RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
 {
   "overall_score": <número de 0 a 100>,
   "overall_score_reason": "<explicação breve de 1-2 frases justificando o score geral>",
   "temperature": "<congelado|frio|morno|quente|muito_quente>",
-  "temperature_reason": "<explicação breve de 1-2 frases justificando a temperatura com base nos critérios NATO/BANT acima>",
-  "bant_score": { "budget": { "score": <0-25>, "reason": "<justificativa>" }, "authority": { "score": <0-25>, "reason": "<justificativa>" }, "need": { "score": <0-25>, "reason": "<justificativa>" }, "timeline": { "score": <0-25>, "reason": "<justificativa>" } },
-  "meddic_score": { "metrics": { "score": <0-17>, "reason": "<justificativa>" }, "economic_buyer": { "score": <0-17>, "reason": "<justificativa>" }, "decision_criteria": { "score": <0-17>, "reason": "<justificativa>" }, "decision_process": { "score": <0-17>, "reason": "<justificativa>" }, "identify_pain": { "score": <0-17>, "reason": "<justificativa>" }, "champion": { "score": <0-17>, "reason": "<justificativa>" } },
+  "temperature_reason": "<explicação breve de 1-2 frases justificando a temperatura com base nos critérios BAN acima, SEM mencionar prazos>",
+  "bant_score": { "budget": { "score": <0-33>, "reason": "<justificativa>" }, "authority": { "score": <0-33>, "reason": "<justificativa>" }, "need": { "score": <0-33>, "reason": "<justificativa>" } },
+  "meddic_score": { "metrics": { "score": <0-17>, "reason": "<justificativa>" }, "economic_buyer": { "score": <0-17>, "reason": "<justificativa>" }, "decision_criteria": { "score": <0-17>, "reason": "<justificativa>" }, "decision_process": { "score": <0-17>, "reason": "<justificativa focada apenas no fluxo de aprovação e steps, SEM estimar prazos>" }, "identify_pain": { "score": <0-17>, "reason": "<justificativa>" }, "champion": { "score": <0-17>, "reason": "<justificativa>" } },
   "spin_score": { "situacao": { "score": <0-25>, "reason": "<justificativa>" }, "problema": { "score": <0-25>, "reason": "<justificativa>" }, "implicacao": { "score": <0-25>, "reason": "<justificativa>" }, "necessidade": { "score": <0-25>, "reason": "<justificativa>" } },
   "talk_ratio": { "seller": <0-100>, "lead": <0-100>, "reason": "<justificativa sobre a proporção de fala>" },
   "conversation_metrics": { "total_questions": <número>, "open_questions": <número>, "objections_handled": <número> },
@@ -445,9 +447,10 @@ RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
 }
 
 IMPORTANTE: 
-- Para cada sub-métrica de BANT, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
-- A temperatura DEVE seguir rigorosamente os critérios NATO/BANT descritos acima. Cruze o score BANT com os critérios de qualificação para determinar a temperatura correta.
-- Na justificativa da temperatura, mencione quantos critérios BANT foram atendidos e quais.
+- Para cada sub-métrica de BAN, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
+- A temperatura DEVE seguir rigorosamente os critérios BAN descritos acima, SEM considerar prazo/timeline. Cruze quantos dos 3 critérios BAN foram atendidos para determinar a temperatura correta.
+- Na justificativa da temperatura, mencione quantos critérios BAN foram atendidos e quais. NUNCA mencione janelas de tempo (dias, meses).
+
 
 Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use a base de conhecimento para enriquecer sua análise e preencher o campo rag_results com detalhes." : " Se não houver base de conhecimento disponível, preencha rag_results como null."}`;
 
