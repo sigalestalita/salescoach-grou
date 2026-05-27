@@ -307,7 +307,7 @@
 
   function startTipsRealtime(token, mid) {
     try {
-      const topic = `realtime:public:live_tips:meeting_id=eq.${mid}`;
+      const topic = `realtime:tips-${mid}`;
       const url = `${SUPABASE_REALTIME_WS}?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
       tipsWS = new WebSocket(url);
 
