@@ -14,6 +14,8 @@ Deno.serve(async (req) => {
   const meetingId = url.searchParams.get("meetingId");
   const token = url.searchParams.get("token");
 
+  console.log("live-transcribe request", { meetingId: meetingId ? "present" : "missing" });
+
   if (!meetingId || !token) {
     return new Response("missing meetingId or token", { status: 400 });
   }
@@ -41,13 +43,8 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
 
-  // Connect to AssemblyAI Streaming v3
-  const aaiUrl =
-    "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&language_code=pt";
-  const aai = new WebSocket(aaiUrl, undefined);
-  // AAI uses subprotocol header for auth in some clients; here we pass via first message? v3 uses Authorization header:
-  // Deno WebSocket doesn't accept custom headers, so use temporary token endpoint:
-  // Workaround: request a temporary auth token
+  // Connect to AssemblyAI Streaming v3 using a temporary token in querystring.
+  const aaiUrl = "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&language_code=pt";
   let aaiReady = false;
   const pendingFrames: ArrayBuffer[] = [];
 
@@ -60,23 +57,35 @@ Deno.serve(async (req) => {
     return j.token;
   }
 
-  // Re-open with token in querystring
-  aai.close();
-  const tempToken = await getTempToken();
-  const aai2 = new WebSocket(
-    `${aaiUrl}&token=${encodeURIComponent(tempToken)}`,
-  );
+  let aai2: WebSocket | null = null;
 
-  aai2.binaryType = "arraybuffer";
+  async function connectAssemblyAI() {
+    const tempToken = await getTempToken();
+    aai2 = new WebSocket(`${aaiUrl}&token=${encodeURIComponent(tempToken)}`);
+    aai2.binaryType = "arraybuffer";
 
-  aai2.onopen = () => {
-    aaiReady = true;
-    for (const f of pendingFrames) aai2.send(f);
-    pendingFrames.length = 0;
-  };
+    aai2.onopen = () => {
+      console.log("AssemblyAI live websocket open");
+      aaiReady = true;
+      for (const f of pendingFrames) aai2?.send(f);
+      pendingFrames.length = 0;
+    };
+
+    aai2.onerror = (e) => {
+      console.error("AAI error", e);
+      try { client.send(JSON.stringify({ kind: "error", message: "transcription_failed" })); } catch {}
+    };
+
+    aai2.onclose = () => {
+      console.log("AssemblyAI live websocket closed");
+      try { client.close(); } catch {}
+    };
+
+    aai2.onmessage = handleAssemblyMessage;
+  }
 
   let lastCoachAt = 0;
-  aai2.onmessage = async (ev) => {
+  const handleAssemblyMessage = async (ev: MessageEvent) => {
     try {
       const msg = JSON.parse(typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data));
       // v3 events: Begin, Turn, Termination
@@ -115,31 +124,32 @@ Deno.serve(async (req) => {
     }
   };
 
-  aai2.onerror = (e) => {
-    console.error("AAI error", e);
-    try { client.send(JSON.stringify({ kind: "error", message: "transcription_failed" })); } catch {}
-  };
-  aai2.onclose = () => {
-    try { client.close(); } catch {}
+  client.onopen = () => {
+    console.log("client live websocket open");
+    connectAssemblyAI().catch((e) => {
+      console.error("AssemblyAI connect error", e);
+      try { client.send(JSON.stringify({ kind: "error", message: "transcription_connect_failed" })); } catch {}
+      try { client.close(); } catch {}
+    });
   };
 
   client.onmessage = (ev) => {
     if (ev.data instanceof ArrayBuffer) {
-      if (aaiReady) aai2.send(ev.data);
+      if (aaiReady && aai2) aai2.send(ev.data);
       else pendingFrames.push(ev.data);
     } else if (typeof ev.data === "string") {
       // control msg from browser (e.g. terminate)
       try {
         const m = JSON.parse(ev.data);
         if (m.action === "terminate") {
-          aai2.send(JSON.stringify({ type: "Terminate" }));
+          aai2?.send(JSON.stringify({ type: "Terminate" }));
         }
       } catch {}
     }
   };
 
   client.onclose = () => {
-    try { aai2.close(); } catch {}
+    try { aai2?.close(); } catch {}
   };
 
   return response;

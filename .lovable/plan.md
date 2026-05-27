@@ -1,73 +1,36 @@
-## Objetivo
+# Corrigir transcrição e insights ao vivo na extensão
 
-Remover o critério de **tempo/prazo (Timeline)** de toda a avaliação de qualificação de leads, pois o ciclo de vendas da Grou é consultivo e complexo — "quando" o lead vai fechar não deve impactar a temperatura nem a nota de qualificação.
+## Diagnóstico confirmado
 
-## Diagnóstico do que usa "tempo" hoje
+O overlay continua mostrando "Aguardando primeiras falas…" e não há **nenhum log** em `live-transcribe` nem em `live-coach`. Isso prova que o WebSocket nem chega às Edge Functions — está sendo barrado antes, no gateway do Supabase.
 
-| Local | Uso de tempo | Decisão |
-|---|---|---|
-| `analyze-meeting` prompt — BANT | `timeline` (0-25 pts) | **Remover** |
-| `analyze-meeting` prompt — critérios de temperatura | "<30 dias", "<90 dias", "3-9 meses", ">9 meses", ">12 meses" | **Remover toda menção temporal** |
-| `analyze-meeting` prompt — MEDDIC | sem critério temporal direto (Decision Process ≠ timeline) | Manter |
-| `analyze-meeting` prompt — SPIN | sem critério temporal | Manter |
-| Dashboard (`avgBant`) | item `{ key: "timeline", label: "Prazo" }` | **Remover** |
-| MeetingDetail render BANT | loop `["budget","authority","need","timeline"]` + tooltip | **Remover `timeline`, atualizar tooltip** |
-| `analysis_results.bant_score` (JSON histórico) | contém `timeline` em registros antigos | **Sem migração**: front simplesmente ignora a chave |
+Três causas reais no código atual:
 
-## Como BANT vira "BAN" (Budget · Authority · Need)
+1. **Falta `apikey` no WebSocket** — `extension/content.js` abre `wss://…/live-transcribe?meetingId=…&token=…`, mas o gateway de Edge Functions do Supabase exige `apikey` em toda requisição (mesmo com `verify_jwt = false`). Como `WebSocket` do browser não permite headers customizados, é obrigatório passar `?apikey=…` na URL. Sem isso, o handshake é rejeitado antes da função rodar.
 
-- Cada critério passa a valer **0–33 pontos** (total 99 ≈ 100).
-- Soma BANT continua sendo um indicador comparável (a média histórica cairá ~25%, o que é esperado e será explicado no card).
-- Justificativa por critério (`reason`) é mantida.
+2. **CSP do Google Meet bloqueia `import('https://esm.sh/@supabase/supabase-js')`** — mesmo se o WS funcionasse, a subscrição em `live_tips` falharia silenciosamente, então as dicas nunca apareceriam no overlay.
 
-## Novos critérios de temperatura (sem componente temporal)
+3. **`live-transcribe` abre um WebSocket dummy e fecha** antes de criar o real com token temporário — código morto que pode falhar e mascarar erros reais.
 
-Baseados apenas em **profundidade da dor, clareza da necessidade, orçamento e acesso ao decisor**:
+## O que vai mudar
 
-- **muito_quente** — Budget confirmado + decisor presente + dor urgente e quantificada + próximo passo de proposta acordado.
-- **quente** — Budget provável + acesso ao decisor + necessidade validada com dor reconhecida.
-- **morno** — Necessidade identificada, mas budget incerto OU sem acesso direto ao decisor; dor reconhecida sem priorização.
-- **frio** — Dor genérica, sem orçamento definido, sem acesso ao decisor; precisa de nutrição.
-- **congelado** — Sem perfil para o negócio (descarte).
+**`extension/content.js`**
+- Adicionar `&apikey=<ANON_KEY>` na URL do `live-transcribe`.
+- Substituir o `import()` dinâmico do `@supabase/supabase-js` por um **WebSocket cru** no endpoint Realtime do Supabase (`wss://<ref>.supabase.co/realtime/v1/websocket?apikey=…&vsn=1.0.0`), enviando o frame `phx_join` para o tópico de `live_tips` filtrado por `meeting_id`. Isso elimina o problema de CSP.
+- Logar `onerror`/`onclose` (code/reason) dos WebSockets no console para diagnóstico futuro.
 
-A regra de cruzamento passa a ser "quantos dos 3 critérios BAN foram plenamente atendidos" em vez de "4 critérios BANT".
+**`supabase/functions/live-transcribe/index.ts`**
+- Remover o WebSocket dummy; abrir somente a conexão real com AssemblyAI usando o token temporário.
+- Adicionar logs de boot, `onopen`, `onclose` e `onerror` da conexão com AssemblyAI para aparecer em `edge_function_logs`.
 
-## Métricas após o ajuste (resumo do impacto)
+**Reempacotar a extensão**
+- Regenerar `public/sales-coach-extension.zip` e subir a `version` em `extension/manifest.json` para o Chrome detectar a atualização ao recarregar.
 
-| Métrica | Antes | Depois |
-|---|---|---|
-| BANT score (total) | 0–100 (4×25) | 0–99 (3×33) — exibido como "BAN" |
-| Card "BANT Médio" no Dashboard | 4 barras | **3 barras** (Budget, Authority, Need) |
-| Distribuição de temperatura | influenciada por timeline | influenciada só por dor/budget/decisor |
-| MEDDIC | 6 critérios, 0–17 cada | inalterado |
-| SPIN | 4 critérios, 0–25 cada | inalterado |
-| Talk ratio / conversation_metrics | inalterado | inalterado |
-| Overall score | 0–100 | inalterado (a IA recalibra a partir do prompt novo) |
-| Histórico (`analysis_results` existentes) | tem `timeline` na JSON | chave fica órfã, **ignorada no render** |
+## Fora do escopo
+- Overlay/UX, fluxo de gravação/upload, `live-coach`, schema do DB, BAN/MEDDIC, dashboard — nada disso muda.
 
-## Arquivos afetados
-
-- `supabase/functions/analyze-meeting/index.ts`
-  - Remover `timeline` do schema `bant_score` (3 critérios, 0–33 cada).
-  - Reescrever bloco "CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA" sem nenhuma janela temporal.
-  - Atualizar instrução final para "3 critérios BAN" em vez de "4 critérios BANT".
-- `src/pages/Dashboard.tsx`
-  - `avgBant`: remover `{ key: "timeline", label: "Prazo" }`.
-  - `FrameworkCard` BANT: passar `maxValue={33}`.
-  - Renomear título visível para "BAN (Budget · Authority · Need)".
-- `src/pages/MeetingDetail.tsx`
-  - Loop BANT: `["budget","authority","need"]`.
-  - Tooltip: remover menção a Timeline; explicar que prazo não é critério na Grou por ciclo consultivo.
-  - Ajustar título da seção para "BAN Score".
-- `mem://features/qualification-logic`
-  - Atualizar regra: BANT → BAN, temperatura sem janela temporal.
-
-## Sem migração de banco
-
-Os JSONs antigos continuam com `timeline`; o frontend simplesmente para de ler essa chave. Análises novas já virão sem ela. Nenhum schema SQL muda.
-
-## Pontos para o usuário confirmar antes de implementar
-
-1. **Nome exibido**: prefere "BAN", "BANT (sem prazo)" ou manter "BANT" só visualmente?
-2. **MEDDIC**: o "Decision Process" às vezes é usado para mapear etapas/prazos de decisão. Quer que eu reforce no prompt que ele deve focar **só no fluxo de aprovação**, ignorando estimativas de tempo? (Recomendo sim.)
-3. **Recalcular histórico**: deseja reprocessar as análises antigas com o novo prompt (botão "reanalisar")? Por padrão, **não** faria — só impacta análises novas.
+## Como validar
+1. Reinstalar a extensão atualizada (Recarregar em `chrome://extensions`).
+2. Iniciar reunião: o flag **LIVE** deve ficar laranja em ~2s.
+3. Após ~5–10s de fala, a "Transcrição" preenche e a primeira dica aparece em "Dicas ao vivo" (throttle de 12s).
+4. Logs em `live-transcribe` mostram eventos `Turn`; logs em `live-coach` mostram `emitted: true`.
