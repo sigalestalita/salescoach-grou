@@ -257,12 +257,18 @@
   // ── Live: WebSocket + PCM streaming + tips realtime ──
   async function startLive(token, mid, audioOnlyStream) {
     // 1) Open WS to live-transcribe
-    const wsUrl = `${SUPABASE_WS}/live-transcribe?meetingId=${mid}&token=${encodeURIComponent(token)}`;
+    const wsUrl = `${SUPABASE_WS}/live-transcribe?meetingId=${mid}&token=${encodeURIComponent(token)}&apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}`;
     liveWS = new WebSocket(wsUrl);
     liveWS.binaryType = 'arraybuffer';
     liveWS.onopen = () => { liveFlag.classList.add('on'); };
-    liveWS.onerror = () => { liveFlag.classList.remove('on'); };
-    liveWS.onclose = () => { liveFlag.classList.remove('on'); };
+    liveWS.onerror = (event) => {
+      console.error('Sales Coach live transcription WS error:', event);
+      liveFlag.classList.remove('on');
+    };
+    liveWS.onclose = (event) => {
+      console.error('Sales Coach live transcription WS closed:', event.code, event.reason);
+      liveFlag.classList.remove('on');
+    };
     liveWS.onmessage = (ev) => {
       try {
         const m = JSON.parse(ev.data);
@@ -287,31 +293,75 @@
       liveWS.send(pcm.buffer);
     };
 
-    // 3) Subscribe to live_tips via Supabase Realtime (lazy-load supabase-js)
+    // 3) Subscribe to live_tips with raw Supabase Realtime WS.
+    // Google Meet CSP blocks dynamic imports from esm.sh inside content scripts.
+    startTipsRealtime(token, mid);
+  }
+
+  function nextRealtimeRef() { return String(realtimeRef++); }
+
+  function sendRealtime(topic, event, payload = {}) {
+    if (!tipsWS || tipsWS.readyState !== WebSocket.OPEN) return;
+    tipsWS.send(JSON.stringify({ topic, event, payload, ref: nextRealtimeRef() }));
+  }
+
+  function startTipsRealtime(token, mid) {
     try {
-      const mod = await import('https://esm.sh/@supabase/supabase-js@2.49.1?bundle');
-      supabaseRT = mod.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-        realtime: { params: { eventsPerSecond: 5 } },
-      });
-      await supabaseRT.realtime.setAuth(token);
-      tipsChannel = supabaseRT
-        .channel(`tips-${mid}`)
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'live_tips', filter: `meeting_id=eq.${mid}` },
-          (payload) => addTip(payload.new))
-        .subscribe();
-    } catch (e) { console.warn('Realtime fail:', e); }
+      const topic = `realtime:public:live_tips:meeting_id=eq.${mid}`;
+      const url = `${SUPABASE_REALTIME_WS}?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
+      tipsWS = new WebSocket(url);
+
+      tipsWS.onopen = () => {
+        sendRealtime(topic, 'phx_join', {
+          access_token: token,
+          config: {
+            broadcast: { self: false },
+            presence: { key: '' },
+            postgres_changes: [
+              { event: 'INSERT', schema: 'public', table: 'live_tips', filter: `meeting_id=eq.${mid}` },
+            ],
+          },
+        });
+        tipsHeartbeatInterval = setInterval(() => sendRealtime('phoenix', 'heartbeat', {}), 25000);
+      };
+
+      tipsWS.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          const tip = extractRealtimeTip(msg);
+          if (tip) addTip(tip);
+        } catch (e) {
+          console.warn('Sales Coach Realtime parse fail:', e);
+        }
+      };
+
+      tipsWS.onerror = (event) => console.error('Sales Coach tips Realtime WS error:', event);
+      tipsWS.onclose = (event) => {
+        console.error('Sales Coach tips Realtime WS closed:', event.code, event.reason);
+        if (tipsHeartbeatInterval) clearInterval(tipsHeartbeatInterval);
+        tipsHeartbeatInterval = null;
+      };
+    } catch (e) {
+      console.warn('Realtime fail:', e);
+    }
+  }
+
+  function extractRealtimeTip(msg) {
+    if (!msg || msg.event !== 'postgres_changes') return null;
+    const data = msg.payload?.data || msg.payload;
+    return data?.new || data?.record || null;
   }
 
   function stopLive() {
     try { liveWS && liveWS.send(JSON.stringify({ action: 'terminate' })); } catch {}
     try { liveWS && liveWS.close(); } catch {}
+    try { tipsWS && tipsWS.close(); } catch {}
+    try { tipsHeartbeatInterval && clearInterval(tipsHeartbeatInterval); } catch {}
     try { liveProcessor && liveProcessor.disconnect(); } catch {}
     try { liveSource && liveSource.disconnect(); } catch {}
     try { liveCtx && liveCtx.close(); } catch {}
-    try { tipsChannel && supabaseRT.removeChannel(tipsChannel); } catch {}
-    liveWS = liveProcessor = liveSource = liveCtx = tipsChannel = supabaseRT = null;
+    liveWS = liveProcessor = liveSource = liveCtx = tipsWS = null;
+    tipsHeartbeatInterval = null;
   }
 
   function addTip(tip) {
