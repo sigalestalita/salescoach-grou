@@ -448,8 +448,8 @@ RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
 
 IMPORTANTE: 
 - Para cada sub-métrica de BAN, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
-- A temperatura DEVE seguir rigorosamente os critérios BAN descritos acima, SEM considerar prazo/timeline. Cruze quantos dos 3 critérios BAN foram atendidos para determinar a temperatura correta.
-- Na justificativa da temperatura, mencione quantos critérios BAN foram atendidos e quais. NUNCA mencione janelas de tempo (dias, meses).
+- A temperatura DEVE seguir rigorosamente os critérios BAN (apenas 3 critérios: Budget, Authority, Need). NUNCA considere Timeline/prazo — a metodologia é BAN, NÃO BANT. O total máximo é SEMPRE 3 critérios, nunca 4.
+- Na justificativa da temperatura ("temperature_reason"), escreva SEMPRE no formato "X de 3 critérios BAN atendidos" (jamais "de 4", jamais "BANT") e cite quais foram atendidos entre Budget, Authority e Need. É PROIBIDO mencionar a letra T, a palavra "Timeline", a sigla "BANT" ou qualquer janela de tempo (dias, meses, prazos, urgência temporal).
 
 
 Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use a base de conhecimento para enriquecer sua análise e preencher o campo rag_results com detalhes." : " Se não houver base de conhecimento disponível, preencha rag_results como null."}`;
