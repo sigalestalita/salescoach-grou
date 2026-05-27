@@ -222,9 +222,11 @@
     notifyBackground('recordingStarted', { mode, startTime });
 
     // ── Live coach pipeline ──
+    setLiveText('Conectando transcrição…');
+    setTipsStatus('Conectando coach…');
     try {
       const token = await getValidToken();
-      if (!token) throw new Error('sem token');
+      if (!token) throw new Error('sessão expirada — refaça login na extensão');
       const data = await chrome.storage.local.get(['meetingData']);
       meetingId = await preCreateMeeting(token, data.meetingData || {});
       if (meetingId) {
@@ -232,10 +234,14 @@
         await startLive(token, meetingId, mixedDest.stream);
       } else {
         liveFlag.style.display = 'none';
+        setLiveText('Live indisponível: não foi possível criar a reunião.');
+        setTipsStatus('Coach indisponível.');
       }
     } catch (e) {
       console.warn('Live coach off:', e);
       liveFlag.style.display = 'none';
+      setLiveText('Live indisponível: ' + (e?.message || e));
+      setTipsStatus('Coach indisponível.');
     }
   }
 
