@@ -44,7 +44,12 @@ Deno.serve(async (req) => {
   const { socket: client, response } = Deno.upgradeWebSocket(req);
 
   // Connect to AssemblyAI Streaming v3 using a temporary token in querystring.
-  const aaiUrl = "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&language_code=pt";
+  // speech_model is required by v3; u3-rt-pro supports PT and multilingual.
+  const aaiBase =
+    "wss://streaming.assemblyai.com/v3/ws" +
+    "?speech_model=u3-rt-pro" +
+    "&encoding=pcm_s16le" +
+    "&sample_rate=16000";
   let aaiReady = false;
   const pendingFrames: ArrayBuffer[] = [];
 
@@ -53,7 +58,12 @@ Deno.serve(async (req) => {
       "https://streaming.assemblyai.com/v3/token?expires_in_seconds=600",
       { headers: { Authorization: ASSEMBLY_KEY } },
     );
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`AssemblyAI token failed ${r.status}: ${t}`);
+    }
     const j = await r.json();
+    if (!j?.token) throw new Error("AssemblyAI token missing in response");
     return j.token;
   }
 
@@ -61,7 +71,9 @@ Deno.serve(async (req) => {
 
   async function connectAssemblyAI() {
     const tempToken = await getTempToken();
-    aai2 = new WebSocket(`${aaiUrl}&token=${encodeURIComponent(tempToken)}`);
+    const url = `${aaiBase}&token=${encodeURIComponent(tempToken)}`;
+    console.log("Opening AssemblyAI WS", aaiBase);
+    aai2 = new WebSocket(url);
     aai2.binaryType = "arraybuffer";
 
     aai2.onopen = () => {
@@ -69,6 +81,7 @@ Deno.serve(async (req) => {
       aaiReady = true;
       for (const f of pendingFrames) aai2?.send(f);
       pendingFrames.length = 0;
+      try { client.send(JSON.stringify({ kind: "status", state: "transcribing" })); } catch {}
     };
 
     aai2.onerror = (e) => {
@@ -76,8 +89,9 @@ Deno.serve(async (req) => {
       try { client.send(JSON.stringify({ kind: "error", message: "transcription_failed" })); } catch {}
     };
 
-    aai2.onclose = () => {
-      console.log("AssemblyAI live websocket closed");
+    aai2.onclose = (ev) => {
+      console.log("AssemblyAI live websocket closed", ev.code, ev.reason);
+      try { client.send(JSON.stringify({ kind: "error", message: `aai_closed:${ev.code}:${ev.reason || ""}` })); } catch {}
       try { client.close(); } catch {}
     };
 
