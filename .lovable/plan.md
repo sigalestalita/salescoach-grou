@@ -1,36 +1,54 @@
-# Corrigir transcrição e insights ao vivo na extensão
+## Diagnóstico
 
-## Diagnóstico confirmado
+A funcionalidade ao vivo não está chegando nas funções de backend: não há logs recentes em `live-transcribe` nem em `live-coach`, e no print o indicador `LIVE` não aparece ao lado de `Gravando`. Isso indica que a extensão está gravando, mas o pipeline realtime não inicia.
 
-O overlay continua mostrando "Aguardando primeiras falas…" e não há **nenhum log** em `live-transcribe` nem em `live-coach`. Isso prova que o WebSocket nem chega às Edge Functions — está sendo barrado antes, no gateway do Supabase.
+Causas encontradas:
 
-Três causas reais no código atual:
+1. **A reunião ao vivo não consegue ser criada**
+   - A extensão tenta criar a reunião com `status: 'ao_vivo'` antes de abrir o WebSocket.
+   - A tabela `meetings` tem uma regra que só aceita: `enviado`, `baixando`, `transcrevendo`, `analisando`, `completo`, `erro`.
+   - Resultado: o insert com `ao_vivo` falha, `meetingId` fica vazio e a extensão desliga o live silently. Sem `meetingId`, não abre `live-transcribe`, não há transcrição e não há insights.
 
-1. **Falta `apikey` no WebSocket** — `extension/content.js` abre `wss://…/live-transcribe?meetingId=…&token=…`, mas o gateway de Edge Functions do Supabase exige `apikey` em toda requisição (mesmo com `verify_jwt = false`). Como `WebSocket` do browser não permite headers customizados, é obrigatório passar `?apikey=…` na URL. Sem isso, o handshake é rejeitado antes da função rodar.
+2. **A conexão AssemblyAI realtime está incompleta para a API atual**
+   - A documentação atual do AssemblyAI Streaming v3 exige `speech_model` na URL do WebSocket.
+   - O código atual usa `sample_rate=16000&format_turns=true&language_code=pt`, mas não envia `speech_model`.
+   - Isso pode fazer a conexão com AssemblyAI falhar mesmo depois que o WebSocket da extensão passar a abrir.
 
-2. **CSP do Google Meet bloqueia `import('https://esm.sh/@supabase/supabase-js')`** — mesmo se o WS funcionasse, a subscrição em `live_tips` falharia silenciosamente, então as dicas nunca apareceriam no overlay.
+3. **Falta observabilidade no overlay**
+   - Hoje, quando o realtime falha, o usuário só vê “Aguardando primeiras falas…” e `...`.
+   - O erro real fica escondido no console, o que mascara falhas de criação da reunião, WebSocket, token, AssemblyAI ou Realtime.
 
-3. **`live-transcribe` abre um WebSocket dummy e fecha** antes de criar o real com token temporário — código morto que pode falhar e mascarar erros reais.
+## Plano de correção
 
-## O que vai mudar
+1. **Corrigir o status ao vivo no banco**
+   - Criar migration para atualizar a regra de `meetings.status` e incluir `ao_vivo`.
+   - Preservar todos os status atuais.
+   - Garantir que as permissões necessárias continuem disponíveis para usuários autenticados e backend.
 
-**`extension/content.js`**
-- Adicionar `&apikey=<ANON_KEY>` na URL do `live-transcribe`.
-- Substituir o `import()` dinâmico do `@supabase/supabase-js` por um **WebSocket cru** no endpoint Realtime do Supabase (`wss://<ref>.supabase.co/realtime/v1/websocket?apikey=…&vsn=1.0.0`), enviando o frame `phx_join` para o tópico de `live_tips` filtrado por `meeting_id`. Isso elimina o problema de CSP.
-- Logar `onerror`/`onclose` (code/reason) dos WebSockets no console para diagnóstico futuro.
+2. **Corrigir a abertura da transcrição ao vivo**
+   - Em `supabase/functions/live-transcribe/index.ts`, ajustar a URL do AssemblyAI Streaming v3 para incluir um modelo válido, preferencialmente `speech_model=u3-rt-pro`.
+   - Usar parâmetros compatíveis com áudio PCM16 16k mono, como `encoding=pcm_s16le` e `sample_rate=16000`.
+   - Validar a resposta de geração do token temporário antes de abrir o WebSocket.
+   - Logar status/razão de fechamento da conexão AssemblyAI.
 
-**`supabase/functions/live-transcribe/index.ts`**
-- Remover o WebSocket dummy; abrir somente a conexão real com AssemblyAI usando o token temporário.
-- Adicionar logs de boot, `onopen`, `onclose` e `onerror` da conexão com AssemblyAI para aparecer em `edge_function_logs`.
+3. **Tornar o erro visível na extensão**
+   - Em `extension/content.js`, quando `preCreateMeeting` falhar, exibir uma mensagem clara no card de transcrição/dicas em vez de só esconder o `LIVE`.
+   - Mostrar estados como: “Live indisponível: reunião não criada”, “Conectando transcrição…”, “Transcrição conectada”, “Erro no WebSocket”.
+   - Manter logs técnicos no console para diagnóstico futuro.
 
-**Reempacotar a extensão**
-- Regenerar `public/sales-coach-extension.zip` e subir a `version` em `extension/manifest.json` para o Chrome detectar a atualização ao recarregar.
+4. **Fortalecer o Realtime dos insights**
+   - Confirmar o `phx_join` do Realtime com tratamento de `phx_reply`.
+   - Se o join falhar, exibir erro no overlay.
+   - Manter inscrição filtrada por `meeting_id` em `live_tips`.
 
-## Fora do escopo
-- Overlay/UX, fluxo de gravação/upload, `live-coach`, schema do DB, BAN/MEDDIC, dashboard — nada disso muda.
+5. **Atualizar e reempacotar a extensão**
+   - Subir a versão do `manifest.json`.
+   - Regenerar `public/sales-coach-extension.zip`.
+   - A página `/extensao` continuará baixando o ZIP atualizado.
 
-## Como validar
-1. Reinstalar a extensão atualizada (Recarregar em `chrome://extensions`).
-2. Iniciar reunião: o flag **LIVE** deve ficar laranja em ~2s.
-3. Após ~5–10s de fala, a "Transcrição" preenche e a primeira dica aparece em "Dicas ao vivo" (throttle de 12s).
-4. Logs em `live-transcribe` mostram eventos `Turn`; logs em `live-coach` mostram `emitted: true`.
+6. **Validação final**
+   - Verificar no banco se uma reunião com `status = ao_vivo` é criada ao iniciar gravação.
+   - Verificar logs de `live-transcribe` mostrando conexão do cliente e AssemblyAI.
+   - Verificar inserts em `transcription_segments` após fala real.
+   - Verificar chamada de `live-coach` e inserts em `live_tips`.
+   - Confirmar que o overlay exibe texto transcrito e pelo menos uma dica realtime após alguns segundos de conversa.

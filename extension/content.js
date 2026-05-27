@@ -222,9 +222,11 @@
     notifyBackground('recordingStarted', { mode, startTime });
 
     // ── Live coach pipeline ──
+    setLiveText('Conectando transcrição…');
+    setTipsStatus('Conectando coach…');
     try {
       const token = await getValidToken();
-      if (!token) throw new Error('sem token');
+      if (!token) throw new Error('sessão expirada — refaça login na extensão');
       const data = await chrome.storage.local.get(['meetingData']);
       meetingId = await preCreateMeeting(token, data.meetingData || {});
       if (meetingId) {
@@ -232,10 +234,14 @@
         await startLive(token, meetingId, mixedDest.stream);
       } else {
         liveFlag.style.display = 'none';
+        setLiveText('Live indisponível: não foi possível criar a reunião.');
+        setTipsStatus('Coach indisponível.');
       }
     } catch (e) {
       console.warn('Live coach off:', e);
       liveFlag.style.display = 'none';
+      setLiveText('Live indisponível: ' + (e?.message || e));
+      setTipsStatus('Coach indisponível.');
     }
   }
 
@@ -260,19 +266,26 @@
     const wsUrl = `${SUPABASE_WS}/live-transcribe?meetingId=${mid}&token=${encodeURIComponent(token)}&apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}`;
     liveWS = new WebSocket(wsUrl);
     liveWS.binaryType = 'arraybuffer';
-    liveWS.onopen = () => { liveFlag.classList.add('on'); };
+    liveWS.onopen = () => {
+      liveFlag.classList.add('on');
+      setLiveText('Conectado. Aguardando fala…');
+    };
     liveWS.onerror = (event) => {
       console.error('Sales Coach live transcription WS error:', event);
       liveFlag.classList.remove('on');
+      setLiveText('Erro no WebSocket de transcrição.');
     };
     liveWS.onclose = (event) => {
       console.error('Sales Coach live transcription WS closed:', event.code, event.reason);
       liveFlag.classList.remove('on');
+      setLiveText(`Transcrição encerrada (${event.code}${event.reason ? ': ' + event.reason : ''}).`);
     };
     liveWS.onmessage = (ev) => {
       try {
         const m = JSON.parse(ev.data);
-        if (m.kind === 'turn') liveTextEl.textContent = m.text || '…';
+        if (m.kind === 'turn') setLiveText(m.text || '…');
+        else if (m.kind === 'status') setLiveText('Transcrição ativa…');
+        else if (m.kind === 'error') setLiveText('Erro de transcrição: ' + m.message);
       } catch {}
     };
 
@@ -294,7 +307,6 @@
     };
 
     // 3) Subscribe to live_tips with raw Supabase Realtime WS.
-    // Google Meet CSP blocks dynamic imports from esm.sh inside content scripts.
     startTipsRealtime(token, mid);
   }
 
@@ -310,24 +322,44 @@
       const topic = `realtime:tips-${mid}`;
       const url = `${SUPABASE_REALTIME_WS}?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
       tipsWS = new WebSocket(url);
+      let joinRef = null;
 
       tipsWS.onopen = () => {
-        sendRealtime(topic, 'phx_join', {
-          access_token: token,
-          config: {
-            broadcast: { self: false },
-            presence: { key: '' },
-            postgres_changes: [
-              { event: 'INSERT', schema: 'public', table: 'live_tips', filter: `meeting_id=eq.${mid}` },
-            ],
+        joinRef = nextRealtimeRef();
+        tipsWS.send(JSON.stringify({
+          topic, event: 'phx_join',
+          payload: {
+            access_token: token,
+            config: {
+              broadcast: { self: false },
+              presence: { key: '' },
+              postgres_changes: [
+                { event: 'INSERT', schema: 'public', table: 'live_tips', filter: `meeting_id=eq.${mid}` },
+              ],
+            },
           },
-        });
+          ref: joinRef,
+        }));
         tipsHeartbeatInterval = setInterval(() => sendRealtime('phoenix', 'heartbeat', {}), 25000);
       };
 
       tipsWS.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
+          if (msg.event === 'phx_reply' && msg.ref === joinRef) {
+            if (msg.payload?.status === 'ok') {
+              setTipsStatus(null); // ready, waiting for tips
+            } else {
+              setTipsStatus('Falha ao conectar coach: ' + (msg.payload?.response?.reason || 'desconhecido'));
+              console.error('phx_join failed', msg);
+            }
+            return;
+          }
+          if (msg.event === 'phx_error') {
+            setTipsStatus('Erro no canal de dicas.');
+            console.error('phx_error', msg);
+            return;
+          }
           const tip = extractRealtimeTip(msg);
           if (tip) addTip(tip);
         } catch (e) {
@@ -335,7 +367,10 @@
         }
       };
 
-      tipsWS.onerror = (event) => console.error('Sales Coach tips Realtime WS error:', event);
+      tipsWS.onerror = (event) => {
+        console.error('Sales Coach tips Realtime WS error:', event);
+        setTipsStatus('Erro no WebSocket de dicas.');
+      };
       tipsWS.onclose = (event) => {
         console.error('Sales Coach tips Realtime WS closed:', event.code, event.reason);
         if (tipsHeartbeatInterval) clearInterval(tipsHeartbeatInterval);
@@ -343,8 +378,23 @@
       };
     } catch (e) {
       console.warn('Realtime fail:', e);
+      setTipsStatus('Falha ao iniciar canal de dicas.');
     }
   }
+
+  function setLiveText(t) { liveTextEl.textContent = t; }
+  function setTipsStatus(t) {
+    if (!t) {
+      if (!tipsEl.querySelector('.sc-tip')) {
+        tipsEl.innerHTML = '<div class="sc-tips-empty">Aguardando primeiras falas…</div>';
+      }
+      return;
+    }
+    if (!tipsEl.querySelector('.sc-tip')) {
+      tipsEl.innerHTML = `<div class="sc-tips-empty">${escape(t)}</div>`;
+    }
+  }
+
 
   function extractRealtimeTip(msg) {
     if (!msg || msg.event !== 'postgres_changes') return null;

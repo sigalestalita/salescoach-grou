@@ -1,0 +1,2 @@
+ALTER TABLE public.meetings DROP CONSTRAINT IF EXISTS meetings_status_check;
+ALTER TABLE public.meetings ADD CONSTRAINT meetings_status_check CHECK (status = ANY (ARRAY['enviado'::text, 'baixando'::text, 'transcrevendo'::text, 'analisando'::text, 'completo'::text, 'erro'::text, 'ao_vivo'::text]));
