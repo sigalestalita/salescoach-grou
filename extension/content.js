@@ -10,6 +10,7 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
   const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
   const SUPABASE_WS = 'wss://xgpfuunmmjkgwjefofcd.functions.supabase.co';
+  const SUPABASE_REALTIME_WS = 'wss://xgpfuunmmjkgwjefofcd.supabase.co/realtime/v1/websocket';
 
   let mediaRecorder = null;
   let recordedChunks = [];
@@ -20,8 +21,9 @@
   let liveSource = null;
   let liveProcessor = null;
   let liveWS = null;
-  let tipsChannel = null;
-  let supabaseRT = null;
+  let tipsWS = null;
+  let tipsHeartbeatInterval = null;
+  let realtimeRef = 1;
   let timerInterval = null;
   let startTime = null;
   let meetingId = null;
