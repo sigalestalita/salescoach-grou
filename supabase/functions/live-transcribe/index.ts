@@ -14,6 +14,8 @@ Deno.serve(async (req) => {
   const meetingId = url.searchParams.get("meetingId");
   const token = url.searchParams.get("token");
 
+  console.log("live-transcribe request", { meetingId: meetingId ? "present" : "missing" });
+
   if (!meetingId || !token) {
     return new Response("missing meetingId or token", { status: 400 });
   }
@@ -41,13 +43,8 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
 
-  // Connect to AssemblyAI Streaming v3
-  const aaiUrl =
-    "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&language_code=pt";
-  const aai = new WebSocket(aaiUrl, undefined);
-  // AAI uses subprotocol header for auth in some clients; here we pass via first message? v3 uses Authorization header:
-  // Deno WebSocket doesn't accept custom headers, so use temporary token endpoint:
-  // Workaround: request a temporary auth token
+  // Connect to AssemblyAI Streaming v3 using a temporary token in querystring.
+  const aaiUrl = "wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&language_code=pt";
   let aaiReady = false;
   const pendingFrames: ArrayBuffer[] = [];
 
@@ -60,8 +57,6 @@ Deno.serve(async (req) => {
     return j.token;
   }
 
-  // Re-open with token in querystring
-  aai.close();
   const tempToken = await getTempToken();
   const aai2 = new WebSocket(
     `${aaiUrl}&token=${encodeURIComponent(tempToken)}`,
@@ -70,6 +65,7 @@ Deno.serve(async (req) => {
   aai2.binaryType = "arraybuffer";
 
   aai2.onopen = () => {
+    console.log("AssemblyAI live websocket open");
     aaiReady = true;
     for (const f of pendingFrames) aai2.send(f);
     pendingFrames.length = 0;
@@ -120,6 +116,7 @@ Deno.serve(async (req) => {
     try { client.send(JSON.stringify({ kind: "error", message: "transcription_failed" })); } catch {}
   };
   aai2.onclose = () => {
+    console.log("AssemblyAI live websocket closed");
     try { client.close(); } catch {}
   };
 
