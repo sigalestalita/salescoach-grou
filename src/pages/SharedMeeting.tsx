@@ -41,15 +41,15 @@ const SharedMeeting = () => {
     <TooltipProvider>
       <div className="min-h-screen bg-background">
         <header className="border-b bg-card/50 backdrop-blur sticky top-0 z-10">
-          <div className="container max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-            <img src={logo} alt="Sales Coach" className="h-8" />
-            <span className="text-xs text-muted-foreground">Análise compartilhada</span>
+          <div className="container max-w-6xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+            <img src={logo} alt="Sales Coach" className="h-6 sm:h-8 shrink-0" />
+            <span className="text-[10px] sm:text-xs text-muted-foreground truncate">Análise compartilhada</span>
           </div>
         </header>
-        <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
+        <main className="container max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
           <div>
-            <h1 className="text-2xl font-bold">{meeting.title}</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground mt-1">
+            <h1 className="text-xl sm:text-2xl font-bold break-words">{meeting.title}</h1>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm text-muted-foreground mt-1">
               {seller?.full_name && <span>Vendedor: {seller.full_name}</span>}
               {meeting.lead_name && <span>• {meeting.lead_name}</span>}
               {meeting.lead_company && <span>• {meeting.lead_company}</span>}
