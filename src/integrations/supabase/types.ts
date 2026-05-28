@@ -278,6 +278,7 @@ export type Database = {
           meeting_type: string | null
           overall_score: number | null
           seller_id: string
+          share_token: string | null
           status: string
           team_id: string | null
           temperature: string | null
@@ -299,6 +300,7 @@ export type Database = {
           meeting_type?: string | null
           overall_score?: number | null
           seller_id: string
+          share_token?: string | null
           status?: string
           team_id?: string | null
           temperature?: string | null
@@ -320,6 +322,7 @@ export type Database = {
           meeting_type?: string | null
           overall_score?: number | null
           seller_id?: string
+          share_token?: string | null
           status?: string
           team_id?: string | null
           temperature?: string | null

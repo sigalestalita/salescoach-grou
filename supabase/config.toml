@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.live-coach]
 verify_jwt = false
+
+[functions.get-shared-meeting]
+verify_jwt = false

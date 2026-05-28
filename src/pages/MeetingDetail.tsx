@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp, HelpCircle, Info } from "lucide-react";
+import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp, HelpCircle, Info, Share2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
@@ -190,6 +190,19 @@ const MeetingDetail = () => {
             )}
           </div>
         </div>
+        {meeting.share_token && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              const url = `${window.location.origin}/share/${meeting.share_token}`;
+              navigator.clipboard.writeText(url);
+              toast({ title: "Link copiado!", description: "Compartilhe com a gestão para ver a análise e o vídeo." });
+            }}
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            Compartilhar
+          </Button>
+        )}
         {(meeting.status === "enviado" || meeting.status === "erro" || isStaleProcessing) && (
           <Button onClick={handleAnalyze} disabled={processing || (isLinkBased && !meeting.youtube_url && !manualTranscript.trim())}>
             <Play className="h-4 w-4 mr-2" />
