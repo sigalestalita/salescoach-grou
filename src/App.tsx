@@ -15,6 +15,7 @@ import Configuracoes from "./pages/Configuracoes";
 import ArgumentGenerator from "./pages/ArgumentGenerator";
 import Extensao from "./pages/Extensao";
 import NotFound from "./pages/NotFound";
+import SharedMeeting from "./pages/SharedMeeting";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+            <Route path="/share/:token" element={<SharedMeeting />} />
             <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Index /></ProtectedRoute>} />
             <Route path="/agendas" element={<ProtectedRoute><Agendas /></ProtectedRoute>} />
             <Route path="/agendas/:id" element={<ProtectedRoute><MeetingDetail /></ProtectedRoute>} />
