@@ -175,7 +175,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Target className="h-4 w-4" /> Score Geral <MetricTooltip text="Avaliação geral da reunião comercial de 0 a 100." /></CardTitle></CardHeader>
               <CardContent>
-                <div className="text-5xl font-bold text-primary text-center">{analysis.overall_score ?? "--"}</div>
+                <div className="text-4xl sm:text-5xl font-bold text-primary text-center">{analysis.overall_score ?? "--"}</div>
                 <p className="text-xs text-center text-muted-foreground mt-1">de 100</p>
                 {rawAnalysis?.overall_score_reason && <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.overall_score_reason}</p>}
               </CardContent>
@@ -184,7 +184,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
             <Card className={meeting.temperature ? tempColors[meeting.temperature] : ""}>
               <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Thermometer className="h-4 w-4" /> Temperatura</CardTitle></CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-center capitalize">
+                <div className="text-2xl sm:text-3xl font-bold text-center capitalize break-words">
                   {meeting.temperature
                     ? { congelado: "🧊 Congelado", frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente", muito_quente: "🔥🔥 Muito Quente" }[meeting.temperature] || meeting.temperature
                     : "--"}
