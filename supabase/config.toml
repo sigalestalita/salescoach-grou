@@ -1,10 +1,22 @@
 project_id = "xgpfuunmmjkgwjefofcd"
 
+# WebSocket: o token do usuário vem na query string e é validado dentro da
+# própria função, junto com a checagem de organização.
 [functions.live-transcribe]
 verify_jwt = false
 
+# A função valida sozinha: aceita chamada interna (segredo compartilhado ou
+# service role) ou usuário autenticado com acesso à reunião. Antes aceitava
+# qualquer meetingId vindo de qualquer origem.
 [functions.live-coach]
 verify_jwt = false
 
+# Link público de compartilhamento. A função exige share_enabled, validade e
+# ausência de revogação.
 [functions.get-shared-meeting]
+verify_jwt = false
+
+# Identidade visual resolvida antes do login, por subdomínio ou domínio
+# próprio. Devolve uma organização por vez e nunca lista.
+[functions.get-branding]
 verify_jwt = false

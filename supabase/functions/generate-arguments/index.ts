@@ -1,108 +1,106 @@
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+// Gerador de argumentos comerciais.
+//
+// O foco da oferta, o público-alvo e a persona vêm da configuração da
+// organização (offer_types, org_settings, analysis_templates). Antes o prompt
+// declarava a empresa e o produto direto no código.
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { json, preflight } from "../_shared/cors.ts";
+import { assertQuota, getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
+import { loadTemplate } from "../_shared/analysis-template.ts";
+
+const ARGUMENTS_MODEL = Deno.env.get("ARGUMENTS_MODEL") ?? "google/gemini-3-flash-preview";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) throw new Error("Missing authorization");
+    const ctx = await getCaller(req);
+    await assertQuota(ctx.admin, ctx.orgId, "generate_arguments", 1);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const { context, pains, audienceType, offerType, selectedServices, selectedDocIds } =
+      await req.json();
 
-    // User client for auth validation
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) throw new Error("Unauthorized");
+    const supabase = ctx.admin;
+    const orgId = ctx.orgId;
 
-    // Admin client for data queries (bypasses RLS)
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    const { context, pains, audienceType, offerType, selectedServices, selectedDocIds } = await req.json();
-
-    // Fetch knowledge base for context
-    const [docsRes, itemsRes] = await Promise.all([
-      supabase.from("knowledge_documents").select("title, extracted_content, category").limit(20),
-      supabase.from("knowledge_items").select("name, description, category, item_type, metadata").limit(50),
+    // Contexto da organização: base de conhecimento, ofertas, público e persona.
+    const [docsRes, itemsRes, offerRes, settingsRes, orgRes, template] = await Promise.all([
+      supabase.from("knowledge_documents").select("title, extracted_content, category").eq("org_id", orgId).limit(20),
+      supabase.from("knowledge_items").select("name, description, category, item_type, metadata").eq("org_id", orgId).limit(50),
+      supabase.from("offer_types").select("key, label, instructions, allows_item_selection").eq("org_id", orgId).eq("is_active", true).order("sort_order"),
+      supabase.from("org_settings").select("argument_audiences").eq("org_id", orgId).maybeSingle(),
+      supabase.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+      loadTemplate(supabase, orgId),
     ]);
 
     const knowledgeContext = [
-      ...(docsRes.data || []).map((d: any) => `[${d.category || 'doc'}] ${d.title}: ${(d.extracted_content || '').slice(0, 500)}`),
-      ...(itemsRes.data || []).map((i: any) => `[${i.item_type}/${i.category || ''}] ${i.name}: ${i.description || ''}`),
+      ...(docsRes.data || []).map((d: any) => `[${d.category || "doc"}] ${d.title}: ${(d.extracted_content || "").slice(0, 500)}`),
+      ...(itemsRes.data || []).map((i: any) => `[${i.item_type}/${i.category || ""}] ${i.name}: ${i.description || ""}`),
     ].join("\n");
 
-    // Build services context when relevant
+    const offers = offerRes.data ?? [];
+    const offer = offers.find((o: any) => o.key === offerType) ?? offers[0] ?? null;
+
+    // Itens escolhidos pelo executivo para focar dentro da oferta.
     let servicesContext = "";
-    if (offerType !== "pda") {
-      // Try matching from knowledge_items first
+    if (offer?.allows_item_selection !== false) {
       if (selectedServices && selectedServices.length > 0) {
-        const allItems = itemsRes.data || [];
-        const matchedServices = allItems.filter((i: any) => selectedServices.includes(i.name));
-        if (matchedServices.length > 0) {
-          servicesContext = matchedServices
-            .map((s: any) => `- ${s.name}: ${s.description || 'sem descrição'}${s.metadata ? ` | Detalhes: ${JSON.stringify(s.metadata)}` : ''}`)
+        const matched = (itemsRes.data || []).filter((i: any) => selectedServices.includes(i.name));
+        if (matched.length > 0) {
+          servicesContext = matched
+            .map((s: any) => `- ${s.name}: ${s.description || "sem descrição"}${s.metadata ? ` | Detalhes: ${JSON.stringify(s.metadata)}` : ""}`)
             .join("\n");
         }
       }
 
-      // Fallback: fetch from knowledge_documents if selectedDocIds provided
       if (!servicesContext && selectedDocIds && selectedDocIds.length > 0) {
         const { data: selectedDocs } = await supabase
           .from("knowledge_documents")
           .select("title, extracted_content, category")
+          .eq("org_id", orgId)
           .in("id", selectedDocIds);
 
         if (selectedDocs && selectedDocs.length > 0) {
           servicesContext = selectedDocs
-            .map((d: any) => `- ${d.title}: ${(d.extracted_content || '').slice(0, 800)}`)
+            .map((d: any) => `- ${d.title}: ${(d.extracted_content || "").slice(0, 800)}`)
             .join("\n\n");
         }
       }
     }
 
-    // Fetch recent high-scoring analyses for learning
+    // Análises de melhor desempenho da própria organização.
     const { data: analyses } = await supabase
       .from("analysis_results")
-      .select("sales_coach, raw_analysis, overall_score, rag_results")
+      .select("sales_coach, overall_score")
+      .eq("org_id", orgId)
       .order("overall_score", { ascending: false })
       .limit(5);
 
     const topAnalyses = (analyses || [])
       .map((a: any) => {
-        const coach = typeof a.sales_coach === 'string' ? a.sales_coach : JSON.stringify(a.sales_coach);
-        return `Score ${a.overall_score}: ${(coach || '').slice(0, 300)}`;
+        const coach = typeof a.sales_coach === "string" ? a.sales_coach : JSON.stringify(a.sales_coach);
+        return `Score ${a.overall_score}: ${(coach || "").slice(0, 300)}`;
       })
       .join("\n");
 
     const painsList = (pains || []).join(", ");
-    const audienceLabel = audienceType === "c-level" ? "decisores C-Level" : audienceType === "rh" ? "profissionais de RH" : "gestores operacionais";
 
-    // Build offer-specific instructions
-    let offerInstruction = "";
-    if (offerType === "pda") {
-      offerInstruction = `FOCO EXCLUSIVO: Licença PDA (Personal Development Analysis). 
-Todos os argumentos devem girar em torno do produto PDA: assessment comportamental, licença PDA, ROI de mapeamento de perfis, assertividade em contratação e desenvolvimento.
-NÃO mencione serviços de consultoria ou treinamento — foque apenas no produto/licença.`;
-    } else if (offerType === "servicos") {
-      offerInstruction = `FOCO EXCLUSIVO: Serviços e Treinamentos Grou.
-Todos os argumentos devem girar em torno dos serviços oferecidos pela Grou (consultorias, treinamentos, diagnósticos comportamentais, workshops).
-NÃO foque no produto PDA como licença — foque nos serviços que geram valor com a metodologia.
-${servicesContext ? `\nSERVIÇOS SELECIONADOS PELO EXECUTIVO (foque nestes):\n${servicesContext}` : ''}`;
-    } else {
-      offerInstruction = `FOCO: Licença PDA + Serviços Grou combinados.
-Gere argumentos que cubram tanto o produto PDA (assessment, licença PDA) quanto os serviços complementares (consultorias, treinamentos, diagnósticos).
-${servicesContext ? `\nSERVIÇOS SELECIONADOS:\n${servicesContext}` : ''}`;
-    }
+    const audiences: { key: string; label: string }[] = Array.isArray(settingsRes.data?.argument_audiences)
+      ? settingsRes.data!.argument_audiences
+      : [];
+    const audienceLabel =
+      audiences.find((a) => a.key === audienceType)?.label ?? audienceType ?? "decisores";
 
-    const systemPrompt = `Você é um especialista em vendas consultivas B2B da Grou, empresa líder em inteligência comportamental com a ferramenta PDA (Personal Development Analysis). Você domina frameworks BANT, SPIN e MEDDIC.
+    const orgName = orgRes.data?.name ?? "a empresa";
+
+    const offerInstruction = offer
+      ? `${offer.instructions ?? `FOCO: ${offer.label}.`}${servicesContext ? `\n\nITENS SELECIONADOS PELO EXECUTIVO (foque nestes):\n${servicesContext}` : ""}`
+      : servicesContext
+      ? `ITENS SELECIONADOS PELO EXECUTIVO (foque nestes):\n${servicesContext}`
+      : "";
+
+    const systemPrompt = `${template.persona} Você domina frameworks de qualificação como ${template.methodology_label}, SPIN e MEDDIC, e vende de forma consultiva em nome de ${orgName}.
 
 Sua missão é gerar argumentos comerciais personalizados, ROI-driven, que ajudem executivos de vendas a fechar negócios.
 
@@ -114,7 +112,8 @@ REGRAS CRÍTICAS:
 - Use linguagem consultiva, não pitch de vendas.
 - Adapte a linguagem para o público: ${audienceLabel}.
 - Baseie-se nos argumentos que já performaram bem em negociações anteriores.
-- Sempre conecte: DOR → SOLUÇÃO (PDA/Grou) → IMPACTO FINANCEIRO.
+- Use APENAS produtos, serviços e diferenciais presentes na base de conhecimento abaixo. Não invente oferta.
+- Sempre conecte: DOR → SOLUÇÃO → IMPACTO FINANCEIRO.
 
 BASE DE CONHECIMENTO DA EMPRESA:
 ${knowledgeContext}
@@ -122,15 +121,15 @@ ${knowledgeContext}
 ANÁLISES DE TOP PERFORMANCE (aprenda com estes padrões de sucesso):
 ${topAnalyses}`;
 
+    const contextLines = Object.entries(context ?? {})
+      .map(([key, value]) => `- ${key}: ${value || "não informado"}`)
+      .join("\n");
+
     const userPrompt = `Gere argumentos comerciais completos para o seguinte cenário:
 
 CONTEXTO DO LEAD:
-- Segmento: ${context.segment || 'não informado'}
-- Tamanho da empresa: ${context.companySize || 'não informado'} colaboradores
-- Maturidade de RH: ${context.hrMaturity || 'não informado'}
-- Tipo de venda: ${context.saleType || 'não informado'}
-- Ticket estimado: ${context.estimatedTicket || 'não informado'}
-- Tipo de oferta: ${offerType === 'pda' ? 'Licença PDA (produto)' : offerType === 'servicos' ? 'Serviços Grou' : 'Licença PDA + Serviços'}
+${contextLines}
+- Tipo de oferta: ${offer?.label ?? "portfólio completo"}
 
 DORES IDENTIFICADAS:
 ${painsList}
@@ -142,7 +141,7 @@ Gere o output EXATAMENTE neste formato JSON:
   "arguments": [
     {
       "pain": "dor específica",
-      "solution": "como o PDA/Grou resolve",
+      "solution": "como a solução da empresa resolve",
       "financialImpact": "impacto financeiro estimado",
       "argument": "argumento consultivo completo pronto para uso"
     }
@@ -177,7 +176,7 @@ Gere o output EXATAMENTE neste formato JSON:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: ARGUMENTS_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -189,14 +188,10 @@ Gere o output EXATAMENTE neste formato JSON:
     if (!aiResponse.ok) {
       const status = aiResponse.status;
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Tente novamente em alguns segundos." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json(req, { error: "Rate limit exceeded. Tente novamente em alguns segundos." }, 429);
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos de IA esgotados." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json(req, { error: "Créditos de IA esgotados." }, 402);
       }
       throw new Error(`AI gateway error: ${status}`);
     }
@@ -204,7 +199,6 @@ Gere o output EXATAMENTE neste formato JSON:
     const aiData = await aiResponse.json();
     const content = aiData.choices?.[0]?.message?.content || "";
 
-    // Try to parse JSON from the response
     let parsed;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -213,23 +207,27 @@ Gere o output EXATAMENTE neste formato JSON:
       parsed = { raw: content };
     }
 
-    // Log usage
-    await supabase.from("api_usage_logs").insert({
-      user_id: user.id,
-      operation_type: "generate_arguments",
-      model_used: "google/gemini-3-flash-preview",
-      input_tokens: aiData.usage?.prompt_tokens || 0,
-      output_tokens: aiData.usage?.completion_tokens || 0,
-      estimated_cost: ((aiData.usage?.prompt_tokens || 0) * 0.000001 + (aiData.usage?.completion_tokens || 0) * 0.000004),
+    await logUsage(supabase, {
+      orgId,
+      userId: ctx.userId,
+      operation: "generate_arguments",
+      provider: "lovable-gateway",
+      model: ARGUMENTS_MODEL,
+      inputTokens: aiData.usage?.prompt_tokens ?? 0,
+      outputTokens: aiData.usage?.completion_tokens ?? 0,
+      quantity: 1,
+      unit: "geracao",
+      estimatedCost:
+        (aiData.usage?.prompt_tokens ?? 0) * 0.000001 +
+        (aiData.usage?.completion_tokens ?? 0) * 0.000004,
     });
 
-    return new Response(JSON.stringify(parsed), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(req, parsed);
   } catch (e) {
+    if (e instanceof HttpError) {
+      return json(req, { error: e.message, code: e.code }, e.status);
+    }
     console.error("generate-arguments error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(req, { error: e instanceof Error ? e.message : "Unknown error" }, 500);
   }
 });

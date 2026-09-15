@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Paleta padrão da plataforma. Cada organização sobrescreve estes tokens em
+ * tempo de execução (BrandingContext), então nenhuma cor aqui é a marca de um
+ * cliente específico.
+ */
 @layer base {
   :root {
     --background: 222 47% 8%;
@@ -13,7 +18,7 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 92%;
 
-    --primary: 24 95% 53%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 217 33% 17%;
@@ -39,18 +44,18 @@
 
     --border: 217 33% 18%;
     --input: 217 33% 18%;
-    --ring: 24 95% 53%;
+    --ring: 217 91% 60%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 222 47% 6%;
     --sidebar-foreground: 210 40% 92%;
-    --sidebar-primary: 24 95% 53%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 217 33% 14%;
     --sidebar-accent-foreground: 210 40% 92%;
     --sidebar-border: 217 33% 15%;
-    --sidebar-ring: 24 95% 53%;
+    --sidebar-ring: 217 91% 60%;
 
     --temp-cold: 199 89% 48%;
     --temp-warm: 38 92% 50%;
@@ -67,7 +72,7 @@
     --popover: 222 47% 9%;
     --popover-foreground: 210 40% 92%;
 
-    --primary: 24 95% 53%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 217 33% 15%;
@@ -93,16 +98,16 @@
 
     --border: 217 33% 15%;
     --input: 217 33% 15%;
-    --ring: 24 95% 53%;
+    --ring: 217 91% 60%;
 
     --sidebar-background: 222 47% 5%;
     --sidebar-foreground: 210 40% 92%;
-    --sidebar-primary: 24 95% 53%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 217 33% 10%;
     --sidebar-accent-foreground: 210 40% 92%;
     --sidebar-border: 217 33% 10%;
-    --sidebar-ring: 24 95% 53%;
+    --sidebar-ring: 217 91% 60%;
 
     --temp-cold: 199 89% 48%;
     --temp-warm: 38 92% 50%;

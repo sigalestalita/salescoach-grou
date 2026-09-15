@@ -30,12 +30,23 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: meeting } = await admin
     .from("meetings")
-    .select("id, seller_id")
+    .select("id, seller_id, org_id")
     .eq("id", meetingId)
     .maybeSingle();
   if (!meeting || meeting.seller_id !== userData.user.id) {
     return new Response("forbidden", { status: 403 });
   }
+
+  // A reunião precisa ser da organização do usuário.
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("org_id")
+    .eq("user_id", userData.user.id)
+    .maybeSingle();
+  if (!callerProfile?.org_id || callerProfile.org_id !== meeting.org_id) {
+    return new Response("forbidden", { status: 403 });
+  }
+  const orgId: string = meeting.org_id;
 
   if (req.headers.get("upgrade") !== "websocket") {
     return new Response("expected websocket", { status: 426 });
@@ -113,6 +124,7 @@ Deno.serve(async (req) => {
           // persist final segment
           await admin.from("transcription_segments").insert({
             meeting_id: meetingId,
+            org_id: orgId,
             text,
             is_final: true,
             speaker: "unknown",
@@ -127,6 +139,9 @@ Deno.serve(async (req) => {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${SERVICE_ROLE}`,
                 apikey: ANON,
+                // Identifica a chamada como interna; a live-coach só aceita
+                // este segredo ou um usuário com acesso à reunião.
+                "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",
               },
               body: JSON.stringify({ meetingId }),
             }).catch(() => {});
@@ -162,8 +177,22 @@ Deno.serve(async (req) => {
     }
   };
 
+  const sessionStartedAt = Date.now();
   client.onclose = () => {
     try { aai2?.close(); } catch {}
+    const minutes = Math.ceil((Date.now() - sessionStartedAt) / 60000);
+    admin.from("api_usage_logs").insert({
+      org_id: orgId,
+      user_id: userData.user.id,
+      meeting_id: meetingId,
+      operation_type: "live_transcricao",
+      model_used: "u3-rt-pro",
+      provider: "assemblyai",
+      quantity: minutes,
+      unit: "minutos",
+    }).then(({ error }) => {
+      if (error) console.error("Falha ao registrar consumo de transcrição ao vivo:", error.message);
+    });
   };
 
   return response;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,15 +88,15 @@ const statusColors: Record<string, string> = {
   erro: "bg-destructive/10 text-destructive",
 };
 
-const tempLabels: Record<string, string> = {
-  congelado: "🧊 Congelado",
-  frio: "❄️ Frio",
-  morno: "🌤️ Morno",
-  quente: "🔥 Quente",
-  muito_quente: "🔥🔥 Muito Quente",
-};
 
 const Agendas = () => {
+  const { config } = useOrgConfig();
+  const meetingTypes = config.meetingTypes;
+  const defaultMeetingType = meetingTypes[0]?.key ?? "";
+  const tempLabels = temperatureLabels(config.temperatureLevels);
+  const typeLabel = (key: string | null) =>
+    meetingTypes.find((t) => t.key === key)?.label ?? key ?? "—";
+
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +116,7 @@ const Agendas = () => {
     lead_email: "",
     meeting_date: "",
     youtube_url: "",
-    meeting_type: "empresa",
+    meeting_type: "",
     seller_id: "",
   });
   const [editForm, setEditForm] = useState({
@@ -123,13 +124,13 @@ const Agendas = () => {
     lead_name: "",
     lead_company: "",
     lead_email: "",
-    meeting_type: "empresa",
+    meeting_type: "",
     seller_id: "",
   });
   const [file, setFile] = useState<File | null>(null);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkLinks, setBulkLinks] = useState("");
-  const [bulkMeetingType, setBulkMeetingType] = useState("empresa");
+  const [bulkMeetingType, setBulkMeetingType] = useState("");
   const [bulkSellerId, setBulkSellerId] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
@@ -142,6 +143,14 @@ const Agendas = () => {
     fetchMeetings();
     fetchProfiles();
   }, []);
+
+  // Os tipos de reunião vêm da configuração da organização; assim que chegam,
+  // preenche o padrão dos formulários que ainda estão vazios.
+  useEffect(() => {
+    if (!defaultMeetingType) return;
+    setNewMeeting((prev) => (prev.meeting_type ? prev : { ...prev, meeting_type: defaultMeetingType }));
+    setBulkMeetingType((prev) => prev || defaultMeetingType);
+  }, [defaultMeetingType]);
 
   const fetchMeetings = async () => {
     const { data, error } = await supabase
@@ -164,7 +173,7 @@ const Agendas = () => {
   const resetForm = () => {
     setNewMeeting({
       title: "", lead_name: "", lead_company: "", lead_email: "",
-      meeting_date: "", youtube_url: "", meeting_type: "empresa", seller_id: "",
+      meeting_date: "", youtube_url: "", meeting_type: defaultMeetingType, seller_id: "",
     });
     setFile(null);
     setSourceTab("file");
@@ -223,7 +232,7 @@ const Agendas = () => {
       lead_name: meeting.lead_name || "",
       lead_company: meeting.lead_company || "",
       lead_email: meeting.lead_email || "",
-      meeting_type: meeting.meeting_type || "empresa",
+      meeting_type: meeting.meeting_type || defaultMeetingType,
       seller_id: meeting.seller_id || "",
     });
     setEditDialogOpen(true);
@@ -331,7 +340,7 @@ const Agendas = () => {
 
       setBulkDialogOpen(false);
       setBulkLinks("");
-      setBulkMeetingType("empresa");
+      setBulkMeetingType(defaultMeetingType);
       setBulkSellerId("");
       fetchMeetings();
     } catch (error: any) {
@@ -392,8 +401,9 @@ const Agendas = () => {
                       <Select value={bulkMeetingType} onValueChange={setBulkMeetingType}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="empresa">Empresa</SelectItem>
-                          <SelectItem value="consultoria">Consultoria</SelectItem>
+                          {meetingTypes.map((t) => (
+                            <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -459,8 +469,9 @@ const Agendas = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="empresa">Empresa</SelectItem>
-                      <SelectItem value="consultoria">Consultoria</SelectItem>
+                      {meetingTypes.map((t) => (
+                        <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -585,8 +596,9 @@ const Agendas = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos os tipos</SelectItem>
-            <SelectItem value="empresa">Empresa</SelectItem>
-            <SelectItem value="consultoria">Consultoria</SelectItem>
+            {meetingTypes.map((t) => (
+              <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         {!isVendedor && (
@@ -652,7 +664,7 @@ const Agendas = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant="outline" className="text-xs">
-                      {meeting.meeting_type === "consultoria" ? "Consultoria" : "Empresa"}
+                      {typeLabel(meeting.meeting_type)}
                     </Badge>
                     {meeting.overall_score !== null && (
                       <div className="flex items-center gap-1">
@@ -769,8 +781,9 @@ const Agendas = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="empresa">Empresa</SelectItem>
-                    <SelectItem value="consultoria">Consultoria</SelectItem>
+                    {meetingTypes.map((t) => (
+                      <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

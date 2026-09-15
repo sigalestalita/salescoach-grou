@@ -8,7 +8,8 @@ import {
   Zap,
   MonitorSmartphone,
 } from "lucide-react";
-import logo from "@/assets/logo.png";
+import fallbackLogo from "@/assets/logo.png";
+import { useBranding } from "@/contexts/BrandingContext";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,6 +46,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { profile, role, signOut } = useAuth();
+  const { branding } = useBranding();
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
@@ -61,9 +63,13 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <img src={logo} alt="Sales Coach" className="h-9 w-9 shrink-0 object-contain" />
+          <img
+            src={branding.logo_url ?? fallbackLogo}
+            alt={branding.product_name}
+            className="h-9 w-9 shrink-0 object-contain"
+          />
           {!collapsed && (
-            <span className="text-sm font-bold text-sidebar-foreground">Sales Coach</span>
+            <span className="text-sm font-bold text-sidebar-foreground">{branding.product_name}</span>
           )}
         </div>
       </SidebarHeader>

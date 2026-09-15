@@ -12,6 +12,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
+import { ShareControls } from "@/components/ShareControls";
+import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 
 const MetricTooltip = ({ text }: { text: string }) => (
   <Tooltip>
@@ -52,6 +54,8 @@ const isMeetingProcessingStalled = (
 };
 
 const MeetingDetail = () => {
+  // Metodologia e faixas de temperatura da organização.
+  const { config } = useOrgConfig();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -166,6 +170,8 @@ const MeetingDetail = () => {
   const ragResults = analysis?.rag_results as any;
   const rawAnalysis = analysis?.raw_analysis as any;
 
+  const tempLabels = temperatureLabels(config.temperatureLevels);
+
   const tempColors: Record<string, string> = {
     congelado: "bg-muted/30 text-muted-foreground border-muted/30",
     frio: "bg-info/10 text-info border-info/20",
@@ -191,17 +197,7 @@ const MeetingDetail = () => {
           </div>
         </div>
         {meeting.share_token && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              const url = `${window.location.origin}/share/${meeting.share_token}`;
-              navigator.clipboard.writeText(url);
-              toast({ title: "Link copiado!", description: "Compartilhe com a gestão para ver a análise e o vídeo." });
-            }}
-          >
-            <Share2 className="h-4 w-4 mr-2" />
-            Compartilhar
-          </Button>
+          <ShareControls meeting={meeting} onChange={fetchData} />
         )}
         {(meeting.status === "enviado" || meeting.status === "erro" || isStaleProcessing) && (
           <Button onClick={handleAnalyze} disabled={processing || (isLinkBased && !meeting.youtube_url && !manualTranscript.trim())}>
@@ -532,7 +528,7 @@ const MeetingDetail = () => {
               <CardContent>
                 <div className="text-3xl font-bold text-center capitalize">
                   {meeting.temperature
-                    ? { congelado: "🧊 Congelado", frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente", muito_quente: "🔥🔥 Muito Quente" }[meeting.temperature] || meeting.temperature
+                    ? tempLabels[meeting.temperature] || meeting.temperature
                     : "--"}
                 </div>
                 {rawAnalysis?.temperature_reason && (
@@ -574,21 +570,26 @@ const MeetingDetail = () => {
             <Card>
               <CardHeader>
                <CardTitle className="text-sm flex items-center gap-2">
-                  BAN Score
-                  <MetricTooltip text="Framework de qualificação de leads adaptado da Grou: Budget (orçamento disponível), Authority (poder de decisão do contato) e Need (necessidade real do produto/serviço). Cada critério vale até 33 pontos. Prazo (Timeline) não é critério qualificatório, pois nosso ciclo de vendas é consultivo e complexo." />
+                  {config.methodologyLabel} Score
+                  <MetricTooltip
+                    text={`Critérios de qualificação desta operação: ${config.criteria
+                      .map((c) => `${c.label}${c.description ? ` (${c.description})` : ""}`)
+                      .join(", ")}. Configuráveis em Configurações › Metodologia de análise.`}
+                  />
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {bant ? (
-                  ["budget", "authority", "need"].map((key) => {
-                    const { score, reason } = getMetricValue(bant[key]);
+                  config.criteria.map((criterion) => {
+                    const { score, reason } = getMetricValue(bant[criterion.key]);
+                    const max = criterion.max_score ?? config.maxCriterionScore;
                     return (
-                      <div key={key} className="space-y-1">
+                      <div key={criterion.key} className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="capitalize">{key === "need" ? "Necessidade" : key === "budget" ? "Orçamento" : "Autoridade"}</span>
-                          <span>{score}/33</span>
+                          <span>{criterion.label}</span>
+                          <span>{score}/{max}</span>
                         </div>
-                        <Progress value={(score / 33) * 100} />
+                        <Progress value={max > 0 ? (score / max) * 100 : 0} />
                         {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
                       </div>
                     );

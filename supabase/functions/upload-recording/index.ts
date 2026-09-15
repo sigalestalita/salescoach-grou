@@ -1,60 +1,48 @@
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { json, preflight } from "../_shared/cors.ts";
+import { assertQuota, getCaller, HttpError } from "../_shared/tenant.ts";
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Validate user JWT
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const ctx = await getCaller(req);
+    const user = { id: ctx.userId };
+    const orgId = ctx.orgId;
+    await assertQuota(ctx.admin, orgId, "analise", 1);
 
     // Parse multipart form
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const title = (formData.get("title") as string) || "Gravação via Extensão";
-    const meetingType = (formData.get("meeting_type") as string) || "empresa";
+    // Tipo de reunião é configurado por organização; sem indicação, usa o
+    // primeiro tipo ativo da própria organização.
+    let meetingType = (formData.get("meeting_type") as string) || null;
+    {
+      const { data: orgTypes } = await ctx.admin
+        .from("meeting_types")
+        .select("key")
+        .eq("org_id", orgId)
+        .eq("is_active", true)
+        .order("sort_order");
+      const validKeys = (orgTypes ?? []).map((t: { key: string }) => t.key);
+      if (!meetingType || !validKeys.includes(meetingType)) {
+        meetingType = validKeys[0] ?? null;
+      }
+    }
     const leadName = (formData.get("lead_name") as string) || null;
     const leadCompany = (formData.get("lead_company") as string) || null;
     const leadEmail = (formData.get("lead_email") as string) || null;
     const existingMeetingId = (formData.get("meeting_id") as string) || null;
 
     if (!file) {
-      return new Response(JSON.stringify({ error: "No file provided" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "No file provided" }, 400);
     }
 
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = ctx.admin;
 
     // Upload file to storage
     const fileName = `${user.id}/${Date.now()}-${file.name}`;
@@ -69,18 +57,10 @@ Deno.serve(async (req) => {
 
     if (uploadError) {
       console.error("Upload error:", uploadError);
-      return new Response(JSON.stringify({ error: "Failed to upload file" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "Failed to upload file" }, 500);
     }
 
-    // Get user's team_id
-    const { data: profile } = await adminClient
-      .from("profiles")
-      .select("team_id")
-      .eq("user_id", user.id)
-      .single();
+    const profile = { team_id: ctx.teamId };
 
     // Create OR update meeting record (when extension pre-created it for live mode)
     let meeting: { id: string } | null = null;
@@ -95,6 +75,7 @@ Deno.serve(async (req) => {
         })
         .eq("id", existingMeetingId)
         .eq("seller_id", user.id)
+        .eq("org_id", orgId)
         .select("id")
         .single();
       meeting = upd.data;
@@ -104,6 +85,7 @@ Deno.serve(async (req) => {
         .from("meetings")
         .insert({
           title,
+          org_id: orgId,
           seller_id: user.id,
           team_id: profile?.team_id || null,
           meeting_type: meetingType,
@@ -123,20 +105,17 @@ Deno.serve(async (req) => {
 
     if (meetingError || !meeting) {
       console.error("Meeting creation error:", meetingError);
-      return new Response(JSON.stringify({ error: "Failed to create meeting" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "Failed to create meeting" }, 500);
     }
 
-    // Trigger analysis pipeline
+    // Dispara o pipeline de análise como chamada interna.
     try {
       const analyzeRes = await fetch(`${supabaseUrl}/functions/v1/analyze-meeting`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: anonKey,
+          "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",
         },
         body: JSON.stringify({ meetingId: meeting.id }),
       });
@@ -148,25 +127,16 @@ Deno.serve(async (req) => {
       console.error("Error triggering analysis:", err);
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        meetingId: meeting.id,
-        message: "Recording uploaded successfully. Analysis will start automatically.",
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return json(req, {
+      success: true,
+      meetingId: meeting.id,
+      message: "Recording uploaded successfully. Analysis will start automatically.",
+    });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return json(req, { error: error.message, code: error.code }, error.status);
+    }
     console.error("upload-recording error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return json(req, { error: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });

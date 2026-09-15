@@ -1,10 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { json, preflight } from "../_shared/cors.ts";
+import { assertQuota, getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
 
 // ── Helpers ──
 
@@ -268,103 +263,89 @@ async function extractFromFile(
 // ── Main handler ──
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
+    const ctx = await getCaller(req);
     const { documentId } = await req.json();
     if (!documentId) {
-      return new Response(JSON.stringify({ error: "documentId is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "documentId is required" }, 400);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = ctx.admin;
 
     if (!lovableKey) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "LOVABLE_API_KEY not configured" }, 500);
     }
 
+    // O documento precisa ser da organização de quem chamou.
     const { data: doc, error: docError } = await supabase
       .from("knowledge_documents")
       .select("*")
       .eq("id", documentId)
-      .single();
+      .eq("org_id", ctx.orgId)
+      .maybeSingle();
 
     if (docError || !doc) {
-      return new Response(JSON.stringify({ error: "Document not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "Document not found" }, 404);
     }
 
-    // Skip if already extracted
     if (doc.extracted_content && doc.extracted_content.trim().length > 0) {
-      return new Response(JSON.stringify({ success: true, message: "Already extracted" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { success: true, message: "Already extracted" });
     }
+
+    await assertQuota(supabase, ctx.orgId, "extracao_documento", 1);
 
     let extractedText = "";
 
     if (doc.doc_type === "link" && doc.file_url) {
-      // Link/URL → fetch and extract
       extractedText = await extractFromUrl(doc.file_url, lovableKey);
     } else if (doc.file_url && doc.doc_type !== "link") {
-      // File in storage → download and extract
       const { data: fileData, error: fileError } = await supabase.storage
         .from("knowledge-files")
         .download(doc.file_url);
 
       if (fileError || !fileData) {
         console.error("File download error:", fileError);
-        return new Response(JSON.stringify({ error: "Failed to download file" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return json(req, { error: "Failed to download file" }, 500);
       }
 
       const fileName = doc.file_url.split("/").pop() || "file";
       extractedText = await extractFromFile(fileData, fileName, lovableKey);
     } else {
-      return new Response(JSON.stringify({ success: true, message: "Nothing to extract" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { success: true, message: "Nothing to extract" });
     }
 
-    // Save extracted content
     const { error: updateError } = await supabase
       .from("knowledge_documents")
       .update({ extracted_content: extractedText })
-      .eq("id", documentId);
+      .eq("id", documentId)
+      .eq("org_id", ctx.orgId);
 
     if (updateError) {
       console.error("Update error:", updateError);
-      return new Response(JSON.stringify({ error: "Failed to save extracted content" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "Failed to save extracted content" }, 500);
     }
+
+    await logUsage(supabase, {
+      orgId: ctx.orgId,
+      userId: ctx.userId,
+      operation: "extracao_documento",
+      provider: "lovable-gateway",
+      quantity: 1,
+      unit: "documento",
+    });
 
     console.log(`Extracted ${extractedText.length} chars from document: ${doc.title}`);
 
-    return new Response(
-      JSON.stringify({ success: true, chars: extractedText.length }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json(req, { success: true, chars: extractedText.length });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return json(req, { error: error.message, code: error.code }, error.status);
+    }
     console.error("extract-document error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json(req, { error: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });

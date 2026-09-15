@@ -130,7 +130,7 @@
       },
       body: JSON.stringify([{
         title: meta.title || 'Gravação ao vivo',
-        meeting_type: meta.meetingType || 'empresa',
+        meeting_type: meta.meetingType || null,
         lead_name: meta.leadName || null,
         lead_company: meta.leadCompany || null,
         lead_email: meta.leadEmail || null,
@@ -443,7 +443,7 @@
       const formData = new FormData();
       formData.append('file', blob, `recording-${Date.now()}.webm`);
       formData.append('title', meta.title || 'Gravação via Extensão');
-      formData.append('meeting_type', meta.meetingType || 'empresa');
+      if (meta.meetingType) formData.append('meeting_type', meta.meetingType);
       formData.append('lead_name', meta.leadName || '');
       formData.append('lead_company', meta.leadCompany || '');
       formData.append('lead_email', meta.leadEmail || '');

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { BrandingProvider } from "@/contexts/BrandingContext";
 import { AppLayout } from "@/components/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -16,11 +17,13 @@ import ArgumentGenerator from "./pages/ArgumentGenerator";
 import Extensao from "./pages/Extensao";
 import NotFound from "./pages/NotFound";
 import SharedMeeting from "./pages/SharedMeeting";
+import AcceptInvite from "./pages/AcceptInvite";
+import SemOrganizacao from "./pages/SemOrganizacao";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode; allowedRoles?: string[] }) {
-  const { session, role, loading } = useAuth();
+  const { session, role, orgId, loading } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -29,6 +32,8 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
     );
   }
   if (!session) return <Navigate to="/auth" replace />;
+  // Usuário autenticado que ainda não pertence a nenhuma organização.
+  if (!orgId || !role) return <Navigate to="/sem-organizacao" replace />;
   if (allowedRoles && role && !allowedRoles.includes(role)) {
     return <Navigate to="/agendas" replace />;
   }
@@ -49,9 +54,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <BrandingProvider>
           <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/share/:token" element={<SharedMeeting />} />
+            <Route path="/convite/:token" element={<AcceptInvite />} />
+            <Route path="/sem-organizacao" element={<SemOrganizacao />} />
             <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Index /></ProtectedRoute>} />
             <Route path="/agendas" element={<ProtectedRoute><Agendas /></ProtectedRoute>} />
             <Route path="/agendas/:id" element={<ProtectedRoute><MeetingDetail /></ProtectedRoute>} />
@@ -62,6 +70,7 @@ const App = () => (
             <Route path="/extensao" element={<ProtectedRoute><Extensao /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
