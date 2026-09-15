@@ -266,7 +266,8 @@ BEGIN;
     PERFORM pg_temp.check(n = 3, 'admin continua vendo todas as reuniões da empresa');
 
     SELECT count(*) INTO n FROM public.profiles;
-    PERFORM pg_temp.check(n = 4, 'admin continua vendo o time inteiro');
+    -- 4 usuários com login + 1 executivo virtual.
+    PERFORM pg_temp.check(n = 5, 'admin continua vendo o time inteiro');
   END
   $$;
 ROLLBACK;

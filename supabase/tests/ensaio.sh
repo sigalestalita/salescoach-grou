@@ -12,6 +12,7 @@
 # Falha no primeiro erro, em qualquer etapa.
 # ============================================================================
 set -euo pipefail
+# pipefail garante que uma falha no psql não seja mascarada por um pipe.
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$HERE/../.."
