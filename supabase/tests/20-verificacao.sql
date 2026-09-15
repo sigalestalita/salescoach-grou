@@ -295,6 +295,12 @@ ROLLBACK;
 \echo ''
 \echo '=== 9. Um admin não consegue agir sobre outra organização ==='
 
+-- O id da organização alheia é capturado FORA da sessão do usuário: com a RLS
+-- ligada ele não enxerga essa linha, e um NULL aqui faria o teste passar pelo
+-- motivo errado (violação de não-nulo em vez de isolamento).
+CREATE TEMP TABLE ref_orgs AS SELECT id, slug FROM public.organizations;
+GRANT SELECT ON ref_orgs TO authenticated;
+
 BEGIN;
   SET LOCAL ROLE authenticated;
   SET LOCAL request.jwt.claims = '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
@@ -303,7 +309,8 @@ BEGIN;
     v_org_a UUID;
     n INT;
   BEGIN
-    SELECT id INTO v_org_a FROM public.organizations WHERE slug <> 'empresa-b' LIMIT 1;
+    SELECT id INTO v_org_a FROM pg_temp.ref_orgs WHERE slug <> 'empresa-b' LIMIT 1;
+    PERFORM pg_temp.check(v_org_a IS NOT NULL, 'id da organização alheia obtido (o teste exercita o caso real)');
 
     -- Tenta escrever na organização alheia: a RLS precisa recusar.
     BEGIN
@@ -334,6 +341,13 @@ BEGIN;
     SELECT count(*) INTO n FROM public.profiles
       WHERE user_id = '55555555-5555-5555-5555-555555555555' AND org_id = v_org_a;
     PERFORM pg_temp.check(n = 0, 'perfil permanece na organização original');
+
+    -- Sem informar org_id, a reunião precisa cair na organização de quem cria.
+    INSERT INTO public.meetings (title, seller_id, status)
+    VALUES ('Reunião sem org explícita', '55555555-5555-5555-5555-555555555555', 'enviado');
+    SELECT count(*) INTO n FROM public.meetings
+      WHERE title = 'Reunião sem org explícita' AND org_id = v_org_a;
+    PERFORM pg_temp.check(n = 0, 'reunião sem org_id não vaza para a organização alheia');
   END
   $$;
 ROLLBACK;
@@ -434,6 +448,28 @@ END
 $$;
 
 \echo ''
+\echo '=== 13. Código antigo (service role, sem org_id) continua criando reunião ==='
+
+DO $$
+DECLARE v_org UUID; v_novo UUID;
+BEGIN
+  SELECT org_id INTO v_org FROM public.profiles
+   WHERE user_id = '33333333-3333-3333-3333-333333333333';
+
+  -- Insere como a edge function antiga faria: sem informar org_id.
+  INSERT INTO public.meetings (title, seller_id, status)
+  VALUES ('Gravação pela extensão', '33333333-3333-3333-3333-333333333333', 'enviado')
+  RETURNING id INTO v_novo;
+
+  PERFORM pg_temp.check(
+    (SELECT org_id FROM public.meetings WHERE id = v_novo) = v_org,
+    'organização derivada do vendedor quando o chamador não informa');
+END
+$$;
+
+\echo ''
 \echo '============================================================'
 \echo ' ENSAIO CONCLUÍDO — todas as verificações passaram'
 \echo '============================================================'
+
+\echo ''

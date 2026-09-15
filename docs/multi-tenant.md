@@ -32,12 +32,36 @@ O script sobe um cluster temporário, aplica um shim do Supabase (papéis,
 `auth.uid()`, schema de storage), roda as migrações que já estão em produção,
 recria um banco com o estado de hoje (usuários, reuniões, análises, base de
 conhecimento, arquivos, links de compartilhamento), aplica as migrações novas e
-verifica 56 afirmações — entre elas que nenhum dado perde organização, que a
+verifica 69 afirmações — entre elas que nenhum dado perde organização, que a
 configuração de hoje é preservada, que uma empresa não enxerga a outra e que os
 papéis continuam se comportando como antes.
 
+Há também `./supabase/tests/ensaio-colagem.sh`, que ensaia o caminho exato da
+colagem: aplica o arquivo consolidado como bloco único e roda a verificação de
+produção em cima do resultado.
+
 Qualquer falha interrompe o script. Vale rodar depois de mexer em qualquer
 policy.
+
+## Aplicar no Lovable Cloud
+
+O backend do Lovable é um projeto Supabase gerenciado: ele não aparece na sua
+conta do supabase.com, então não há connection string nem CLI. O caminho é o
+SQL do próprio Lovable (**View Backend → SQL**), com dois arquivos prontos:
+
+1. **`supabase/tests/aplicar-migracoes.sql`** — as 7 migrações em um arquivo só,
+   dentro de **uma transação**. Se qualquer comando falhar, nada é aplicado e o
+   banco fica exatamente como estava. Não existe estado parcial.
+2. **`supabase/tests/verificar-producao.sql`** — somente leitura. Devolve uma
+   tabela em que toda linha precisa terminar em `ok`.
+
+A ordem importa: **banco primeiro, código depois**. Se o código novo for
+publicado antes das migrações, o front e as funções passam a esperar colunas
+que ainda não existem.
+
+Na janela entre uma coisa e outra, o código antigo continua funcionando: um
+gatilho deriva a organização do vendedor quando quem insere não a informa, que
+é o caso das edge functions rodando com service role.
 
 ## Ordem do deploy
 

@@ -121,6 +121,30 @@ CREATE TRIGGER set_org_live_tips
   BEFORE INSERT ON public.live_tips
   FOR EACH ROW EXECUTE FUNCTION public.set_org_from_meeting();
 
+-- ── Herança de organização na própria reunião ───────────────────────────────
+-- Quando quem insere é uma edge function com service role, não há auth.uid() e
+-- o DEFAULT não resolve. Deriva a organização do vendedor dono da reunião.
+-- Também protege a janela entre aplicar o banco e publicar o código novo: o
+-- código antigo continua conseguindo criar reuniões.
+
+CREATE OR REPLACE FUNCTION public.set_org_from_seller()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.org_id IS NULL AND NEW.seller_id IS NOT NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM public.profiles p WHERE p.user_id = NEW.seller_id;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER set_org_meetings
+  BEFORE INSERT ON public.meetings
+  FOR EACH ROW EXECUTE FUNCTION public.set_org_from_seller();
+
 -- ── Controle de compartilhamento externo ────────────────────────────────────
 -- Hoje toda reunião nasce com share_token e qualquer link vaza a transcrição
 -- inteira, sem expiração nem revogação. O token continua existindo, mas passa

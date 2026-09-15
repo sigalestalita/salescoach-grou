@@ -64,10 +64,12 @@ RETURNS UUID
 LANGUAGE sql
 STABLE
 AS $$
+  -- NULLIF antes do cast: um GUC customizado volta para string vazia depois de
+  -- um ROLLBACK, e '' não é JSON válido. O auth.uid() do Supabase faz o mesmo.
   SELECT NULLIF(
     COALESCE(
-      current_setting('request.jwt.claim.sub', true),
-      (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')
+      NULLIF(current_setting('request.jwt.claim.sub', true), ''),
+      (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
     ),
     ''
   )::uuid
@@ -79,8 +81,8 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT COALESCE(
-    current_setting('request.jwt.claim.role', true),
-    (current_setting('request.jwt.claims', true)::jsonb ->> 'role')
+    NULLIF(current_setting('request.jwt.claim.role', true), ''),
+    (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
   )
 $$;
 
@@ -90,8 +92,8 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT COALESCE(
-    current_setting('request.jwt.claim.email', true),
-    (current_setting('request.jwt.claims', true)::jsonb ->> 'email')
+    NULLIF(current_setting('request.jwt.claim.email', true), ''),
+    (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email')
   )
 $$;
 
