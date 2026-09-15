@@ -19,6 +19,12 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
 UPDATE public.user_roles SET role = 'admin'  WHERE user_id = '11111111-1111-1111-1111-111111111111';
 UPDATE public.user_roles SET role = 'gestor' WHERE user_id = '22222222-2222-2222-2222-222222222222';
 
+-- Executivo virtual: perfil criado pelo admin para atribuir reuniões a quem não
+-- tem login. As chaves estrangeiras para auth.users foram removidas em abril
+-- justamente para permitir isso, então não existe usuário correspondente.
+INSERT INTO public.profiles (user_id, full_name)
+VALUES ('77777777-7777-7777-7777-777777777777', 'Executivo Virtual');
+
 INSERT INTO public.teams (id, name, description)
 VALUES ('aaaaaaaa-0000-0000-0000-000000000001', 'Comercial', 'Time comercial');
 

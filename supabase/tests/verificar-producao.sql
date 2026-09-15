@@ -51,11 +51,20 @@ verificacoes AS (
 
   -- ── Ninguém perde acesso ──────────────────────────────────────────────────
 
-  UNION ALL SELECT 20, 'Usuários que ficariam sem papel (perderiam acesso)', '0',
+  -- Só é problema quem tem login de verdade e ficou sem papel. Perfis sem
+  -- usuário correspondente em auth.users são os executivos virtuais, criados
+  -- para atribuir reuniões a quem nunca teve acesso ao sistema.
+  UNION ALL SELECT 20, 'Usuários COM login que ficariam sem papel', '0',
          (SELECT count(*)::text FROM public.profiles p
+            JOIN auth.users u ON u.id = p.user_id
            WHERE p.org_id IS NOT NULL
              AND NOT EXISTS (SELECT 1 FROM public.user_roles r
                               WHERE r.user_id = p.user_id AND r.org_id = p.org_id))
+
+  UNION ALL SELECT 22, 'Executivos virtuais (perfil sem login, nunca tiveram acesso)', '(informativo)',
+         (SELECT count(*)::text FROM public.profiles p
+            LEFT JOIN auth.users u ON u.id = p.user_id
+           WHERE p.org_id IS NOT NULL AND u.id IS NULL)
 
   UNION ALL SELECT 21, 'Administradores na organização', '>= 1',
          CASE WHEN (SELECT count(*) FROM public.user_roles WHERE role = 'admin') >= 1
