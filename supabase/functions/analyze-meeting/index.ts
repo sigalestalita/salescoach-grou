@@ -1,10 +1,21 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { json, preflight } from "../_shared/cors.ts";
+import {
+  adminClient,
+  assertQuota,
+  getCaller,
+  isInternalCall,
+  HttpError,
+  logUsage,
+} from "../_shared/tenant.ts";
+import {
+  buildAnalysisPrompt,
+  fetchKnowledgeContext,
+  loadMeetingTypeContext,
+  loadTemplate,
+} from "../_shared/analysis-template.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const ANALYSIS_MODEL = Deno.env.get("ANALYSIS_MODEL") ?? "google/gemini-2.5-flash";
 
 // ── Google Drive helpers ──
 
@@ -242,46 +253,11 @@ async function transcribeWithGroq(fileData: Blob, fileName: string): Promise<str
   return result.text;
 }
 
-// ── Knowledge base helpers ──
+// ── Processamento ───────────────────────────────────────────────────────────
 
-async function fetchKnowledgeContext(supabase: any): Promise<string> {
-  const [docsRes, itemsRes] = await Promise.all([
-    supabase.from("knowledge_documents").select("title, category, extracted_content").not("extracted_content", "is", null),
-    supabase.from("knowledge_items").select("name, item_type, category, description, metadata"),
-  ]);
-
-  const parts: string[] = [];
-
-  if (docsRes.data && docsRes.data.length > 0) {
-    parts.push("=== DOCUMENTOS DA BASE DE CONHECIMENTO ===");
-    for (const doc of docsRes.data) {
-      parts.push(`\n--- ${doc.title} (${doc.category || "sem categoria"}) ---`);
-      // Limit each doc to ~2000 chars to avoid token overflow
-      const content = doc.extracted_content?.substring(0, 2000) || "";
-      parts.push(content);
-    }
-  }
-
-  if (itemsRes.data && itemsRes.data.length > 0) {
-    parts.push("\n=== ITENS DA BASE DE CONHECIMENTO ===");
-    for (const item of itemsRes.data) {
-      parts.push(`\n- ${item.name} (${item.item_type}/${item.category || "geral"}): ${item.description || ""}`);
-      if (item.metadata) {
-        parts.push(`  Metadata: ${JSON.stringify(item.metadata).substring(0, 500)}`);
-      }
-    }
-  }
-
-  return parts.join("\n");
-}
-
-// ── Main processing ──
-
-async function processeMeeting(meetingId: string, manualTranscript: string | null) {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+async function processMeeting(meetingId: string, manualTranscript: string | null) {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = adminClient();
 
   const { data: meeting, error: meetingError } = await supabase
     .from("meetings").select("*").eq("id", meetingId).single();
@@ -291,6 +267,7 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
     return;
   }
 
+  const orgId: string = meeting.org_id;
   let transcript = "";
   let speakers: any[] | null = null;
 
@@ -309,13 +286,11 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       let assemblyAudioUrl: string;
 
       if (driveFileId) {
-        // Validate the file is publicly accessible, then pass the URL DIRECTLY to AssemblyAI.
-        // AssemblyAI will download the file from Google's servers itself — this avoids
-        // loading large files (hundreds of MB) into the Edge Function's limited memory.
+        // Valida o acesso e entrega a URL direto para a AssemblyAI, que baixa o
+        // arquivo nos servidores dela — evita carregar centenas de MB na função.
         assemblyAudioUrl = await validateGoogleDriveUrl(driveFileId);
         await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
       } else {
-        // Non-Drive URL: pass directly to AssemblyAI
         await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
         assemblyAudioUrl = meeting.youtube_url;
       }
@@ -342,16 +317,24 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
       const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
       if (assemblyKey) {
-        // Upload file directly to AssemblyAI (handles any format including webm video)
         const uploadUrl = await uploadToAssemblyAI(fileData);
         const result = await transcribeWithAssemblyAI(uploadUrl);
         transcript = result.text;
         speakers = result.speakers;
       } else {
-        // Fallback to Groq/OpenAI (only works with pure audio files)
         const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
         transcript = await transcribeWithGroq(fileData, fileName);
       }
+
+      await logUsage(supabase, {
+        orgId,
+        userId: meeting.seller_id,
+        meetingId,
+        operation: "storage",
+        provider: "supabase",
+        quantity: fileData.size ?? 0,
+        unit: "bytes",
+      });
     } else {
       await supabase.from("meetings").update({
         status: "erro",
@@ -360,9 +343,23 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
       return;
     }
 
-    // Save transcription
+    // Consumo de transcrição, em minutos.
+    if (!manualTranscript) {
+      await logUsage(supabase, {
+        orgId,
+        userId: meeting.seller_id,
+        meetingId,
+        operation: "transcricao",
+        provider: Deno.env.get("ASSEMBLYAI_API_KEY") ? "assemblyai" : "groq/openai",
+        model: Deno.env.get("ASSEMBLYAI_API_KEY") ? "universal-2" : "whisper",
+        quantity: meeting.duration_seconds ? Math.ceil(meeting.duration_seconds / 60) : 0,
+        unit: "minutos",
+      });
+    }
+
     await supabase.from("transcriptions").insert({
       meeting_id: meetingId,
+      org_id: orgId,
       full_text: transcript,
       language: "pt-BR",
       speakers: speakers,
@@ -370,89 +367,31 @@ async function processeMeeting(meetingId: string, manualTranscript: string | nul
 
     await supabase.from("meetings").update({ status: "analisando" }).eq("id", meetingId);
 
-    // Fetch knowledge base context
-    console.log("Fetching knowledge base context...");
-    const knowledgeContext = await fetchKnowledgeContext(supabase);
-    const hasKnowledge = knowledgeContext.trim().length > 0;
-    console.log(`Knowledge base: ${hasKnowledge ? "found content" : "empty"}`);
+    // Template, tipo de reunião e base de conhecimento — tudo da organização
+    // dona da reunião.
+    const [template, knowledgeContext, meetingTypeContext] = await Promise.all([
+      loadTemplate(supabase, orgId),
+      fetchKnowledgeContext(supabase, orgId),
+      loadMeetingTypeContext(supabase, orgId, meeting.meeting_type),
+    ]);
 
-    // Build analysis prompt with knowledge base
-    // Add consulting-specific pricing context
-    const consultoriaSection = meeting.meeting_type === "consultoria"
-      ? `\nCONTEXTO DE PREÇOS PARA CONSULTORIA:
-- Esta é uma reunião de CONSULTORIA. Use as tabelas "Créditos PDA - Consultoria" (para clientes existentes/recargas) e "Programa de Partners" (para novos clientes) ao avaliar propostas de valor e oportunidades.
-- NÃO use a tabela de Licenças PDA para empresas neste contexto.
-- Créditos PDA - Consultoria = recargas para consultores já clientes.
-- Programa de Partners = entrada de novos consultores com pacotes de licenças (Bronze a Safira).
-- Avalie se o vendedor apresentou a faixa correta do programa com base no perfil do prospect.\n`
-      : "";
+    const { data: meetingTypeRow } = await supabase
+      .from("meeting_types")
+      .select("label")
+      .eq("org_id", orgId)
+      .eq("key", meeting.meeting_type ?? "")
+      .maybeSingle();
 
-    const knowledgeSection = hasKnowledge
-      ? `\nBASE DE CONHECIMENTO DA EMPRESA:
-${knowledgeContext}
-
-INSTRUÇÕES ADICIONAIS SOBRE A BASE DE CONHECIMENTO:
-- Use a base de conhecimento acima para validar se o vendedor mencionou corretamente os produtos, serviços e diferenciais da empresa.
-- Identifique oportunidades de cross-sell e upsell com base nos produtos/serviços disponíveis na base.
-- Avalie a aderência do discurso comercial aos materiais e argumentos da base de conhecimento.
-- No campo "rag_results" do JSON, inclua sua análise sobre o uso da base de conhecimento.\n`
-      : "";
-
-    const analysisPrompt = `Você é um especialista em vendas B2B. Analise a transcrição abaixo de uma reunião comercial e retorne uma análise estruturada.
-
-TRANSCRIÇÃO:
-${transcript}
-
-CONTEXTO:
-- Vendedor está conversando com o lead: ${meeting.lead_name || "desconhecido"} da empresa ${meeting.lead_company || "desconhecida"}
-- Título da reunião: ${meeting.title}
-- Tipo de reunião: ${meeting.meeting_type || "empresa"}
-${consultoriaSection}${knowledgeSection}
-
-CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (metodologia BAN — Budget, Authority, Need — adaptada da Grou):
-
-IMPORTANTE: O ciclo de venda da Grou é consultivo e complexo. NÃO use prazo/timeline/urgência temporal ("quando vai fechar", "em X dias/meses") como critério de qualificação. Avalie APENAS profundidade da dor, clareza da necessidade, orçamento e acesso ao decisor.
-
-A temperatura DEVE ser classificada em uma das 5 categorias abaixo, usando EXATAMENTE estes valores:
-- "muito_quente": Os 3 critérios BAN plenamente atendidos. Budget confirmado, decisor presente, dor urgente e quantificada, próximo passo de proposta acordado.
-- "quente": 3 critérios BAN atendidos com alguma ressalva. Budget provável, acesso ao decisor, necessidade validada com dor reconhecida.
-- "morno": 2 critérios BAN atendidos. Necessidade identificada, mas budget incerto OU sem acesso direto ao decisor; dor reconhecida sem priorização.
-- "frio": 1 critério BAN atendido. Dor genérica, sem orçamento definido, sem acesso ao decisor; precisa de nutrição.
-- "congelado": 0-1 critério BAN. Sem perfil para o negócio (descartar).
-
-RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
-{
-  "overall_score": <número de 0 a 100>,
-  "overall_score_reason": "<explicação breve de 1-2 frases justificando o score geral>",
-  "temperature": "<congelado|frio|morno|quente|muito_quente>",
-  "temperature_reason": "<explicação breve de 1-2 frases justificando a temperatura com base nos critérios BAN acima, SEM mencionar prazos>",
-  "bant_score": { "budget": { "score": <0-33>, "reason": "<justificativa>" }, "authority": { "score": <0-33>, "reason": "<justificativa>" }, "need": { "score": <0-33>, "reason": "<justificativa>" } },
-  "meddic_score": { "metrics": { "score": <0-17>, "reason": "<justificativa>" }, "economic_buyer": { "score": <0-17>, "reason": "<justificativa>" }, "decision_criteria": { "score": <0-17>, "reason": "<justificativa>" }, "decision_process": { "score": <0-17>, "reason": "<justificativa focada apenas no fluxo de aprovação e steps, SEM estimar prazos>" }, "identify_pain": { "score": <0-17>, "reason": "<justificativa>" }, "champion": { "score": <0-17>, "reason": "<justificativa>" } },
-  "spin_score": { "situacao": { "score": <0-25>, "reason": "<justificativa>" }, "problema": { "score": <0-25>, "reason": "<justificativa>" }, "implicacao": { "score": <0-25>, "reason": "<justificativa>" }, "necessidade": { "score": <0-25>, "reason": "<justificativa>" } },
-  "talk_ratio": { "seller": <0-100>, "lead": <0-100>, "reason": "<justificativa sobre a proporção de fala>" },
-  "conversation_metrics": { "total_questions": <número>, "open_questions": <número>, "objections_handled": <número> },
-  "insights": { "positives": ["..."], "improvements": ["..."], "key_moments": ["..."] },
-  "sales_coach": { "next_steps": ["..."], "suggestions": ["..."], "scripts": ["..."] },
-  "highlights": [{ "type": "<objecao|sinal_compra|momento_chave|dor|necessidade>", "text": "...", "speaker": "<vendedor|lead>" }],
-  "meeting_summary": {
-    "company_name": "<nome da empresa do lead, se mencionado>",
-    "participants": [{ "name": "<nome>", "role": "<cargo/função>" }],
-    "company_size": "<número de colaboradores ou porte da empresa, se mencionado>",
-    "identified_pains": ["<dor 1>", "<dor 2>", "..."],
-    "products_presented": ["<produto/serviço apresentado 1>", "..."],
-    "proposal_value": "<valor da proposta ou descrição da proposta comercial, se mencionado>",
-    "solution_pain_match": [{ "pain": "<dor identificada>", "solution": "<solução do portfólio que endereça essa dor>" }]
-  },
-  "rag_results": { "knowledge_adherence_score": <0-100>, "products_mentioned": ["..."], "missed_opportunities": ["..."], "cross_sell_suggestions": ["..."], "discourse_alignment": "..." }
-}
-
-IMPORTANTE: 
-- Para cada sub-métrica de BAN, MEDDIC e SPIN, inclua um objeto com "score" e "reason". A "reason" deve ser uma frase curta e específica baseada no que aconteceu (ou não) na reunião.
-- A temperatura DEVE seguir rigorosamente os critérios BAN (apenas 3 critérios: Budget, Authority, Need). NUNCA considere Timeline/prazo — a metodologia é BAN, NÃO BANT. O total máximo é SEMPRE 3 critérios, nunca 4.
-- Na justificativa da temperatura ("temperature_reason"), escreva SEMPRE no formato "X de 3 critérios BAN atendidos" (jamais "de 4", jamais "BANT") e cite quais foram atendidos entre Budget, Authority e Need. É PROIBIDO mencionar a letra T, a palavra "Timeline", a sigla "BANT" ou qualquer janela de tempo (dias, meses, prazos, urgência temporal).
-
-
-Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use a base de conhecimento para enriquecer sua análise e preencher o campo rag_results com detalhes." : " Se não houver base de conhecimento disponível, preencha rag_results como null."}`;
+    const analysisPrompt = buildAnalysisPrompt({
+      template,
+      transcript,
+      meetingTitle: meeting.title,
+      meetingTypeLabel: meetingTypeRow?.label ?? meeting.meeting_type ?? null,
+      meetingTypeContext,
+      leadName: meeting.lead_name,
+      leadCompany: meeting.lead_company,
+      knowledgeContext,
+    });
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -461,7 +400,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: ANALYSIS_MODEL,
         messages: [
           { role: "system", content: "Você é um analista de vendas B2B experiente. Responda APENAS com JSON válido, sem markdown." },
           { role: "user", content: analysisPrompt },
@@ -482,6 +421,22 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
     const aiResult = await aiRes.json();
     const rawContent = aiResult.choices?.[0]?.message?.content || "";
 
+    await logUsage(supabase, {
+      orgId,
+      userId: meeting.seller_id,
+      meetingId,
+      operation: "analise",
+      provider: "lovable-gateway",
+      model: ANALYSIS_MODEL,
+      inputTokens: aiResult.usage?.prompt_tokens ?? 0,
+      outputTokens: aiResult.usage?.completion_tokens ?? 0,
+      quantity: 1,
+      unit: "analise",
+      estimatedCost:
+        (aiResult.usage?.prompt_tokens ?? 0) * 0.0000003 +
+        (aiResult.usage?.completion_tokens ?? 0) * 0.0000025,
+    });
+
     let analysisData;
     try {
       const jsonStr = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
@@ -497,6 +452,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
 
     const { error: insertError } = await supabase.from("analysis_results").insert({
       meeting_id: meetingId,
+      org_id: orgId,
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
       bant_score: analysisData.bant_score,
@@ -508,7 +464,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
       sales_coach: analysisData.sales_coach,
       rag_results: analysisData.rag_results || null,
       raw_analysis: analysisData,
-      model_used: "google/gemini-2.5-flash",
+      model_used: ANALYSIS_MODEL,
     });
 
     if (insertError) {
@@ -523,6 +479,7 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
     if (analysisData.highlights && Array.isArray(analysisData.highlights)) {
       const rows = analysisData.highlights.map((h: any) => ({
         meeting_id: meetingId,
+        org_id: orgId,
         highlight_type: h.type,
         text: h.text,
         speaker: h.speaker || null,
@@ -552,61 +509,67 @@ Analise com profundidade. Seja específico nas sugestões.${hasKnowledge ? " Use
   }
 }
 
-// ── Handler ──
+// ── Handler ─────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
+    // Chamada interna (upload-recording, import-bulk-meetings) traz o segredo
+    // compartilhado; chamada do app traz o token do usuário.
+    const internal = isInternalCall(req);
+    const ctx = internal ? null : await getCaller(req);
+    const admin = ctx?.admin ?? adminClient();
+
     const { meetingId, manualTranscript } = await req.json();
+
     if (!meetingId) {
-      return new Response(JSON.stringify({ error: "meetingId is required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "meetingId is required" }, 400);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const meetingQuery = admin
+      .from("meetings")
+      .select("id, status, seller_id, org_id")
+      .eq("id", meetingId);
 
-    const { data: meeting } = await supabase
-      .from("meetings").select("id, status").eq("id", meetingId).single();
+    // Do app, a reunião precisa ser da organização de quem chamou.
+    const { data: meeting } = ctx
+      ? await meetingQuery.eq("org_id", ctx.orgId).maybeSingle()
+      : await meetingQuery.maybeSingle();
 
     if (!meeting) {
-      return new Response(JSON.stringify({ error: "Meeting not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json(req, { error: "Reunião não encontrada" }, 404);
     }
 
-    // Reset error_message on (re)processing dispatch.
-    await supabase.from("meetings").update({
+    if (ctx && meeting.seller_id !== ctx.userId && ctx.role !== "admin") {
+      return json(req, { error: "Sem permissão para processar esta reunião" }, 403);
+    }
+
+    await assertQuota(admin, meeting.org_id, "analise", 1);
+
+    await admin.from("meetings").update({
       status: "transcrevendo",
       error_message: null,
     }).eq("id", meetingId);
 
     EdgeRuntime.waitUntil(
-      processeMeeting(meetingId, manualTranscript || null).catch((err) => {
+      processMeeting(meetingId, manualTranscript || null).catch((err) => {
         console.error("Background processing failed:", err);
         const msg = err instanceof Error ? err.message : "Erro inesperado no processamento.";
-        supabase.from("meetings").update({
+        adminClient().from("meetings").update({
           status: "erro",
           error_message: msg,
         }).eq("id", meetingId);
       })
     );
 
-    return new Response(JSON.stringify({ success: true, message: "Processing started" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(req, { success: true, message: "Processing started" });
   } catch (error) {
+    if (error instanceof HttpError) {
+      return json(req, { error: error.message, code: error.code }, error.status);
+    }
     console.error("analyze-meeting error:", error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json(req, { error: error instanceof Error ? error.message : "Unknown error" }, 500);
   }
 });

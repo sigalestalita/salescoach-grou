@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrgConfig } from "@/hooks/useOrgConfig";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare } from "lucide-react";
 
@@ -29,15 +30,19 @@ interface SellerOption {
   name: string;
 }
 
-const TEMP_COLORS: Record<string, string> = {
-  muito_quente: "hsl(0 85% 45%)",
-  quente: "hsl(var(--destructive))",
-  morno: "hsl(var(--warning, 38 92% 50%))",
-  frio: "hsl(var(--info, 210 100% 50%))",
-  congelado: "hsl(220 15% 60%)",
-};
+// Da faixa mais quente para a mais fria. Funciona com qualquer quantidade de
+// faixas configuradas pela organização.
+const TEMP_PALETTE: string[] = [
+  "hsl(0 85% 45%)",
+  "hsl(var(--destructive))",
+  "hsl(var(--warning, 38 92% 50%))",
+  "hsl(var(--info, 210 100% 50%))",
+  "hsl(220 15% 60%)",
+];
 
 const Dashboard = () => {
+  // Metodologia e faixas de temperatura vêm da configuração da organização.
+  const { config } = useOrgConfig();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
@@ -45,7 +50,9 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedSeller]);
+  // Refaz o cálculo quando a configuração da organização chega, para que os
+  // critérios e faixas usados sejam os do cliente e não os padrões.
+  }, [selectedSeller, config]);
 
   const fetchDashboardData = async () => {
     try {
@@ -103,20 +110,26 @@ const Dashboard = () => {
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : null;
 
       // Temperature distribution
-      const tempCounts: Record<string, number> = { muito_quente: 0, quente: 0, morno: 0, frio: 0, congelado: 0 };
+      const levels = config.temperatureLevels;
+      const tempCounts: Record<string, number> = {};
+      for (const level of levels) tempCounts[level.key] = 0;
       for (const m of completed) {
         if (m.temperature && m.temperature in tempCounts) {
           tempCounts[m.temperature]++;
         }
       }
-      const hotRate = completedMeetings > 0 ? Math.round(((tempCounts.quente + tempCounts.muito_quente) / completedMeetings) * 100) : 0;
-      const tempDistribution = [
-        { name: "Muito Quente", value: tempCounts.muito_quente, color: TEMP_COLORS.muito_quente },
-        { name: "Quente", value: tempCounts.quente, color: TEMP_COLORS.quente },
-        { name: "Morno", value: tempCounts.morno, color: TEMP_COLORS.morno },
-        { name: "Frio", value: tempCounts.frio, color: TEMP_COLORS.frio },
-        { name: "Congelado", value: tempCounts.congelado, color: TEMP_COLORS.congelado },
-      ].filter(t => t.value > 0);
+
+      // "Quente" = faixas da metade superior da escala configurada.
+      const hotKeys = levels.slice(Math.ceil(levels.length / 2)).map((l) => l.key);
+      const hotCount = hotKeys.reduce((sum, key) => sum + (tempCounts[key] ?? 0), 0);
+      const hotRate = completedMeetings > 0 ? Math.round((hotCount / completedMeetings) * 100) : 0;
+
+      // Da faixa mais quente para a mais fria, com a paleta na mesma ordem.
+      const tempDistribution = [...levels].reverse().map((level, idx, arr) => ({
+        name: level.label,
+        value: tempCounts[level.key] ?? 0,
+        color: TEMP_PALETTE[Math.min(idx, TEMP_PALETTE.length - 1)] ?? TEMP_PALETTE[TEMP_PALETTE.length - 1],
+      })).filter(t => t.value > 0);
 
       // Seller ranking (only when viewing all)
       const sellerData = new Map<string, { scores: number[]; count: number }>();
@@ -195,11 +208,12 @@ const Dashboard = () => {
       }
 
       // Average framework scores
-      const avgBant = computeAvgFramework(uniqueAnalyses, "bant_score", [
-        { key: "budget", label: "Orçamento" },
-        { key: "authority", label: "Autoridade" },
-        { key: "need", label: "Necessidade" },
-      ], 33);
+      const avgBant = computeAvgFramework(
+        uniqueAnalyses,
+        "bant_score",
+        config.criteria.map((c) => ({ key: c.key, label: c.label })),
+        config.maxCriterionScore,
+      );
 
 
       const avgMeddic = computeAvgFramework(uniqueAnalyses, "meddic_score", [
@@ -376,7 +390,9 @@ const Dashboard = () => {
               <Thermometer className="h-4 w-4" />
               Temperatura das Agendas
             </CardTitle>
-            <CardDescription>Distribuição NATO/BANT: Congelado → Muito Quente</CardDescription>
+            <CardDescription>
+              Distribuição {config.methodologyLabel}: {config.temperatureLevels[0]?.label} → {config.temperatureLevels[config.temperatureLevels.length - 1]?.label}
+            </CardDescription>
           </CardHeader>
           <CardContent className="h-64">
             {data.tempDistribution.length > 0 ? (
@@ -404,7 +420,11 @@ const Dashboard = () => {
 
       {/* Framework Averages */}
       <div className="grid gap-4 md:grid-cols-3 animate-stagger">
-        <FrameworkCard title={isFiltered ? "BAN Individual" : "BAN Médio"} items={data.avgBant} maxValue={33} />
+        <FrameworkCard
+          title={`${config.methodologyLabel} ${isFiltered ? "Individual" : "Médio"}`}
+          items={data.avgBant}
+          maxValue={config.maxCriterionScore}
+        />
         <FrameworkCard title={isFiltered ? "MEDDIC Individual" : "MEDDIC Médio"} items={data.avgMeddic} maxValue={17} />
         <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
       </div>

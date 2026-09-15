@@ -16,85 +16,44 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import type { LucideIcon } from "lucide-react";
 import {
   Loader2, Zap, Users, Clock, BarChart3, DollarSign, Brain, TrendingUp,
   MessageSquare, Mail, Video, FileText, ShieldCheck, Copy, Check,
   ChevronDown, ChevronUp, Package, Briefcase,
 } from "lucide-react";
 
-const PAIN_CATEGORIES = [
-  {
-    id: "pessoas",
-    label: "Pessoas & Turnover",
-    icon: Users,
-    pains: [
-      "Alto turnover",
-      "Baixa retenção de talentos",
-      "Contratações erradas (fit comportamental inadequado)",
-      "Falta de plano de desenvolvimento individual (PDI)",
-      "Baixo engajamento do time",
-    ],
-  },
-  {
-    id: "recrutamento",
-    label: "Recrutamento & Seleção",
-    icon: Clock,
-    pains: [
-      "Tempo elevado de contratação (time-to-hire alto)",
-      "Alto custo por contratação",
-      "Baixa assertividade nos processos seletivos",
-      "Excesso de retrabalho em seleção",
-      "Falta de critérios objetivos para contratação",
-    ],
-  },
-  {
-    id: "performance",
-    label: "Performance & Produtividade",
-    icon: BarChart3,
-    pains: [
-      "Baixa produtividade dos times",
-      "Falta de clareza de perfil ideal por função",
-      "Equipes desalinhadas com as demandas do negócio",
-      "Dificuldade em montar times de alta performance",
-      "Baixa previsibilidade de performance",
-    ],
-  },
-  {
-    id: "custos",
-    label: "Custos & Eficiência Operacional",
-    icon: DollarSign,
-    pains: [
-      "Alto custo operacional em RH",
-      "Processos manuais e pouco escaláveis",
-      "Falta de dados para tomada de decisão",
-      "Baixa eficiência em gestão de pessoas",
-      "Desperdício de investimento em contratações erradas",
-    ],
-  },
-  {
-    id: "lideranca",
-    label: "Liderança & Gestão",
-    icon: Brain,
-    pains: [
-      "Líderes despreparados para gerir pessoas",
-      "Falta de inteligência comportamental na gestão",
-      "Dificuldade em dar feedbacks eficazes",
-      "Conflitos internos recorrentes",
-      "Falta de visão estratégica sobre o time",
-    ],
-  },
-  {
-    id: "crescimento",
-    label: "Crescimento & Escala",
-    icon: TrendingUp,
-    pains: [
-      "Crescimento desorganizado do time",
-      "Dificuldade em escalar cultura",
-      "Falta de padronização nos processos de pessoas",
-      "Risco ao crescer sem estrutura de RH madura",
-    ],
-  },
-];
+/**
+ * Dores, ofertas e público-alvo vêm da configuração da organização. Antes eram
+ * listas fixas no componente, específicas de um único negócio.
+ */
+interface PainCategory {
+  id: string;
+  label: string;
+  icon: string | null;
+  pains: string[];
+}
+
+interface OfferType {
+  key: string;
+  label: string;
+  allows_item_selection: boolean;
+}
+
+interface Audience {
+  key: string;
+  label: string;
+}
+
+interface ContextField {
+  key: string;
+  label: string;
+  suffix?: string;
+}
+
+const ICONS: Record<string, LucideIcon> = {
+  Users, Clock, BarChart3, DollarSign, Brain, TrendingUp, Package, Briefcase, Zap,
+};
 
 interface GeneratedResult {
   arguments?: Array<{
@@ -126,16 +85,16 @@ export default function ArgumentGenerator() {
   const [result, setResult] = useState<GeneratedResult | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Context filters
-  const [segment, setSegment] = useState("");
-  const [companySize, setCompanySize] = useState("");
-  const [hrMaturity, setHrMaturity] = useState("");
-  const [saleType, setSaleType] = useState("");
-  const [estimatedTicket, setEstimatedTicket] = useState("");
-  const [audienceType, setAudienceType] = useState("rh");
+  // Contexto do lead: campos definidos pela organização.
+  const [contextValues, setContextValues] = useState<Record<string, string>>({});
+  const [contextFields, setContextFields] = useState<ContextField[]>([]);
+  const [audiences, setAudiences] = useState<Audience[]>([]);
+  const [audienceType, setAudienceType] = useState("");
 
-  // Offer type
-  const [offerType, setOfferType] = useState<"pda" | "servicos" | "ambos">("ambos");
+  // Catálogos da organização.
+  const [painCategories, setPainCategories] = useState<PainCategory[]>([]);
+  const [offerTypes, setOfferTypes] = useState<OfferType[]>([]);
+  const [offerType, setOfferType] = useState("");
   const [services, setServices] = useState<Array<{ id: string; name: string; description: string | null }>>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
@@ -180,10 +139,52 @@ export default function ArgumentGenerator() {
     fetchServices();
   }, []);
 
+  // Catálogos da organização: dores, ofertas, público-alvo e campos de contexto.
+  useEffect(() => {
+    const fetchOrgCatalogs = async () => {
+      const [catsRes, itemsRes, offersRes, settingsRes] = await Promise.all([
+        supabase.from("pain_categories").select("id, label, icon, sort_order").order("sort_order"),
+        supabase.from("pain_items").select("id, category_id, label, sort_order").order("sort_order"),
+        supabase.from("offer_types").select("key, label, allows_item_selection, sort_order")
+          .eq("is_active", true).order("sort_order"),
+        supabase.from("org_settings").select("argument_audiences, argument_context_fields").maybeSingle(),
+      ]);
+
+      const items = itemsRes.data ?? [];
+      const categories: PainCategory[] = (catsRes.data ?? []).map((c) => ({
+        id: c.id,
+        label: c.label,
+        icon: c.icon,
+        pains: items.filter((i) => i.category_id === c.id).map((i) => i.label),
+      }));
+      setPainCategories(categories);
+      setExpandedCategories(categories.map((c) => c.id));
+
+      const offers = (offersRes.data ?? []) as OfferType[];
+      setOfferTypes(offers);
+      setOfferType((prev) => prev || offers[0]?.key || "");
+
+      const rawAudiences = settingsRes.data?.argument_audiences;
+      const parsedAudiences: Audience[] = Array.isArray(rawAudiences)
+        ? (rawAudiences as unknown as Audience[])
+        : [];
+      setAudiences(parsedAudiences);
+      setAudienceType((prev) => prev || parsedAudiences[0]?.key || "");
+
+      const rawFields = settingsRes.data?.argument_context_fields;
+      setContextFields(Array.isArray(rawFields) ? (rawFields as unknown as ContextField[]) : []);
+    };
+
+    fetchOrgCatalogs();
+  }, []);
+
+  const selectedOffer = offerTypes.find((o) => o.key === offerType) ?? null;
+  const allowsItemSelection = selectedOffer?.allows_item_selection !== false;
+
   const toggleService = (name: string) => {
     setSelectedServices(prev => prev.includes(name) ? prev.filter(s => s !== name) : [...prev, name]);
   };
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(PAIN_CATEGORIES.map(c => c.id));
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
 
   const togglePain = (pain: string) => {
     setSelectedPains(prev => prev.includes(pain) ? prev.filter(p => p !== pain) : [...prev, pain]);
@@ -209,12 +210,12 @@ export default function ArgumentGenerator() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-arguments", {
         body: {
-          context: { segment, companySize, hrMaturity, saleType, estimatedTicket },
+          context: contextValues,
           pains: selectedPains,
           audienceType,
           offerType,
-          selectedServices: offerType !== "pda" ? selectedServices : [],
-          selectedDocIds: offerType !== "pda" && servicesSource === "docs"
+          selectedServices: allowsItemSelection ? selectedServices : [],
+          selectedDocIds: allowsItemSelection && servicesSource === "docs"
             ? services.filter(s => selectedServices.includes(s.name)).map(s => s.id)
             : [],
         },
@@ -249,51 +250,35 @@ export default function ArgumentGenerator() {
               <CardTitle className="text-base">Contexto do Lead</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Segmento</Label>
-                <Input placeholder="Ex: Tecnologia, Varejo..." value={segment} onChange={e => setSegment(e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Nº de colaboradores</Label>
-                <Input placeholder="Ex: 200" value={companySize} onChange={e => setCompanySize(e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Maturidade de RH</Label>
-                <Select value={hrMaturity} onValueChange={setHrMaturity}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="baixo">Baixo</SelectItem>
-                    <SelectItem value="medio">Médio</SelectItem>
-                    <SelectItem value="alto">Alto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Tipo de venda</Label>
-                <Select value={saleType} onValueChange={setSaleType}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="novo">Novo cliente</SelectItem>
-                    <SelectItem value="expansao">Expansão</SelectItem>
-                    <SelectItem value="renovacao">Renovação</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Ticket estimado</Label>
-                <Input placeholder="Ex: R$ 50.000" value={estimatedTicket} onChange={e => setEstimatedTicket(e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Público-alvo</Label>
-                <Select value={audienceType} onValueChange={setAudienceType}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="c-level">C-Level / Decisores</SelectItem>
-                    <SelectItem value="rh">RH</SelectItem>
-                    <SelectItem value="gestores">Gestores Operacionais</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {contextFields.map((field) => (
+                <div key={field.key}>
+                  <Label className="text-xs text-muted-foreground" htmlFor={`ctx-${field.key}`}>
+                    {field.label}
+                  </Label>
+                  <Input
+                    id={`ctx-${field.key}`}
+                    placeholder={field.suffix ? `Ex: 200 ${field.suffix}` : "Opcional"}
+                    value={contextValues[field.key] ?? ""}
+                    onChange={(e) =>
+                      setContextValues((prev) => ({ ...prev, [field.key]: e.target.value }))
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              ))}
+              {audiences.length > 0 && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">Público-alvo</Label>
+                  <Select value={audienceType} onValueChange={setAudienceType}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {audiences.map((a) => (
+                        <SelectItem key={a.key} value={a.key}>{a.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -304,27 +289,23 @@ export default function ArgumentGenerator() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-3 gap-2">
-                {([
-                  { value: "pda" as const, label: "Licença PDA", icon: Package },
-                  { value: "servicos" as const, label: "Serviços Grou", icon: Briefcase },
-                  { value: "ambos" as const, label: "Ambos", icon: Zap },
-                ]).map(opt => (
+                {offerTypes.map(opt => (
                   <button
-                    key={opt.value}
-                    onClick={() => setOfferType(opt.value)}
+                    key={opt.key}
+                    onClick={() => setOfferType(opt.key)}
                     className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-all ${
-                      offerType === opt.value
+                      offerType === opt.key
                         ? "bg-primary/20 border-primary/50 text-primary"
                         : "border-border/50 text-muted-foreground hover:bg-accent/30"
                     }`}
                   >
-                    <opt.icon className="h-4 w-4" />
+                    <Package className="h-4 w-4" />
                     {opt.label}
                   </button>
                 ))}
               </div>
 
-              {offerType !== "pda" && services.length > 0 && (
+              {allowsItemSelection && services.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-border/30">
                   <Label className="text-xs text-muted-foreground">Serviços/Treinamentos disponíveis</Label>
                   <div className="max-h-[150px] overflow-y-auto space-y-1.5">
@@ -354,7 +335,7 @@ export default function ArgumentGenerator() {
                 </div>
               )}
 
-              {offerType !== "pda" && services.length === 0 && (
+              {allowsItemSelection && services.length === 0 && (
                 <p className="text-xs text-muted-foreground italic">
                   Nenhum serviço cadastrado na base de conhecimento. Cadastre serviços/treinamentos para ativar este filtro.
                 </p>
@@ -368,8 +349,8 @@ export default function ArgumentGenerator() {
               <CardDescription className="text-xs">Selecione as dores identificadas</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 max-h-[400px] overflow-y-auto">
-              {PAIN_CATEGORIES.map(cat => {
-                const Icon = cat.icon;
+              {painCategories.map(cat => {
+                const Icon = (cat.icon && ICONS[cat.icon]) || Zap;
                 const expanded = expandedCategories.includes(cat.id);
                 const selectedCount = cat.pains.filter(p => selectedPains.includes(p)).length;
                 return (

@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import logo from "@/assets/logo.png";
+import fallbackLogo from "@/assets/logo.png";
+import { useBranding } from "@/contexts/BrandingContext";
 
 // --- Flashcard slides ---
 
@@ -17,18 +18,18 @@ const slides = [
       <svg viewBox="0 0 200 80" className="w-full h-24 overflow-visible">
         <defs>
           <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(24,100%,50%)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="hsl(24,100%,60%)" stopOpacity="0.8" />
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.8" />
           </linearGradient>
           <linearGradient id="ag1" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="hsl(24,100%,55%)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="hsl(24,100%,55%)" stopOpacity="0" />
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d="M0,60 Q20,55 40,45 T80,30 T120,40 T160,20 T200,10" fill="none" stroke="url(#lg1)" strokeWidth="2" className="auth-line-draw" />
         <path d="M0,60 Q20,55 40,45 T80,30 T120,40 T160,20 T200,10 L200,80 L0,80 Z" fill="url(#ag1)" className="auth-area-fade" />
         {[{ cx: 0, cy: 60 }, { cx: 40, cy: 45 }, { cx: 80, cy: 30 }, { cx: 120, cy: 40 }, { cx: 160, cy: 20 }, { cx: 200, cy: 10 }].map((d, i) => (
-          <circle key={i} cx={d.cx} cy={d.cy} r="3" fill="hsl(24,100%,55%)" className="opacity-0" style={{ animation: `dotAppear 0.3s ease-out ${0.3 + i * 0.15}s forwards` }} />
+          <circle key={i} cx={d.cx} cy={d.cy} r="3" fill="hsl(var(--primary))" className="opacity-0" style={{ animation: `dotAppear 0.3s ease-out ${0.3 + i * 0.15}s forwards` }} />
         ))}
       </svg>
     ),
@@ -40,7 +41,7 @@ const slides = [
         {[40, 65, 50, 80, 55, 90, 70].map((h, i) => (
           <div
             key={i}
-            className="w-5 rounded-t bg-gradient-to-t from-orange-500 to-orange-300 opacity-0"
+            className="w-5 rounded-t bg-gradient-to-t from-[hsl(var(--primary))] to-[hsl(var(--primary)/0.5)] opacity-0"
             style={{
               height: `${h}%`,
               animation: `barGrow 0.6s ease-out ${i * 0.12}s forwards, barPulse 3s ease-in-out ${i * 0.12 + 0.6}s infinite`,
@@ -56,8 +57,8 @@ const slides = [
       <div className="flex justify-center">
         <svg viewBox="0 0 80 80" className="w-24 h-24">
           <circle cx="40" cy="40" r="30" fill="none" stroke="hsl(var(--sidebar-accent))" strokeWidth="6" />
-          <circle cx="40" cy="40" r="30" fill="none" stroke="hsl(24,100%,55%)" strokeWidth="6" strokeLinecap="round" strokeDasharray="188.5" strokeDashoffset="188.5" transform="rotate(-90 40 40)" className="auth-ring-fill" />
-          <text x="40" y="44" textAnchor="middle" fill="hsl(24,100%,55%)" fontSize="14" fontWeight="bold" className="opacity-0" style={{ animation: "dotAppear 0.3s ease-out 1s forwards" }}>A+</text>
+          <circle cx="40" cy="40" r="30" fill="none" stroke="hsl(var(--primary))" strokeWidth="6" strokeLinecap="round" strokeDasharray="188.5" strokeDashoffset="188.5" transform="rotate(-90 40 40)" className="auth-ring-fill" />
+          <text x="40" y="44" textAnchor="middle" fill="hsl(var(--primary))" fontSize="14" fontWeight="bold" className="opacity-0" style={{ animation: "dotAppear 0.3s ease-out 1s forwards" }}>A+</text>
         </svg>
       </div>
     ),
@@ -73,7 +74,7 @@ const slides = [
         ].map((m, i) => (
           <div key={i} className="bg-sidebar-accent/50 backdrop-blur-sm rounded-lg px-3 py-3 border border-sidebar-border opacity-0" style={{ animation: `floatUp 0.4s ease-out ${i * 0.15}s forwards` }}>
             <div className="text-xs text-sidebar-foreground/50">{m.label}</div>
-            <div className="text-lg font-bold text-orange-400">{m.value}</div>
+            <div className="text-lg font-bold text-primary">{m.value}</div>
           </div>
         ))}
       </div>
@@ -91,6 +92,8 @@ const Auth = () => {
   const [slideState, setSlideState] = useState<"in" | "out">("in");
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { branding } = useBranding();
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -114,15 +117,11 @@ const Auth = () => {
         .from("user_roles")
         .select("role")
         .eq("user_id", data.user.id)
-        .single();
+        .maybeSingle();
 
       if (!roleData) {
-        await supabase.auth.signOut();
-        toast({
-          title: "Acesso negado",
-          description: "Usuário sem papel definido. Contate o administrador.",
-          variant: "destructive",
-        });
+        // Conta válida que ainda não foi vinculada a uma organização.
+        navigate("/sem-organizacao");
         return;
       }
 
@@ -131,6 +130,32 @@ const Auth = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      toast({
+        title: "Informe seu email",
+        description: "Preencha o campo de email para receber o link de redefinição.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setResetting(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) throw error;
+      toast({
+        title: "Link enviado",
+        description: "Se existir uma conta com este email, o link de redefinição chegará em instantes.",
+      });
+    } catch (error: any) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -147,11 +172,17 @@ const Auth = () => {
 
         <div className="max-w-md w-full text-center space-y-6 relative z-10">
           <div className="flex justify-center mb-4">
-            <img src={logo} alt="Sales Coach" className="h-16 object-contain" />
+            <img
+              src={branding.logo_url ?? fallbackLogo}
+              alt={branding.product_name}
+              className="h-16 object-contain"
+            />
           </div>
-          <h1 className="text-4xl font-bold text-primary-foreground">Sales Coach</h1>
+          <h1 className="text-4xl font-bold text-primary-foreground">
+            {branding.login_headline ?? branding.product_name}
+          </h1>
           <p className="text-base text-primary-foreground/60">
-            Análise inteligente de reuniões comerciais com IA avançada
+            {branding.login_subheadline ?? "Análise inteligente de reuniões comerciais com IA"}
           </p>
 
           {/* Flashcard area */}
@@ -177,7 +208,7 @@ const Auth = () => {
                   key={i}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     i === currentSlide
-                      ? "w-6 bg-orange-400"
+                      ? "w-6 bg-primary"
                       : "w-1.5 bg-sidebar-foreground/20"
                   }`}
                 />
@@ -207,6 +238,14 @@ const Auth = () => {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Carregando..." : "Entrar"}
               </Button>
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={resetting}
+                className="w-full text-sm text-muted-foreground hover:text-foreground"
+              >
+                {resetting ? "Enviando..." : "Esqueci minha senha"}
+              </button>
             </form>
           </CardContent>
         </Card>

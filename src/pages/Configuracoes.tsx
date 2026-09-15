@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Settings, Brain, Database, CreditCard, Users, Plus, KeyRound, Trash2, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BrandingSettings } from "@/components/settings/BrandingSettings";
+import { MethodologySettings } from "@/components/settings/MethodologySettings";
+import { PlanUsageCard } from "@/components/settings/PlanUsageCard";
 
 interface ManagedUser {
   id: string;
@@ -367,61 +370,31 @@ const Configuracoes = () => {
         </DialogContent>
       </Dialog>
 
+      {role === "admin" && (
+        <>
+          <BrandingSettings />
+          <MethodologySettings />
+        </>
+      )}
+
+      <PlanUsageCard />
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Brain className="h-5 w-5" />
-              Modelo de IA
-            </CardTitle>
-            <CardDescription>Modelo utilizado para análises</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Modelo ativo</span>
-              <Badge>Lovable AI</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              O sistema utiliza Lovable AI (Google Gemini) para transcrição e análise das reuniões.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
               <Database className="h-5 w-5" />
-              Base de Dados
+              Dados e privacidade
             </CardTitle>
-            <CardDescription>Informações sobre armazenamento</CardDescription>
+            <CardDescription>Onde ficam as gravações e análises</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Backend</span>
-              <Badge variant="secondary">Lovable Cloud</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Dados armazenados de forma segura com Lovable Cloud.
+            <p className="text-sm text-muted-foreground">
+              Gravações, transcrições e base de conhecimento ficam isoladas por empresa. Nenhum outro
+              cliente da plataforma tem acesso aos dados desta conta.
             </p>
           </CardContent>
         </Card>
-
-        {role === "admin" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CreditCard className="h-5 w-5" />
-                Custos de API
-              </CardTitle>
-              <CardDescription>Monitoramento de uso</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                O monitoramento detalhado de custos estará disponível após as primeiras análises.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         <Card>
           <CardHeader>

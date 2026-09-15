@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Target, Thermometer, MessageSquare, Mic, Link as LinkIcon, ChevronDown, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, Info } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
+import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
@@ -46,6 +47,11 @@ interface Props {
 }
 
 export const MeetingAnalysisView = ({ meeting, analysis, transcription, highlights, mediaUrl }: Props) => {
+  // Metodologia, critérios e faixas de temperatura vêm da configuração da
+  // organização — não há framework fixo no componente.
+  const { config } = useOrgConfig();
+  const tempLabels = temperatureLabels(config.temperatureLevels);
+
   const bant = analysis?.bant_score as any;
   const meddic = analysis?.meddic_score as any;
   const spin = analysis?.spin_score as any;
@@ -185,9 +191,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
               <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Thermometer className="h-4 w-4" /> Temperatura</CardTitle></CardHeader>
               <CardContent>
                 <div className="text-2xl sm:text-3xl font-bold text-center capitalize break-words">
-                  {meeting.temperature
-                    ? { congelado: "🧊 Congelado", frio: "❄️ Frio", morno: "🌤️ Morno", quente: "🔥 Quente", muito_quente: "🔥🔥 Muito Quente" }[meeting.temperature] || meeting.temperature
-                    : "--"}
+                  {meeting.temperature ? tempLabels[meeting.temperature] || meeting.temperature : "--"}
                 </div>
                 {rawAnalysis?.temperature_reason && <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.temperature_reason}</p>}
               </CardContent>
@@ -210,14 +214,15 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
           {/* Frameworks */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
-              <CardHeader><CardTitle className="text-sm">BAN Score</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm">{config.methodologyLabel} Score</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {bant ? ["budget", "authority", "need"].map((key) => {
-                  const { score, reason } = getMetricValue(bant[key]);
+                {bant ? config.criteria.map((criterion) => {
+                  const { score, reason } = getMetricValue(bant[criterion.key]);
+                  const max = criterion.max_score ?? config.maxCriterionScore;
                   return (
-                    <div key={key} className="space-y-1">
-                      <div className="flex justify-between text-xs"><span className="capitalize">{key === "need" ? "Necessidade" : key === "budget" ? "Orçamento" : "Autoridade"}</span><span>{score}/33</span></div>
-                      <Progress value={(score / 33) * 100} />
+                    <div key={criterion.key} className="space-y-1">
+                      <div className="flex justify-between text-xs"><span>{criterion.label}</span><span>{score}/{max}</span></div>
+                      <Progress value={max > 0 ? (score / max) * 100 : 0} />
                       {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
                     </div>
                   );

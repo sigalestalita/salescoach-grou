@@ -107,6 +107,48 @@ function showRecordingUI() {
   formSection.classList.remove('hidden');
   activeRecording.classList.add('hidden');
   uploadStatus.classList.add('hidden');
+  loadMeetingTypes();
+}
+
+// Os tipos de reunião são configurados por empresa; a RLS já devolve apenas os
+// da organização do usuário logado.
+async function loadMeetingTypes() {
+  const select = document.getElementById('meeting-type');
+  if (!select) return;
+
+  const { accessToken } = await chrome.storage.local.get(['accessToken']);
+  if (!accessToken) return;
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/meeting_types?select=key,label&is_active=eq.true&order=sort_order`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const types = await res.json();
+    select.innerHTML = '';
+
+    if (!Array.isArray(types) || types.length === 0) {
+      select.innerHTML = '<option value="">Sem tipos configurados</option>';
+      return;
+    }
+
+    for (const type of types) {
+      const option = document.createElement('option');
+      option.value = type.key;
+      option.textContent = type.label;
+      select.appendChild(option);
+    }
+  } catch (err) {
+    console.error('Falha ao carregar tipos de reunião:', err);
+    select.innerHTML = '<option value="">Não foi possível carregar</option>';
+  }
 }
 
 function showActiveRecording(mode) {
