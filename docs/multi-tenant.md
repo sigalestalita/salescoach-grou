@@ -109,13 +109,35 @@ liga uma proteção ou um recurso:
 > `google/gemini-3.5-flash` existe no gateway: se não existir, o coach ao vivo
 > nunca emitiu dica e a variável acima resolve sem novo deploy.
 
+## Quem pode subir cliente novo
+
+Dois caminhos, e **ainda não existe tela para isso** — o backend do painel do
+provedor está pronto (`platform-orgs`), a interface não.
+
+**Pelo SQL do backend.** É o caminho de hoje e não exige cadastro nenhum: ali
+não há usuário autenticado, e `provision_organization` aceita a chamada. Use
+`supabase/tests/novo-cliente.sql`: ajuste nome, subdomínio, produto e e-mail do
+administrador, execute, e ele devolve o link do convite.
+
+**Pela função `platform-orgs`.** Exige um usuário cadastrado em
+`platform_admins`, que é como se concede o acesso de operador da plataforma:
+
+```sql
+INSERT INTO public.platform_admins (user_id, note)
+SELECT user_id, 'operação da plataforma'
+FROM public.profiles
+WHERE full_name = 'SEU NOME';
+```
+
+Esse acesso dá visão de organizações, planos e consumo — e nunca de conteúdo
+de reunião, transcrição ou base de conhecimento dos clientes. Não há policy que
+permita isso a um administrador de plataforma; para dar suporte a um cliente é
+preciso ser membro da organização dele.
+
 ## Colocar uma empresa nova no ar
 
-1. Cadastre um operador em `platform_admins` (uma vez, direto no banco):
-   ```sql
-   INSERT INTO public.platform_admins (user_id, note)
-   VALUES ('<uuid do usuário>', 'operação da plataforma');
-   ```
+1. Cadastre um operador em `platform_admins` (só necessário para o caminho pela
+   função; pelo SQL do backend não é preciso).
 2. Chame a função `platform-orgs` com `action: "create_org"`:
    ```json
    {
