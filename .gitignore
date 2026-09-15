@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cluster temporário do ensaio de migração
+supabase/tests/pgdata
+supabase/tests/postgres.log

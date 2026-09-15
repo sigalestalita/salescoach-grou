@@ -18,6 +18,27 @@ Dois testes protegem isso:
 - `src/test/no-tenant-hardcoding.test.ts` — falha se um termo de negócio de um
   cliente específico voltar para dentro do código.
 
+## Ensaiar antes de aplicar
+
+O repositório traz um ensaio que roda a migração inteira contra um Postgres
+local, sem depender de Supabase nem de credencial:
+
+```bash
+brew install postgresql@16   # uma vez
+./supabase/tests/ensaio.sh
+```
+
+O script sobe um cluster temporário, aplica um shim do Supabase (papéis,
+`auth.uid()`, schema de storage), roda as migrações que já estão em produção,
+recria um banco com o estado de hoje (usuários, reuniões, análises, base de
+conhecimento, arquivos, links de compartilhamento), aplica as migrações novas e
+verifica 56 afirmações — entre elas que nenhum dado perde organização, que a
+configuração de hoje é preservada, que uma empresa não enxerga a outra e que os
+papéis continuam se comportando como antes.
+
+Qualquer falha interrompe o script. Vale rodar depois de mexer em qualquer
+policy.
+
 ## Ordem do deploy
 
 As migrações são incrementais e dependentes entre si. Aplique na ordem:
