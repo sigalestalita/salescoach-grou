@@ -99,6 +99,18 @@ export async function getCaller(req: Request): Promise<CallerContext> {
     .eq("org_id", profile.org_id)
     .maybeSingle();
 
+  // Organização suspensa ou cancelada não executa trabalho novo. A leitura
+  // continua pela RLS; aqui só passam as funções que gastam ou escrevem.
+  const { data: org } = await admin
+    .from("organizations")
+    .select("status")
+    .eq("id", profile.org_id)
+    .maybeSingle();
+
+  if (!org || !["trial", "active", "past_due"].includes(org.status)) {
+    throw new HttpError(402, "Conta suspensa. Fale com o administrador da plataforma.", "ORG_INACTIVE");
+  }
+
   return {
     userId: user.id,
     email: user.email ?? null,
