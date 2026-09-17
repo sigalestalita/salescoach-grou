@@ -84,8 +84,13 @@ export function LiveMeetingPanel({ meetingId }: { meetingId: string }) {
                 <span className="text-primary font-semibold">{t.categoria}</span>
                 <Badge variant={urgencyColor(t.urgencia) as any} className="h-4 text-[9px]">{t.urgencia}</Badge>
               </div>
-              <p className="text-sm font-medium">{t.titulo}</p>
-              {t.acao && <p className="text-xs text-muted-foreground italic">{t.acao}</p>}
+              {t.acao && (
+                <p className="text-sm font-semibold leading-snug text-foreground">
+                  <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-primary">Fale agora</span>
+                  {t.acao}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">{t.titulo}</p>
             </div>
           ))}
         </CardContent>

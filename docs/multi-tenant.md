@@ -192,6 +192,19 @@ domínio próprio é o campo `custom_domain` na organização, apontado por CNAM
 - **Administrador da plataforma** vê organizações, planos e consumo — nunca
   conteúdo de reunião, transcrição ou base de conhecimento dos clientes.
 
+## Coach ao vivo
+
+A cada trecho final da transcrição (no máximo a cada 8 s), a `live-coach`
+monta o contexto da organização — persona, metodologia e critérios de
+qualificação, faixas de temperatura, tipo de reunião, ofertas e os trechos da
+base de conhecimento mais relacionados ao que está sendo dito — e pede uma
+única orientação: por que agora (`titulo`) e a frase exata para o vendedor
+falar (`acao`). A extensão e o painel da reunião mostram a frase em destaque.
+
+A relevância da base é por sobreposição de termos com a conversa recente, não
+por embeddings; é o suficiente para trazer o documento certo quando o lead
+cita um produto, uma dor ou um concorrente pelo nome.
+
 ## Medição e cotas
 
 Toda operação que custa dinheiro grava em `api_usage_logs` com `org_id`, e um

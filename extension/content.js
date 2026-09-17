@@ -423,8 +423,8 @@
         <span class="sc-tip-cat">${escape(tip.categoria || 'dica')}</span>
         <span class="sc-tip-urg">${escape(tip.urgencia || 'media')}</span>
       </div>
+      ${tip.acao ? `<div class="sc-tip-action"><span class="sc-tip-say">Fale agora</span>${escape(tip.acao)}</div>` : ''}
       <div class="sc-tip-title">${escape(tip.titulo || '')}</div>
-      ${tip.acao ? `<div class="sc-tip-action">${escape(tip.acao)}</div>` : ''}
     `;
     tipsEl.prepend(card);
     while (tipsEl.children.length > 5) tipsEl.removeChild(tipsEl.lastChild);

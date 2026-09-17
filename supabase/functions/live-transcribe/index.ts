@@ -129,9 +129,9 @@ Deno.serve(async (req) => {
             is_final: true,
             speaker: "unknown",
           });
-          // throttle coach: at most every 12s
+          // Coach no máximo a cada 8s: abaixo disso as dicas se atropelam.
           const now = Date.now();
-          if (now - lastCoachAt > 12_000) {
+          if (now - lastCoachAt > 8_000) {
             lastCoachAt = now;
             fetch(`${SUPABASE_URL}/functions/v1/live-coach`, {
               method: "POST",
