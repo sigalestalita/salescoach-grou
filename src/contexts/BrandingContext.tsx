@@ -132,11 +132,13 @@ export const BrandingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   /** Marca resolvida pelo host, disponível antes do login. */
   const loadFromHost = useCallback(async (): Promise<Branding | null> => {
+    // Envia subdomínio e domínio completo: a organização pode estar cadastrada
+    // por um ou por outro (custom_domain cobre o endereço atual da instalação).
     const hostname = window.location.hostname;
     const slug = slugFromHost(hostname);
     const params = new URLSearchParams();
     if (slug) params.set("slug", slug);
-    else params.set("domain", hostname);
+    params.set("domain", hostname);
 
     try {
       const { data, error } = await supabase.functions.invoke(
