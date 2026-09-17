@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sales Coach AI - Gravador de Reuniões",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Grave suas reuniões comerciais com tela e áudio, com coaching ao vivo em tempo real.",
   "permissions": [
     "storage",
