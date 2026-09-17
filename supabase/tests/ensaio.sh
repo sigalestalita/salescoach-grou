@@ -54,9 +54,8 @@ $PSQL -d "$DB" -f "$HERE/00-shim.sql" >/dev/null
 echo "→ Aplicando as migrações que já estão em produção"
 count=0
 for f in $(ls "$MIGRATIONS"/*.sql | sort); do
-  case "$(basename "$f")" in
-    20260914*) continue ;;
-  esac
+  # Tudo a partir de 20260914 pertence ao lote multi-tenant.
+  [[ "$(basename "$f")" > "20260913" ]] && continue
   $PSQL -d "$DB" -f "$f" >/dev/null
   count=$((count + 1))
 done
@@ -66,7 +65,8 @@ echo "→ Recriando o estado de hoje (usuários, reuniões, análises, arquivos)
 $PSQL -d "$DB" -f "$HERE/10-estado-atual.sql" >/dev/null
 
 echo "→ Aplicando as migrações novas"
-for f in $(ls "$MIGRATIONS"/20260914*.sql | sort); do
+for f in $(ls "$MIGRATIONS"/*.sql | sort); do
+  [[ "$(basename "$f")" > "20260913" ]] || continue
   echo "  $(basename "$f")"
   $PSQL -d "$DB" -f "$f" >/dev/null
 done

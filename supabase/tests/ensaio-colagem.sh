@@ -39,7 +39,7 @@ PSQL="psql -h $HOST -p $PORT -U postgres -v ON_ERROR_STOP=1 -q -d $DB"
 echo "→ Shim + migrações de produção + estado de hoje"
 $PSQL -f "$HERE/00-shim.sql" >/dev/null
 for f in $(ls "$MIGRATIONS"/*.sql | sort); do
-  case "$(basename "$f")" in 20260914*) continue ;; esac
+  [[ "$(basename "$f")" > "20260913" ]] && continue
   $PSQL -f "$f" >/dev/null
 done
 $PSQL -f "$HERE/10-estado-atual.sql" >/dev/null

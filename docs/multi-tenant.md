@@ -111,8 +111,13 @@ liga uma proteção ou um recurso:
 
 ## Quem pode subir cliente novo
 
-Dois caminhos, e **ainda não existe tela para isso** — o backend do painel do
-provedor está pronto (`platform-orgs`), a interface não.
+**Pelo painel da plataforma** (`/plataforma`). Aparece no menu de quem está em
+`platform_admins`. Lista as empresas com plano, usuários, reuniões e consumo do
+ciclo; cria empresa nova (com o link de convite do primeiro administrador
+pronto para copiar); suspende, reativa e troca plano.
+
+Para liberar o painel e criar o plano piloto, rode
+`supabase/tests/abrir-para-testes.sql` uma vez, com o seu e-mail.
 
 **Pelo SQL do backend.** É o caminho de hoje e não exige cadastro nenhum: ali
 não há usuário autenticado, e `provision_organization` aceita a chamada. Use

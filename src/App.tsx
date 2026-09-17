@@ -19,6 +19,8 @@ import NotFound from "./pages/NotFound";
 import SharedMeeting from "./pages/SharedMeeting";
 import AcceptInvite from "./pages/AcceptInvite";
 import SemOrganizacao from "./pages/SemOrganizacao";
+import Plataforma from "./pages/Plataforma";
+import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,23 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
     return <Navigate to="/agendas" replace />;
   }
   return <AppLayout>{children}</AppLayout>;
+}
+
+// Painel do provedor: exige sessão e cadastro em platform_admins. Não exige
+// organização — um operador da plataforma pode não pertencer a nenhuma.
+function PlatformRoute({ children }: { children: React.ReactNode }) {
+  const { session, loading } = useAuth();
+  const { isPlatformAdmin, loading: adminLoading } = usePlatformAdmin();
+  if (loading || adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+  if (!session) return <Navigate to="/auth" replace />;
+  if (!isPlatformAdmin) return <Navigate to="/" replace />;
+  return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -60,6 +79,7 @@ const App = () => (
             <Route path="/share/:token" element={<SharedMeeting />} />
             <Route path="/convite/:token" element={<AcceptInvite />} />
             <Route path="/sem-organizacao" element={<SemOrganizacao />} />
+            <Route path="/plataforma" element={<PlatformRoute><Plataforma /></PlatformRoute>} />
             <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Index /></ProtectedRoute>} />
             <Route path="/agendas" element={<ProtectedRoute><Agendas /></ProtectedRoute>} />
             <Route path="/agendas/:id" element={<ProtectedRoute><MeetingDetail /></ProtectedRoute>} />

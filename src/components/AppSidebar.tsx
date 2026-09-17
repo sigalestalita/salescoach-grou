@@ -7,9 +7,11 @@ import {
   LogOut,
   Zap,
   MonitorSmartphone,
+  Building2,
 } from "lucide-react";
 import fallbackLogo from "@/assets/logo.png";
 import { useBranding } from "@/contexts/BrandingContext";
+import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +49,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { profile, role, signOut } = useAuth();
   const { branding } = useBranding();
+  const { isPlatformAdmin } = usePlatformAdmin();
 
   const isActive = (path: string) =>
     path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
@@ -92,6 +95,24 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isPlatformAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Plataforma</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/plataforma")}>
+                    <NavLink to="/plataforma">
+                      <Building2 className="h-4 w-4" />
+                      {!collapsed && <span>Empresas clientes</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {(role === "admin" || role === "gestor") && (
           <SidebarGroup>
