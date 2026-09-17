@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import fullLogo from "@/assets/salescoach-logo.png";
+import mark from "@/assets/salescoach-mark.png";
 import markWhite from "@/assets/salescoach-mark-white.png";
 import { useBranding } from "@/contexts/BrandingContext";
 
@@ -43,7 +43,7 @@ const slides = [
   {
     title: "Score por executivo",
     content: (
-      <div className="flex h-28 items-end justify-start gap-2">
+      <div className="flex h-28 items-end justify-center gap-2">
         {[40, 65, 50, 80, 55, 90, 70].map((h, i) => (
           <div
             key={i}
@@ -60,7 +60,7 @@ const slides = [
   {
     title: "Qualificação da agenda",
     content: (
-      <div className="flex justify-start">
+      <div className="flex justify-center">
         <svg viewBox="0 0 80 80" className="h-24 w-24" aria-hidden="true">
           <circle cx="40" cy="40" r="30" fill="none" stroke="hsl(var(--muted))" strokeWidth="6" />
           <circle cx="40" cy="40" r="30" fill="none" stroke="hsl(var(--primary))" strokeWidth="6" strokeLinecap="round" strokeDasharray="188.5" strokeDashoffset="188.5" transform="rotate(-90 40 40)" className="auth-ring-fill" />
@@ -165,6 +165,20 @@ const Auth = () => {
     }
   };
 
+  // Parallax discreto: as esferas de luz seguem o mouse dentro do painel.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const onMove = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty("--mx", String(((e.clientX - r.left) / r.width - 0.5) * 2));
+      el.style.setProperty("--my", String(((e.clientY - r.top) / r.height - 0.5) * 2));
+    };
+    el.addEventListener("mousemove", onMove);
+    return () => el.removeEventListener("mousemove", onMove);
+  }, []);
+
   const slide = slides[currentSlide];
   const hasOwnLogo = !!branding.logo_url;
   const headline = branding.login_headline ?? branding.product_name;
@@ -173,23 +187,37 @@ const Auth = () => {
   return (
     <div className="flex min-h-screen">
       {/* Painel de marca */}
-      <div className="relative hidden flex-col justify-center bg-card px-14 py-12 lg:flex lg:w-[52%]">
-        <div className="mx-auto w-full max-w-md">
-          <div className="mb-8">
+      <div className="relative hidden flex-col items-center justify-center bg-card px-12 py-12 lg:flex lg:w-1/2">
+        <div className="flex w-full max-w-md flex-col items-center text-center">
+          {/* Símbolo: revelado por varredura, depois flutua com um brilho que respira */}
+          <div className="brand-stage brand-mark-float mb-6">
+            <div className="brand-glow" aria-hidden="true" />
             <img
-              src={hasOwnLogo ? branding.logo_url! : fullLogo}
+              src={hasOwnLogo ? branding.logo_url! : mark}
               alt={branding.product_name}
-              className={hasOwnLogo ? "h-16 object-contain" : "h-40 w-auto object-contain"}
+              className={`brand-mark object-contain ${hasOwnLogo ? "h-24 w-auto" : "h-28 w-28"}`}
             />
-            {hasOwnLogo && (
-              <h1 className="mt-5 text-3xl font-semibold tracking-tight text-foreground">{headline}</h1>
-            )}
+            <div className="brand-sweep" aria-hidden="true" />
           </div>
 
-          <p className="max-w-sm text-[15px] leading-relaxed text-muted-foreground">{subheadline}</p>
+          {/* Nome: duas palavras, duas entradas */}
+          <h1 className="text-[44px] leading-none text-foreground" aria-label={headline}>
+            {hasOwnLogo ? (
+              <span className="brand-word brand-word-1 font-semibold tracking-tight">{headline}</span>
+            ) : (
+              <>
+                <span className="brand-word brand-word-1 font-extrabold">Sales</span>
+                <span className="brand-word brand-word-2 font-light">&nbsp;Coach</span>
+              </>
+            )}
+          </h1>
+
+          <p className="brand-tagline mt-5 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
+            {subheadline}
+          </p>
 
           {/* Vinheta */}
-          <div className="mt-12 min-h-[190px]">
+          <div className="brand-vignette mt-12 min-h-[190px] w-full">
             <div
               key={currentSlide}
               className={`space-y-4 transition-all duration-300 ${
@@ -202,7 +230,7 @@ const Auth = () => {
               {slide.content}
             </div>
 
-            <div className="mt-6 flex gap-1.5" aria-hidden="true">
+            <div className="mt-6 flex justify-center gap-1.5" aria-hidden="true">
               {slides.map((_, i) => (
                 <div
                   key={i}
@@ -215,21 +243,21 @@ const Auth = () => {
           </div>
         </div>
 
-        <p className="absolute bottom-6 left-14 text-[11px] text-muted-foreground/70">
+        <p className="absolute bottom-6 text-[11px] text-muted-foreground/70">
           {branding.product_name} · {new Date().getFullYear()}
         </p>
       </div>
 
       {/* Painel de acesso */}
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-brand-gradient px-5 py-10">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-white/[0.06] blur-3xl"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-40 -left-24 h-96 w-96 rounded-full bg-white/[0.05] blur-3xl"
-        />
+      <div
+        ref={stageRef}
+        className="aurora-bg relative flex flex-1 items-center justify-center overflow-hidden px-5 py-10"
+      >
+        <div className="dot-grid" aria-hidden="true" />
+        <div className="orb -right-24 -top-24 h-[420px] w-[420px] bg-[hsl(214_80%_60%/0.35)]" aria-hidden="true" />
+        <div className="orb orb-2 -bottom-32 -left-20 h-[380px] w-[380px] bg-[hsl(200_90%_70%/0.22)]" aria-hidden="true" />
+        <div className="orb orb-3 left-1/2 top-1/3 h-[260px] w-[260px] bg-[hsl(230_70%_65%/0.18)]" aria-hidden="true" />
+        <div className="scan-line" aria-hidden="true" />
 
         <div className="relative w-full max-w-[400px]">
           {/* Marca compacta: só em telas sem o painel esquerdo */}
