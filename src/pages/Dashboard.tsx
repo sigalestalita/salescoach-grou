@@ -33,12 +33,33 @@ interface SellerOption {
 // Da faixa mais quente para a mais fria. Funciona com qualquer quantidade de
 // faixas configuradas pela organização.
 const TEMP_PALETTE: string[] = [
-  "hsl(0 85% 45%)",
+  "hsl(0 68% 38%)",
   "hsl(var(--destructive))",
-  "hsl(var(--warning, 38 92% 50%))",
-  "hsl(var(--info, 210 100% 50%))",
-  "hsl(220 15% 60%)",
+  "hsl(var(--warning))",
+  "hsl(var(--info))",
+  "hsl(215 16% 62%)",
 ];
+
+// Séries por executivo: matizes distintos em luminosidade parecida, ancorados
+// no azul da marca, legíveis sobre fundo claro.
+const SERIES_PALETTE: string[] = [
+  "hsl(214 74% 40%)",
+  "hsl(174 58% 34%)",
+  "hsl(28 80% 44%)",
+  "hsl(280 45% 48%)",
+  "hsl(340 60% 46%)",
+  "hsl(150 50% 36%)",
+  "hsl(196 70% 40%)",
+  "hsl(45 70% 40%)",
+];
+
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "6px",
+  color: "hsl(var(--foreground))",
+  fontSize: "12px",
+};
 
 const Dashboard = () => {
   // Metodologia e faixas de temperatura vêm da configuração da organização.
@@ -355,20 +376,19 @@ const Dashboard = () => {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 100]} className="text-xs" tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: 'hsl(222, 47%, 11%)', border: '1px solid hsl(217, 33%, 25%)', borderRadius: '8px', color: '#e2e8f0' }} labelStyle={{ color: '#94a3b8' }} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
                   {data.scoreEvolutionSellers.length > 0 ? (
                     <>
                       <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                       {data.scoreEvolutionSellers.map((sid, idx) => {
                         const sellerName = sellers.find(s => s.id === sid)?.name || sid.slice(0, 8);
-                        const colors = ["hsl(24, 95%, 53%)", "hsl(200, 80%, 50%)", "hsl(150, 70%, 45%)", "hsl(280, 70%, 55%)", "hsl(340, 75%, 50%)", "hsl(60, 80%, 45%)", "hsl(180, 60%, 45%)", "hsl(30, 90%, 45%)"];
                         return (
-                          <Line key={sid} type="monotone" dataKey={sid} stroke={colors[idx % colors.length]} strokeWidth={2} dot={{ r: 3 }} name={sellerName} connectNulls />
+                          <Line key={sid} type="monotone" dataKey={sid} stroke={SERIES_PALETTE[idx % SERIES_PALETTE.length]} strokeWidth={2} dot={{ r: 3 }} name={sellerName} connectNulls />
                         );
                       })}
                     </>
                   ) : (
-                    <Line type="monotone" dataKey="score" stroke="hsl(24, 95%, 53%)" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
                   )}
                 </LineChart>
               </ResponsiveContainer>

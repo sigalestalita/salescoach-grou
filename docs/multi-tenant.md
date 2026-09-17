@@ -109,6 +109,21 @@ liga uma proteção ou um recurso:
 > `google/gemini-3.5-flash` existe no gateway: se não existir, o coach ao vivo
 > nunca emitiu dica e a variável acima resolve sem novo deploy.
 
+## Identidade visual da plataforma
+
+A casca do sistema — tipografia Poppins, tema claro, menu navy, gradiente
+`#071A34 → #15498D` — é da plataforma e vale para todas as empresas. O que
+cada organização sobrescreve em runtime: cor principal, cor de destaque, fundo
+do menu, logo e nome do produto.
+
+Antes do login, a tela mostra o logotipo completo do Sales Coach (ou o logo da
+organização, quando o host resolve uma). Depois do login, só o símbolo. Os
+ativos estão em `src/assets/salescoach-*.png`; a versão branca do símbolo é a
+variante monocromática para o menu navy.
+
+Uma organização que ainda usa o padrão antigo recebe a paleta nova pelo
+`supabase/tests/aplicar-marca.sql`; quem já personalizou não é tocado.
+
 ## Quem pode subir cliente novo
 
 **Pelo painel da plataforma** (`/plataforma`). Aparece no menu de quem está em

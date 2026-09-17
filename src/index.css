@@ -3,115 +3,129 @@
 @tailwind utilities;
 
 /*
- * Paleta padrão da plataforma. Cada organização sobrescreve estes tokens em
- * tempo de execução (BrandingContext), então nenhuma cor aqui é a marca de um
- * cliente específico.
+ * Sistema visual da plataforma.
+ *
+ * Tema claro por padrão: superfície branca sobre um cinza frio, tipografia
+ * Poppins e a paleta do produto — navy #071A34, azul #15498D. O gradiente
+ * navy → azul aparece em um lugar por tela, nunca como fundo genérico.
+ *
+ * Cada organização sobrescreve, em tempo de execução, apenas a cor principal,
+ * a cor de destaque e o fundo do menu (BrandingContext). O restante é a casca
+ * da plataforma e vale para todo mundo.
  */
 @layer base {
   :root {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 92%;
+    /* Ground e superfícies */
+    --background: 220 33% 97%;
+    --foreground: 212 76% 12%;
 
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 92%;
+    --card: 0 0% 100%;
+    --card-foreground: 212 76% 12%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 92%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 76% 12%;
 
-    --primary: 217 91% 60%;
+    /* Marca (padrão da plataforma; por organização em runtime) */
+    --primary: 214 74% 32%;
     --primary-foreground: 0 0% 100%;
+    --brand-navy: 212 76% 12%;
+    --brand-accent: 214 74% 32%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 92%;
+    --secondary: 214 40% 94%;
+    --secondary-foreground: 212 76% 14%;
 
-    --muted: 217 33% 15%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 216 33% 94%;
+    --muted-foreground: 215 16% 42%;
 
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 92%;
+    --accent: 214 60% 95%;
+    --accent-foreground: 212 76% 14%;
 
-    --destructive: 0 84% 60%;
+    /* Semânticas — separadas da cor de marca */
+    --destructive: 0 68% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 42%;
+    --success: 152 60% 34%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 10%;
+    --warning: 34 90% 40%;
+    --warning-foreground: 0 0% 100%;
 
-    --info: 199 89% 48%;
+    --info: 204 78% 40%;
     --info-foreground: 0 0% 100%;
 
-    --border: 217 33% 18%;
-    --input: 217 33% 18%;
-    --ring: 217 91% 60%;
+    --border: 215 24% 88%;
+    --input: 215 24% 84%;
+    --ring: 214 74% 32%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
 
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 210 40% 92%;
-    --sidebar-primary: 217 91% 60%;
+    /* Menu lateral: navy da marca */
+    --sidebar-background: 212 76% 12%;
+    --sidebar-foreground: 210 40% 94%;
+    --sidebar-primary: 214 74% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 33% 14%;
-    --sidebar-accent-foreground: 210 40% 92%;
-    --sidebar-border: 217 33% 15%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 212 66% 18%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 212 50% 20%;
+    --sidebar-ring: 214 74% 45%;
 
-    --temp-cold: 199 89% 48%;
-    --temp-warm: 38 92% 50%;
-    --temp-hot: 0 84% 60%;
+    --temp-cold: 204 78% 40%;
+    --temp-warm: 34 90% 40%;
+    --temp-hot: 0 68% 46%;
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 92%;
+    --background: 212 60% 7%;
+    --foreground: 210 40% 94%;
 
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 92%;
+    --card: 212 55% 10%;
+    --card-foreground: 210 40% 94%;
 
-    --popover: 222 47% 9%;
-    --popover-foreground: 210 40% 92%;
+    --popover: 212 55% 10%;
+    --popover-foreground: 210 40% 94%;
 
-    --primary: 217 91% 60%;
+    --primary: 214 74% 55%;
     --primary-foreground: 0 0% 100%;
+    --brand-navy: 212 76% 12%;
+    --brand-accent: 214 74% 55%;
 
-    --secondary: 217 33% 15%;
-    --secondary-foreground: 210 40% 92%;
+    --secondary: 212 40% 16%;
+    --secondary-foreground: 210 40% 94%;
 
-    --muted: 217 33% 13%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 212 35% 15%;
+    --muted-foreground: 214 20% 68%;
 
-    --accent: 217 33% 15%;
-    --accent-foreground: 210 40% 92%;
+    --accent: 212 40% 16%;
+    --accent-foreground: 210 40% 94%;
 
-    --destructive: 0 63% 31%;
+    --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 76% 36%;
+    --success: 152 55% 42%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 50%;
+    --warning: 36 90% 52%;
     --warning-foreground: 0 0% 10%;
 
-    --info: 199 89% 48%;
+    --info: 204 80% 55%;
     --info-foreground: 0 0% 100%;
 
-    --border: 217 33% 15%;
-    --input: 217 33% 15%;
-    --ring: 217 91% 60%;
+    --border: 212 35% 18%;
+    --input: 212 35% 20%;
+    --ring: 214 74% 55%;
 
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 210 40% 92%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-background: 212 76% 9%;
+    --sidebar-foreground: 210 40% 94%;
+    --sidebar-primary: 214 74% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 33% 10%;
-    --sidebar-accent-foreground: 210 40% 92%;
-    --sidebar-border: 217 33% 10%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 212 60% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 212 45% 16%;
+    --sidebar-ring: 214 74% 55%;
 
-    --temp-cold: 199 89% 48%;
-    --temp-warm: 38 92% 50%;
-    --temp-hot: 0 63% 31%;
+    --temp-cold: 204 80% 55%;
+    --temp-warm: 36 90% 52%;
+    --temp-hot: 0 62% 50%;
   }
 }
 
@@ -119,34 +133,67 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss01" on, "cv11" on;
+  }
+  h1, h2, h3, h4 {
+    letter-spacing: -0.01em;
+  }
+  /* Dígitos alinhados em tabelas e métricas. */
+  table, .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* ===== Glass card effect ===== */
+/* ===== Cartões =====
+ * As classes abaixo eram efeitos de vidro e brilho; continuam existindo para
+ * as páginas que as usam, mas agora descrevem um cartão limpo.
+ */
 .glass-card {
-  @apply bg-card/60 backdrop-blur-sm border border-border/50;
+  @apply bg-card border border-border shadow-sm;
 }
 
-/* ===== Stagger fade-in animations ===== */
+.card-hover-glow {
+  @apply transition-shadow duration-200;
+}
+.card-hover-glow:hover {
+  box-shadow: 0 4px 16px -6px hsl(var(--brand-navy) / 0.18);
+}
+
+/* Fundo de página: plano, sem grade. */
+.bg-grid-subtle {
+  background-image: none;
+}
+
+/* Gradiente da marca — um por tela. */
+.bg-brand-gradient {
+  background-image: linear-gradient(135deg, hsl(var(--brand-navy)) 0%, hsl(var(--primary)) 100%);
+}
+
+/* ===== Entrada suave de listas ===== */
 .animate-stagger > * {
   opacity: 0;
-  animation: staggerFadeIn 0.5s ease-out forwards;
+  animation: staggerFadeIn 0.35s ease-out forwards;
 }
 .animate-stagger > *:nth-child(1) { animation-delay: 0s; }
-.animate-stagger > *:nth-child(2) { animation-delay: 0.08s; }
-.animate-stagger > *:nth-child(3) { animation-delay: 0.16s; }
-.animate-stagger > *:nth-child(4) { animation-delay: 0.24s; }
-.animate-stagger > *:nth-child(5) { animation-delay: 0.32s; }
-.animate-stagger > *:nth-child(6) { animation-delay: 0.4s; }
+.animate-stagger > *:nth-child(2) { animation-delay: 0.05s; }
+.animate-stagger > *:nth-child(3) { animation-delay: 0.1s; }
+.animate-stagger > *:nth-child(4) { animation-delay: 0.15s; }
+.animate-stagger > *:nth-child(5) { animation-delay: 0.2s; }
+.animate-stagger > *:nth-child(6) { animation-delay: 0.25s; }
 
 @keyframes staggerFadeIn {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ===== Auth page animations ===== */
+/* ===== Tela de login ===== */
 @keyframes barGrow {
   from { opacity: 0; transform: scaleY(0); transform-origin: bottom; }
   to { opacity: 1; transform: scaleY(1); transform-origin: bottom; }
@@ -154,17 +201,12 @@
 
 @keyframes barPulse {
   0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(0.85); }
+  50% { transform: scaleY(0.9); }
 }
 
 @keyframes floatUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes floatBob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
 }
 
 @keyframes dotAppear {
@@ -172,10 +214,19 @@
   to { opacity: 1; transform: scale(1); }
 }
 
+@keyframes authCardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-card-in {
+  animation: authCardIn 0.5s ease-out forwards;
+}
+
 .auth-line-draw {
   stroke-dasharray: 300;
   stroke-dashoffset: 300;
-  animation: lineDraw 1.5s ease-out 0.5s forwards;
+  animation: lineDraw 1.4s ease-out 0.4s forwards;
 }
 
 @keyframes lineDraw {
@@ -184,7 +235,7 @@
 
 .auth-area-fade {
   opacity: 0;
-  animation: areaFade 0.8s ease-out 1.2s forwards;
+  animation: areaFade 0.8s ease-out 1.1s forwards;
 }
 
 @keyframes areaFade {
@@ -192,27 +243,21 @@
 }
 
 .auth-ring-fill {
-  animation: ringFill 1.2s ease-out 0.8s forwards;
+  animation: ringFill 1.2s ease-out 0.7s forwards;
 }
 
 @keyframes ringFill {
   to { stroke-dashoffset: 34; }
 }
 
-/* ===== Subtle grid background ===== */
-.bg-grid-subtle {
-  background-image: linear-gradient(hsl(var(--foreground) / 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--foreground) / 0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-/* ===== Card hover glow ===== */
-.card-hover-glow {
-  @apply transition-all duration-300;
-  box-shadow: 0 0 15px -5px hsl(var(--primary) / 0.2);
-  border-color: hsl(var(--primary) / 0.25);
-}
-.card-hover-glow:hover {
-  box-shadow: 0 0 25px -5px hsl(var(--primary) / 0.35);
-  border-color: hsl(var(--primary) / 0.5);
+@media (prefers-reduced-motion: reduce) {
+  .animate-stagger > *,
+  .auth-card-in,
+  .auth-line-draw,
+  .auth-area-fade,
+  .auth-ring-fill {
+    animation: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
 }

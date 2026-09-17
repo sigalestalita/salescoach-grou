@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { MeetingAnalysisView } from "@/components/MeetingAnalysisView";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import logo from "@/assets/logo.png";
+import mark from "@/assets/salescoach-mark.png";
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-shared-meeting`;
 
@@ -35,15 +35,25 @@ const SharedMeeting = () => {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando análise…</div>;
   if (error || !data) return <div className="min-h-screen flex items-center justify-center text-destructive">{error || "Não encontrado"}</div>;
 
-  const { meeting, analysis, transcription, highlights, mediaUrl, seller } = data;
+  const { meeting, analysis, transcription, highlights, mediaUrl, seller, branding } = data;
+
+  // A página pública leva a marca da empresa dona da reunião: logo, nome e
+  // cor principal, aplicados só neste subárvore.
+  const brandStyle = branding?.primary_hsl
+    ? ({ "--primary": branding.primary_hsl, "--ring": branding.primary_hsl } as React.CSSProperties)
+    : undefined;
+  const productName: string = branding?.product_name ?? "Sales Coach";
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background">
-        <header className="border-b bg-card/50 backdrop-blur sticky top-0 z-10">
-          <div className="container max-w-6xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
-            <img src={logo} alt="Sales Coach" className="h-6 sm:h-8 shrink-0" />
-            <span className="text-[10px] sm:text-xs text-muted-foreground truncate">Análise compartilhada</span>
+      <div className="min-h-screen bg-background" style={brandStyle}>
+        <header className="sticky top-0 z-10 border-b border-border bg-card">
+          <div className="container mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <img src={branding?.logo_url ?? mark} alt={productName} className="h-7 w-7 shrink-0 object-contain sm:h-8 sm:w-8" />
+              <span className="truncate text-sm font-semibold text-foreground">{productName}</span>
+            </div>
+            <span className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:text-xs">Análise compartilhada</span>
           </div>
         </header>
         <main className="container max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
