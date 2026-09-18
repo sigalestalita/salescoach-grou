@@ -206,7 +206,6 @@
   .caps.hs .hs-track { --gap: 18px; align-items: stretch; }
   .caps.hs .hs-head .lead { margin-top: 12px; max-width: 64ch; }
   @media (max-width: 900px) { .product .bg-glow { display: none; } .show > * { min-width: 0; } }
-  @media (max-width: 560px) { .an-top { grid-template-columns: 1fr; justify-items: start; } .temp { width: auto; max-width: 100%; } .crit .row { grid-template-columns: 76px 1fr 42px; } }
   @media (max-width: 900px) { .caps.hs .hs-track { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } .caps.hs .hs-slide { width: auto; } }
   @media (max-width: 560px) { .caps.hs .hs-track { grid-template-columns: 1fr; } }
 
@@ -470,6 +469,8 @@
     .tip { opacity: 1; transform: none; }
     .spark .draw { stroke-dashoffset: 0; }
   }
+  /* Ajustes finais de mobile (depois das regras base, para vencer na ordem) */
+  @media (max-width: 560px) { .an-top { grid-template-columns: 1fr; justify-items: start; } .temp { width: auto; max-width: 100%; } .crit .row { grid-template-columns: 76px 1fr 42px; } }
 </style>
 </head>
 <body>
