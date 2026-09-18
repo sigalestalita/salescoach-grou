@@ -57,7 +57,7 @@
     --input: 215 24% 84%;
     --ring: 214 74% 32%;
 
-    --radius: 0.5rem;
+    --radius: 0.875rem;
 
     /* Menu lateral: navy da marca */
     --sidebar-background: 212 76% 12%;
@@ -160,11 +160,31 @@
 }
 
 .card-hover-glow {
-  @apply transition-shadow duration-200;
+  @apply transition-[box-shadow,transform] duration-200;
 }
 .card-hover-glow:hover {
-  box-shadow: 0 4px 16px -6px hsl(var(--brand-navy) / 0.18);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px -18px hsl(var(--brand-navy) / 0.35);
 }
+
+/* ===== Menu lateral flutuante ===== */
+.sidebar-pill {
+  @apply relative grid grid-cols-2 rounded-full p-1;
+  background: hsl(var(--sidebar-accent) / 0.8);
+}
+.sidebar-pill > button {
+  @apply relative z-10 h-8 rounded-full text-[11.5px] font-semibold uppercase tracking-[0.1em] transition-colors;
+  color: hsl(var(--sidebar-foreground) / 0.6);
+}
+.sidebar-pill > button[data-on="true"] {
+  color: hsl(var(--sidebar-background));
+}
+.sidebar-pill > i {
+  @apply absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full transition-transform duration-300;
+  background: hsl(var(--sidebar-foreground));
+  transition-timing-function: cubic-bezier(.22,1,.36,1);
+}
+.sidebar-pill[data-index="1"] > i { transform: translateX(100%); }
 
 /* Fundo de página: plano, sem grade. */
 .bg-grid-subtle {

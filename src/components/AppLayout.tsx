@@ -26,9 +26,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 items-center justify-between border-b border-border bg-card px-4 md:px-6">
+          <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
             <div className="flex items-center gap-3">
-              <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
+              <SidebarTrigger className="rounded-xl text-muted-foreground hover:bg-card hover:text-foreground" />
               {branding.org_name && (
                 <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
                   {branding.org_name}
@@ -37,7 +37,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
             <div className="flex items-center gap-3">
               {role && (
-                <span className="rounded-md border border-border bg-secondary px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-secondary-foreground">
+                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-secondary-foreground">
                   {ROLE_LABELS[role]}
                 </span>
               )}
@@ -46,7 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </span>
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-5 md:p-8">{children}</main>
+          <main className="flex-1 overflow-auto px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">{children}</main>
         </div>
       </div>
     </SidebarProvider>

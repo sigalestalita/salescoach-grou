@@ -636,22 +636,43 @@ const Agendas = () => {
           {filtered.map((meeting) => (
             <Card
               key={meeting.id}
-              className="cursor-pointer glass-card card-hover-glow transition-all"
+              className="cursor-pointer card-hover-glow"
               onClick={() => navigate(`/agendas/${meeting.id}`)}
             >
-              <CardContent className="p-4">
+              <CardContent className="p-4 md:p-5">
                 {(() => {
                   const isStalled = isMeetingProcessingStalled(meeting);
                   const statusLabel = isStalled ? "Travado" : (statusLabels[meeting.status] || meeting.status);
                   const statusClassName = isStalled
                     ? "bg-destructive/10 text-destructive"
                     : (statusColors[meeting.status] || "bg-muted text-muted-foreground");
+                  const score = meeting.overall_score;
+                  const scoreTone = score === null
+                    ? "bg-muted text-muted-foreground"
+                    : score >= 75 ? "bg-success/10 text-success"
+                    : score >= 55 ? "bg-warning/10 text-warning"
+                    : "bg-destructive/10 text-destructive";
+                  const tempTone: Record<string, string> = {
+                    congelado: "bg-muted text-muted-foreground",
+                    frio: "bg-info/10 text-info",
+                    morno: "bg-warning/10 text-warning",
+                    quente: "bg-destructive/10 text-destructive",
+                    muito_quente: "bg-destructive/15 text-destructive",
+                  };
 
                   return (
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <h3 className="font-semibold">{meeting.title}</h3>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-4">
+                  <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-xl font-bold tabular-nums ${scoreTone}`}>
+                    {score !== null ? score : <Target className="h-5 w-5 opacity-60" />}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate font-semibold">{meeting.title}</h3>
+                      <Badge variant="outline" className="rounded-full border-border/80 px-2.5 text-[11px] font-medium">
+                        {typeLabel(meeting.meeting_type)}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
                       {meeting.lead_name && <span>{meeting.lead_name}</span>}
                       {meeting.lead_company && <span>• {meeting.lead_company}</span>}
                       {meeting.meeting_date && (
@@ -662,23 +683,16 @@ const Agendas = () => {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs">
-                      {typeLabel(meeting.meeting_type)}
-                    </Badge>
-                    {meeting.overall_score !== null && (
-                      <div className="flex items-center gap-1">
-                        <Target className="h-4 w-4 text-primary" />
-                        <span className="font-bold text-primary">{meeting.overall_score}</span>
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2">
                     {meeting.temperature && (
-                      <span className="text-sm">{tempLabels[meeting.temperature]}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tempTone[meeting.temperature] ?? "bg-muted text-muted-foreground"}`}>
+                        {tempLabels[meeting.temperature]}
+                      </span>
                     )}
                     {meeting.status === "erro" && meeting.error_message ? (
                       <Tooltip>
                         <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Badge className={`${statusClassName} cursor-help`}>
+                          <Badge className={`${statusClassName} cursor-help rounded-full px-2.5`}>
                             {statusLabel}
                           </Badge>
                         </TooltipTrigger>
@@ -687,7 +701,7 @@ const Agendas = () => {
                         </TooltipContent>
                       </Tooltip>
                     ) : (
-                      <Badge className={statusClassName}>
+                      <Badge className={`${statusClassName} rounded-full px-2.5`}>
                         {statusLabel}
                       </Badge>
                     )}

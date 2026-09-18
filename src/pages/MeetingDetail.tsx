@@ -531,21 +531,21 @@ const MeetingDetail = () => {
 
           {/* Score Geral + Temperatura */}
           <div className="grid gap-4 md:grid-cols-3">
-            <Card className="md:col-span-1">
+            <Card className="md:col-span-1 border-0 bg-brand-gradient text-white">
               <CardHeader className="pb-2">
-               <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2 text-white/85">
                   <Target className="h-4 w-4" />
                   Score Geral
                   <MetricTooltip text="Avaliação geral da qualidade da reunião comercial, de 0 a 100. Considera técnica de vendas, qualificação do lead, rapport, identificação de dores e condução do processo comercial." />
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-5xl font-bold text-primary text-center">
+                <div className="text-5xl font-bold text-white text-center tracking-tight">
                   {analysis.overall_score ?? "--"}
                 </div>
-                <p className="text-xs text-center text-muted-foreground mt-1">de 100</p>
+                <p className="text-xs text-center text-white/70 mt-1">de 100</p>
                 {rawAnalysis?.overall_score_reason && (
-                  <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.overall_score_reason}</p>
+                  <p className="text-xs text-white/75 mt-2 text-center italic">{rawAnalysis.overall_score_reason}</p>
                 )}
               </CardContent>
             </Card>
