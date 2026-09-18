@@ -183,7 +183,9 @@ export interface UsageRecord {
     | "live_transcricao"
     | "live_coach"
     | "extracao_documento"
-    | "storage";
+    | "storage"
+    | "roleplay"
+    | "assistant_chat";
   model?: string | null;
   provider?: string | null;
   inputTokens?: number;

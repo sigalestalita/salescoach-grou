@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { SalesAssistant } from "@/components/SalesAssistant";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 
@@ -49,6 +50,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <main className="flex-1 overflow-auto px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">{children}</main>
         </div>
       </div>
+      <SalesAssistant />
     </SidebarProvider>
   );
 }

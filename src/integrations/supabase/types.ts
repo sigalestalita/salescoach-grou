@@ -208,6 +208,86 @@ export type Database = {
           },
         ]
       }
+      assistant_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_conversations_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          meta: Json | null
+          org_id: string
+          role: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          org_id?: string
+          role: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          meta?: Json | null
+          org_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -1020,6 +1100,110 @@ export type Database = {
           slug?: string
         }
         Relationships: []
+      }
+      roleplay_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          org_id: string
+          role: string
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          role: string
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roleplay_messages_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roleplay_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "roleplay_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roleplay_sessions: {
+        Row: {
+          created_at: string
+          difficulty: string
+          ended_at: string | null
+          feedback: Json | null
+          focus_pain: string | null
+          id: string
+          meeting_type: string | null
+          org_id: string
+          overall_score: number | null
+          persona: Json
+          status: string
+          temperature: string | null
+          turn_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          difficulty?: string
+          ended_at?: string | null
+          feedback?: Json | null
+          focus_pain?: string | null
+          id?: string
+          meeting_type?: string | null
+          org_id?: string
+          overall_score?: number | null
+          persona: Json
+          status?: string
+          temperature?: string | null
+          turn_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          difficulty?: string
+          ended_at?: string | null
+          feedback?: Json | null
+          focus_pain?: string | null
+          id?: string
+          meeting_type?: string | null
+          org_id?: string
+          overall_score?: number | null
+          persona?: Json
+          status?: string
+          temperature?: string | null
+          turn_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roleplay_sessions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscriptions: {
         Row: {

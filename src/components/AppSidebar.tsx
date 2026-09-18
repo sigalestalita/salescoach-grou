@@ -4,6 +4,7 @@ import {
   CalendarDays,
   BookOpen,
   Sparkles,
+  Dumbbell,
   MonitorSmartphone,
   Users,
   Settings,
@@ -82,6 +83,7 @@ const TABS: { key: TabKey; label: string; groups: NavGroup[] }[] = [
         items: [
           { title: "Base de conhecimento", url: "/conhecimento", icon: BookOpen, roles: MANAGEMENT },
           { title: "Gerador de argumentos", url: "/argumentos", icon: Sparkles, roles: ALL_ROLES },
+          { title: "Modo de treino", url: "/treino", icon: Dumbbell, roles: ALL_ROLES },
         ],
       },
       {

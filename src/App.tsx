@@ -14,6 +14,7 @@ import Conhecimento from "./pages/Conhecimento";
 import Equipe from "./pages/Equipe";
 import Configuracoes from "./pages/Configuracoes";
 import ArgumentGenerator from "./pages/ArgumentGenerator";
+import Roleplay from "./pages/Roleplay";
 import Extensao from "./pages/Extensao";
 import NotFound from "./pages/NotFound";
 import SharedMeeting from "./pages/SharedMeeting";
@@ -87,6 +88,7 @@ const App = () => (
             <Route path="/equipe" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Equipe /></ProtectedRoute>} />
             <Route path="/configuracoes" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Configuracoes /></ProtectedRoute>} />
             <Route path="/argumentos" element={<ProtectedRoute><ArgumentGenerator /></ProtectedRoute>} />
+            <Route path="/treino" element={<ProtectedRoute><Roleplay /></ProtectedRoute>} />
             <Route path="/extensao" element={<ProtectedRoute><Extensao /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
