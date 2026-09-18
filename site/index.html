@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales Coach</title>
+<meta name="description" content="O copiloto inteligente das suas vendas. Grave, analise e receba orientação ao vivo nas reuniões comerciais — com a metodologia da sua empresa.">
+<meta property="og:title" content="Sales Coach — o copiloto inteligente das suas vendas">
+<meta property="og:description" content="Cada reunião comercial vira uma aula para o seu time. Análise por metodologia, coach ao vivo e base de conhecimento da sua empresa.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --navy: #071A34;
+    --navy-2: #0E2B4C;
+    --blue: #053B6D;
+    --primary: #15498D;
+    --primary-soft: #E6EEF9;
+    --ink: #071A34;
+    --ink-soft: #4A5A70;
+    --ink-faint: #7C8A9E;
+    --paper: #F5F7FB;
+    --surface: #FFFFFF;
+    --line: #DCE3EE;
+    --line-strong: #C4CFDF;
+    --ok: #1F7A4D;
+    --warm: #B8651A;
+    --hot: #B93326;
+    --radius: 12px;
+    --shadow-sm: 0 1px 2px rgba(7,26,52,.06), 0 6px 18px -8px rgba(7,26,52,.12);
+    --shadow-lg: 0 24px 60px -24px rgba(7,26,52,.35);
+    --gradient: linear-gradient(135deg, #071A34 0%, #0E2B4C 45%, #15498D 100%);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font-family: Poppins, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.6; }
+  img, video { max-width: 100%; display: block; }
+  a { color: inherit; text-decoration: none; }
+  h1, h2, h3, h4 { margin: 0; letter-spacing: -0.02em; text-wrap: balance; line-height: 1.12; }
+  p { margin: 0; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 6px; }
+  .wrap { width: min(1160px, 100% - 40px); margin-inline: auto; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin-bottom: 14px; }
+  .lead { font-size: 18px; color: var(--ink-soft); max-width: 60ch; }
+  section { padding-block: 96px; }
+  @media (max-width: 720px) { section { padding-block: 64px; } }
+
+  /* ── Botões ── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 48px; padding: 0 22px; border-radius: 10px; font-weight: 600; font-size: 15px; border: 1px solid transparent; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; white-space: nowrap; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 8px 20px -10px rgba(21,73,141,.7); }
+  .btn-primary:hover { background: #123f7a; }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+  .btn-ghost:hover { background: var(--paper); }
+  .btn-light { background: #fff; color: var(--navy); }
+  .btn-outline-light { background: transparent; color: #fff; border-color: rgba(255,255,255,.4); }
+  .btn-outline-light:hover { background: rgba(255,255,255,.08); }
+  .btn-sm { height: 40px; padding: 0 16px; font-size: 14px; }
+
+  /* ── Navegação ── */
+  .nav { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.86); backdrop-filter: saturate(140%) blur(10px); border-bottom: 1px solid transparent; transition: border-color .2s; }
+  .nav.scrolled { border-bottom-color: var(--line); }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; height: 68px; gap: 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+  .brand img { height: 30px; width: 30px; }
+  .nav-links { display: flex; gap: 28px; font-size: 14.5px; font-weight: 500; color: var(--ink-soft); }
+  .nav-links a:hover { color: var(--ink); }
+  @media (max-width: 860px) { .nav-links { display: none; } }
+
+  /* ── Hero ── */
+  /* O vídeo termina no logotipo centralizado; o texto fica abaixo dele, nunca
+     por cima. A faixa do vídeo é alta o bastante para impor presença e o
+     título já aparece no primeiro quadro. */
+  .hero { background: #F8F9FB; padding-block: 0; }
+  .hero-media { position: relative; height: clamp(300px, 54vh, 560px); overflow: hidden; }
+  .hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 45%; }
+  .hero-veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(248,249,251,0) 60%, #F8F9FB 100%); pointer-events: none; }
+  .hero-in { position: relative; width: min(1160px, 100% - 40px); margin-inline: auto; padding: 8px 0 72px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: end; }
+  .hero h1 { font-size: clamp(32px, 4.2vw, 54px); font-weight: 700; }
+  .hero h1 .accent { color: var(--primary); }
+  .hero .lead { margin-top: 18px; }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+  .hero-note { margin-top: 16px; font-size: 13px; color: var(--ink-faint); }
+  .hero-side { justify-self: end; display: grid; gap: 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 999px; background: #fff; border: 1px solid var(--line); font-size: 13.5px; font-weight: 500; color: var(--ink-soft); box-shadow: var(--shadow-sm); }
+  .pill b { color: var(--ink); font-weight: 600; }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 4px rgba(21,73,141,.15); }
+  @media (max-width: 900px) {
+    .hero-media { height: auto; aspect-ratio: 16/9; }
+    .hero-video { object-fit: contain; background: #F8F9FB; }
+    .hero-veil { display: none; }
+    .hero-in { grid-template-columns: 1fr; padding: 24px 0 56px; }
+    .hero-side { justify-self: start; }
+  }
+
+  /* ── Como funciona ── */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
+  .step { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 24px 24px; box-shadow: var(--shadow-sm); }
+  .step .num { font-size: 12px; font-weight: 700; letter-spacing: .12em; color: var(--primary); margin-bottom: 14px; }
+  .step h3 { font-size: 19px; font-weight: 600; margin-bottom: 8px; }
+  .step p { font-size: 15px; color: var(--ink-soft); }
+  .step .icon { width: 42px; height: 42px; border-radius: 10px; background: var(--primary-soft); display: grid; place-items: center; margin-bottom: 16px; color: var(--primary); }
+  @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+
+  /* ── Mockups ── */
+  .band { background: var(--paper); }
+  .showcase { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; margin-top: 56px; }
+  .showcase + .showcase { margin-top: 88px; }
+  .showcase.flip .text { order: 2; }
+  .showcase h3 { font-size: 30px; font-weight: 700; margin-bottom: 14px; }
+  .showcase p { font-size: 16.5px; color: var(--ink-soft); }
+  .showcase ul { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .showcase li { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; color: var(--ink); }
+  .showcase li::before { content: ""; flex-shrink: 0; width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; background: var(--primary-soft); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2315498D' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12l5 5L20 7'/></svg>"); background-size: 11px; background-position: center; background-repeat: no-repeat; }
+  @media (max-width: 900px) { .showcase { grid-template-columns: 1fr; gap: 28px; } .showcase.flip .text { order: 0; } }
+
+  .mock { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; font-size: 13px; }
+  .mock-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: #FBFCFE; }
+  .mock-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); display: inline-block; }
+  .mock-bar span { margin-left: 8px; font-size: 12px; color: var(--ink-faint); font-weight: 500; }
+  .mock-body { padding: 18px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .kpi small { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); font-weight: 600; }
+  .kpi b { display: block; font-size: 22px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em; }
+  .kpi.hot b { color: var(--hot); }
+  .bars { margin-top: 14px; display: grid; gap: 10px; }
+  .bar-row { display: grid; grid-template-columns: 90px 1fr 44px; align-items: center; gap: 10px; font-size: 12px; }
+  .bar-row .track { height: 8px; border-radius: 999px; background: var(--paper); overflow: hidden; }
+  .bar-row .fill { height: 100%; border-radius: 999px; background: var(--gradient); width: 0; transition: width 1.2s cubic-bezier(.22,1,.36,1); }
+  .in .bar-row .fill { width: var(--w); }
+  .bar-row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+  .insights { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 8px; }
+  .insights div { display: flex; gap: 8px; align-items: flex-start; color: var(--ink-soft); font-size: 12.5px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; }
+  .tag.ok { background: #E6F4EC; color: var(--ok); }
+  .tag.warn { background: #FBEEDD; color: var(--warm); }
+
+  /* coach ao vivo (overlay escuro, como a extensão) */
+  .live { background: #071A34; color: #E6EDF7; border-radius: 14px; box-shadow: var(--shadow-lg); overflow: hidden; font-size: 13px; position: relative; }
+  .live-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .live-head .name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
+  .live-head .name img { width: 18px; height: 18px; }
+  .live-flag { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; }
+  .live-flag i { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  .live-transcript { padding: 12px 14px; font-size: 12px; color: #A9B7CC; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .live-transcript p + p { margin-top: 6px; }
+  .live-transcript b { color: #fff; font-weight: 500; }
+  .tips { padding: 12px 14px; display: grid; gap: 8px; }
+  .tip { background: #0E2B4C; border-left: 3px solid var(--primary); border-radius: 6px; padding: 10px 12px; }
+  .tip.alta { border-left-color: #E37567; }
+  .tip .meta { display: flex; justify-content: space-between; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: #7FB3FF; font-weight: 700; margin-bottom: 6px; }
+  .tip .say { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #7FB3FF; font-weight: 700; margin-bottom: 3px; }
+  .tip .phrase { font-size: 13.5px; font-weight: 600; color: #fff; line-height: 1.4; }
+  .tip .why { font-size: 11.5px; color: #A9B7CC; margin-top: 5px; }
+
+  /* visão do gestor */
+  .rank { display: grid; gap: 8px; margin-top: 12px; }
+  .rank-row { display: grid; grid-template-columns: 22px 1fr 110px 40px; gap: 10px; align-items: center; font-size: 12.5px; }
+  .rank-row .pos { color: var(--ink-faint); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rank-row .track { height: 8px; border-radius: 999px; background: var(--paper); overflow: hidden; }
+  .rank-row .fill { height: 100%; background: var(--primary); width: 0; transition: width 1.2s cubic-bezier(.22,1,.36,1); border-radius: 999px; }
+  .in .rank-row .fill { width: var(--w); }
+  .spark { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .spark small { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); font-weight: 600; }
+  .spark svg { width: 100%; height: 70px; display: block; margin-top: 6px; }
+
+  /* ── Funcionalidades ── */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+  .feat { border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; background: var(--surface); transition: transform .2s, box-shadow .2s; }
+  .feat:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+  .feat .icon { width: 38px; height: 38px; border-radius: 9px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; margin-bottom: 14px; }
+  .feat h3 { font-size: 16.5px; font-weight: 600; margin-bottom: 6px; }
+  .feat p { font-size: 14.5px; color: var(--ink-soft); }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+  /* ── Para quem / whitelabel ── */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 32px; } }
+  .who { display: grid; gap: 14px; margin-top: 28px; }
+  .who div { border-left: 3px solid var(--primary); padding: 4px 0 4px 16px; }
+  .who b { display: block; font-weight: 600; font-size: 16px; }
+  .who span { font-size: 14.5px; color: var(--ink-soft); }
+  .brandcard { background: var(--gradient); color: #fff; border-radius: 16px; padding: 32px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden; }
+  .brandcard::after { content: ""; position: absolute; right: -80px; top: -80px; width: 260px; height: 260px; border-radius: 50%; background: rgba(255,255,255,.08); filter: blur(30px); }
+  .brandcard h3 { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
+  .brandcard p { color: rgba(255,255,255,.78); font-size: 15px; }
+  .swatches { display: flex; gap: 8px; margin-top: 20px; }
+  .swatches i { width: 34px; height: 34px; border-radius: 8px; border: 2px solid rgba(255,255,255,.35); }
+  .sec-list { margin: 24px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .sec-list li { display: flex; gap: 12px; font-size: 15px; color: var(--ink-soft); }
+  .sec-list li b { color: var(--ink); font-weight: 600; }
+  .sec-list li::before { content: ""; flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; background: var(--primary-soft); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2315498D' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/></svg>"); background-size: 13px; background-position: center; background-repeat: no-repeat; margin-top: 1px; }
+
+  /* ── Planos ── */
+  .toggle { display: inline-flex; align-items: center; gap: 12px; margin-top: 22px; font-size: 14px; color: var(--ink-soft); }
+  .switch { position: relative; width: 44px; height: 24px; border-radius: 999px; background: var(--line-strong); border: 0; cursor: pointer; transition: background .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .switch[aria-checked="true"] { background: var(--primary); }
+  .switch[aria-checked="true"]::after { transform: translateX(20px); }
+  .save { font-size: 12px; font-weight: 600; color: var(--ok); background: #E6F4EC; padding: 3px 8px; border-radius: 999px; }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 36px; align-items: stretch; }
+  .plan { border: 1px solid var(--line); border-radius: 16px; padding: 28px; background: var(--surface); display: flex; flex-direction: column; }
+  .plan.featured { border-color: var(--primary); box-shadow: 0 20px 50px -24px rgba(21,73,141,.45); position: relative; }
+  .plan.featured::before { content: "Mais escolhido"; position: absolute; top: -12px; left: 24px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; }
+  .plan h3 { font-size: 20px; font-weight: 600; }
+  .plan .for { font-size: 13.5px; color: var(--ink-soft); margin-top: 4px; min-height: 42px; }
+  .price { margin-top: 18px; display: flex; align-items: baseline; gap: 6px; }
+  .price b { font-size: 38px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+  .price small { font-size: 14px; color: var(--ink-faint); }
+  .price .cur { font-size: 16px; font-weight: 600; color: var(--ink-soft); }
+  .price-note { font-size: 12.5px; color: var(--ink-faint); min-height: 18px; margin-top: 2px; }
+  .plan ul { list-style: none; margin: 20px 0 0; padding: 20px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; flex: 1; }
+  .plan li { display: flex; gap: 10px; font-size: 14px; color: var(--ink); }
+  .plan li::before { content: "✓"; color: var(--primary); font-weight: 700; }
+  .plan li.dim { color: var(--ink-faint); }
+  .plan li.dim::before { content: "–"; color: var(--line-strong); }
+  .plan .btn { margin-top: 22px; width: 100%; }
+  @media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
+  .pilot { margin-top: 22px; border: 1px dashed var(--line-strong); border-radius: 12px; padding: 16px 20px; display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: 14.5px; color: var(--ink-soft); }
+  .pilot b { color: var(--ink); }
+
+  /* ── FAQ ── */
+  .faq { max-width: 780px; margin: 36px auto 0; display: grid; gap: 10px; }
+  details { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  summary { cursor: pointer; padding: 16px 20px; font-weight: 600; font-size: 15.5px; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font-weight: 400; font-size: 20px; color: var(--ink-faint); }
+  details[open] summary::after { content: "–"; }
+  details p { padding: 0 20px 18px; font-size: 15px; color: var(--ink-soft); }
+
+  /* ── CTA final ── */
+  .cta { position: relative; overflow: hidden; color: #fff; background: var(--gradient); background-size: 200% 200%; animation: aurora 18s ease-in-out infinite; padding-block: 88px; }
+  @keyframes aurora { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  .cta .orb { position: absolute; border-radius: 50%; filter: blur(40px); pointer-events: none; }
+  .cta-in { position: relative; display: grid; grid-template-columns: 1.2fr .8fr; gap: 40px; align-items: center; }
+  .cta h2 { font-size: clamp(28px, 3.6vw, 44px); font-weight: 700; }
+  .cta p { color: rgba(255,255,255,.8); font-size: 17px; margin-top: 12px; max-width: 52ch; }
+  .form { background: #fff; color: var(--ink); border-radius: 14px; padding: 24px; box-shadow: var(--shadow-lg); display: grid; gap: 12px; }
+  .form label { font-size: 13px; font-weight: 500; display: grid; gap: 6px; }
+  .form input, .form select { height: 42px; border: 1px solid var(--line-strong); border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; color: var(--ink); background: #fff; }
+  .form input:focus, .form select:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: var(--primary); }
+  .form .fine { font-size: 12px; color: var(--ink-faint); }
+  @media (max-width: 900px) { .cta-in { grid-template-columns: 1fr; } }
+
+  footer { padding: 40px 0; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-faint); }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .foot .brand { font-size: 15px; }
+  .foot nav { display: flex; gap: 18px; }
+
+  /* ── Revelação ao rolar ── */
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s cubic-bezier(.22,1,.36,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .cta { animation: none; }
+    .live-flag i { animation: none; }
+    .bar-row .fill, .rank-row .fill { transition: none; width: var(--w); }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top"><img src="assets/mark.png" alt=""><span>Sales Coach</span></a>
+    <nav class="nav-links" aria-label="Seções">
+      <a href="#produto">Produto</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#recursos">Recursos</a>
+      <a href="#planos">Planos</a>
+      <a href="#faq">Perguntas</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="#contato">Começar piloto grátis</a>
+  </div>
+</header>
+
+<!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+<section class="hero" id="top">
+  <div class="hero-media">
+    <video class="hero-video" id="heroVideo" autoplay muted playsinline preload="auto" poster="assets/hero-poster.jpg" aria-label="Animação do logotipo Sales Coach">
+      <source src="assets/hero.mp4" type="video/mp4">
+    </video>
+    <div class="hero-veil" aria-hidden="true"></div>
+  </div>
+  <div class="hero-in">
+    <div>
+      <h1>Cada reunião comercial vira uma <span class="accent">aula</span> para o seu time.</h1>
+      <p class="lead">O Sales Coach grava, transcreve e analisa as reuniões com a metodologia da <em>sua</em> empresa — e orienta o vendedor ao vivo, na tela, com o que falar agora.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#contato">Começar piloto grátis</a>
+        <a class="btn btn-ghost" href="#como-funciona">Ver como funciona</a>
+      </div>
+      <p class="hero-note">Piloto de 14 dias, sem cartão. Funciona no Google Meet e no Microsoft Teams pela extensão Chrome.</p>
+    </div>
+    <div class="hero-side" aria-hidden="true">
+      <div class="pill"><span class="dot"></span><span><b>Coach ao vivo</b> · dica em até 8 s de fala</span></div>
+      <div class="pill"><span class="dot"></span><span><b>BANT, MEDDIC, SPIN</b> · ou a sua metodologia</span></div>
+      <div class="pill"><span class="dot"></span><span><b>Marca própria</b> · uma plataforma, várias empresas</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Como funciona ────────────────────────────────────────────────────── -->
+<section id="como-funciona">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="eyebrow">Como funciona</p>
+      <h2 style="font-size:clamp(26px,3.4vw,40px);font-weight:700">Três passos entre a reunião e a evolução do vendedor.</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></div>
+        <div class="num">01</div>
+        <h3>Grave</h3>
+        <p>Pela extensão no Meet ou no Teams, com um clique. Ou envie o arquivo e o link da gravação depois — MP3, MP4, Drive.</p>
+      </div>
+      <div class="step reveal">
+        <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16M6 15V9m6 6V5m6 10v-4"/></svg></div>
+        <div class="num">02</div>
+        <h3>Analise</h3>
+        <p>Transcrição com separação de falas, score geral, temperatura da agenda, critérios da sua metodologia pontuados e justificados, objeções e sinais de compra.</p>
+      </div>
+      <div class="step reveal">
+        <div class="icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></div>
+        <div class="num">03</div>
+        <h3>Oriente</h3>
+        <p>Durante a reunião, o coach diz o que falar agora. Depois, o gestor vê o ranking, os gaps do time e onde o discurso saiu do portfólio.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Produto: mockups ─────────────────────────────────────────────────── -->
+<section class="band" id="produto">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="eyebrow">O produto</p>
+      <h2 style="font-size:clamp(26px,3.4vw,40px);font-weight:700">Não é só transcrição. É a metodologia da sua empresa aplicada em cada conversa.</h2>
+    </div>
+
+    <div class="showcase">
+      <div class="text reveal">
+        <h3>Análise por metodologia, com justificativa</h3>
+        <p>Cada critério recebe uma nota e o motivo, baseado no que foi dito. A temperatura da agenda segue as faixas que você define — não uma régua genérica.</p>
+        <ul>
+          <li>Score geral e temperatura com explicação em uma frase</li>
+          <li>BANT, MEDDIC e SPIN prontos, ou critérios próprios com pesos</li>
+          <li>Objeções, sinais de compra e momentos-chave destacados</li>
+          <li>Aderência ao portfólio: o que foi apresentado, o que faltou</li>
+        </ul>
+      </div>
+      <div class="mock reveal" data-anim>
+        <div class="mock-bar"><i></i><i></i><i></i><span>Reunião · Discovery com Cliente A</span></div>
+        <div class="mock-body">
+          <div class="kpis">
+            <div class="kpi"><small>Score geral</small><b>78</b></div>
+            <div class="kpi hot"><small>Temperatura</small><b>Quente</b></div>
+            <div class="kpi"><small>Talk ratio</small><b>42%</b></div>
+          </div>
+          <div class="bars">
+            <div class="bar-row"><span>Budget</span><div class="track"><div class="fill" style="--w:76%"></div></div><span class="val">19/25</span></div>
+            <div class="bar-row"><span>Authority</span><div class="track"><div class="fill" style="--w:92%"></div></div><span class="val">23/25</span></div>
+            <div class="bar-row"><span>Need</span><div class="track"><div class="fill" style="--w:88%"></div></div><span class="val">22/25</span></div>
+            <div class="bar-row"><span>Timeline</span><div class="track"><div class="fill" style="--w:40%"></div></div><span class="val">10/25</span></div>
+          </div>
+          <div class="insights">
+            <div><span class="tag ok">Positivo</span>Decisor presente e dor quantificada em horas perdidas por semana.</div>
+            <div><span class="tag warn">Explorar</span>Prazo de decisão não foi perguntado; proposta sem data.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="showcase flip">
+      <div class="text reveal">
+        <h3>Coach ao vivo, na tela, durante a reunião</h3>
+        <p>A extensão acompanha a conversa e mostra ao vendedor a frase exata para dizer nos próximos segundos — com base na sua base de conhecimento e na metodologia configurada.</p>
+        <ul>
+          <li>Prioriza objeção e sinal de compra que acabaram de surgir</li>
+          <li>Puxa o critério de qualificação que ainda não foi coberto</li>
+          <li>Cita produto, dado e diferencial pelo nome que está na base</li>
+          <li>Nunca inventa preço ou funcionalidade</li>
+        </ul>
+      </div>
+      <div class="live reveal">
+        <div class="live-head">
+          <div class="name"><img src="assets/mark-white.png" alt="">Sales Coach</div>
+          <span class="live-flag"><i></i>LIVE</span>
+        </div>
+        <div class="live-transcript">
+          <p><b>Lead:</b> …a gente já testou uma ferramenta assim e o time não usou. Tenho medo de pagar de novo por algo que fica parado.</p>
+        </div>
+        <div class="tips">
+          <div class="tip alta">
+            <div class="meta"><span>objeção</span><span>alta</span></div>
+            <div class="say">Fale agora</div>
+            <div class="phrase">"Entendo. O que fez o time parar de usar da última vez: era complexo ou não mostrava resultado? Pergunto porque aqui o vendedor recebe a orientação dentro da própria reunião, sem abrir outra tela."</div>
+            <div class="why">Objeção de adoção — responda com pergunta e conecte ao coach ao vivo.</div>
+          </div>
+          <div class="tip">
+            <div class="meta"><span>budget</span><span>media</span></div>
+            <div class="say">Fale agora</div>
+            <div class="phrase">"Quanto vocês investem hoje em treinamento do comercial por ano?"</div>
+            <div class="why">Budget ainda não coberto nesta conversa.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="showcase">
+      <div class="text reveal">
+        <h3>A visão do gestor: quem precisa de ajuda, e em quê</h3>
+        <p>Ranking por score, evolução mês a mês, distribuição de temperatura e os gaps mais frequentes do time. Compare executivos e veja onde o discurso sai do portfólio.</p>
+        <ul>
+          <li>Score médio por vendedor e por time</li>
+          <li>Principais lacunas por critério da metodologia</li>
+          <li>Taxa de agendas quentes e evolução no tempo</li>
+          <li>Análise compartilhável por link, com validade e revogação</li>
+        </ul>
+      </div>
+      <div class="mock reveal" data-anim>
+        <div class="mock-bar"><i></i><i></i><i></i><span>Visão geral · Setembro</span></div>
+        <div class="mock-body">
+          <div class="kpis">
+            <div class="kpi"><small>Reuniões</small><b>178</b></div>
+            <div class="kpi"><small>Score médio</small><b>71</b></div>
+            <div class="kpi"><small>Agendas quentes</small><b>38%</b></div>
+          </div>
+          <div class="rank">
+            <div class="rank-row"><span class="pos">1</span><span>Mariana B.</span><div class="track"><div class="fill" style="--w:86%"></div></div><span class="val" style="text-align:right;font-variant-numeric:tabular-nums">86</span></div>
+            <div class="rank-row"><span class="pos">2</span><span>Fabricio F.</span><div class="track"><div class="fill" style="--w:79%"></div></div><span class="val" style="text-align:right;font-variant-numeric:tabular-nums">79</span></div>
+            <div class="rank-row"><span class="pos">3</span><span>Taís O.</span><div class="track"><div class="fill" style="--w:74%"></div></div><span class="val" style="text-align:right;font-variant-numeric:tabular-nums">74</span></div>
+            <div class="rank-row"><span class="pos">4</span><span>Lisiane B.</span><div class="track"><div class="fill" style="--w:61%"></div></div><span class="val" style="text-align:right;font-variant-numeric:tabular-nums">61</span></div>
+          </div>
+          <div class="spark">
+            <small>Evolução do score médio</small>
+            <svg viewBox="0 0 320 70" preserveAspectRatio="none" aria-hidden="true">
+              <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#15498D" stop-opacity=".22"/><stop offset="1" stop-color="#15498D" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0,52 L46,48 L92,50 L138,40 L184,36 L230,28 L276,24 L320,16 L320,70 L0,70 Z" fill="url(#sg)"/>
+              <path d="M0,52 L46,48 L92,50 L138,40 L184,36 L230,28 L276,24 L320,16" fill="none" stroke="#15498D" stroke-width="2.5" stroke-linejoin="round"/>
+              <circle cx="320" cy="16" r="3.5" fill="#15498D"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Recursos ─────────────────────────────────────────────────────────── -->
+<section id="recursos">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="eyebrow">Recursos</p>
+      <h2 style="font-size:clamp(26px,3.4vw,40px);font-weight:700">Tudo que um time comercial precisa para aprender com as próprias conversas.</h2>
+    </div>
+    <div class="grid">
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h16M6 15V9m6 6V5m6 10v-4"/></svg></div><h3>Análise por metodologia</h3><p>BANT, MEDDIC e SPIN prontos, ou critérios próprios com pesos e faixas de temperatura definidos por você.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5"/></svg></div><h3>Coach ao vivo</h3><p>Orientação na tela durante a reunião: o que falar agora, com base na sua base de conhecimento.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/></svg></div><h3>Base de conhecimento</h3><p>Portfólio, cases, tabelas e materiais da empresa alimentam a análise e o coach. PDF, planilha, link ou texto.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg></div><h3>Gerador de argumentos</h3><p>Argumentos, ROI, respostas a objeções e frases prontas para proposta, WhatsApp e e-mail, a partir da dor do lead.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M17 8a3 3 0 010 6M21 20c0-2.5-1.5-4.6-3.7-5.5"/></svg></div><h3>Gestão do time</h3><p>Ranking, evolução, gaps por critério e comparação entre executivos. Papéis de admin, gestor e vendedor.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><h3>Extensão Chrome</h3><p>Grava tela e áudio no Meet e no Teams, sobe a gravação e mostra o coach ao vivo — sem sair da reunião.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/></svg></div><h3>Compartilhamento controlado</h3><p>Análise por link para quem não tem conta, com validade e revogação a um clique.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 010 18M3 12h18"/></svg></div><h3>Marca própria</h3><p>Nome, logo e cores da sua empresa em toda a interface, na tela de login e nos relatórios compartilhados.</p></div>
+      <div class="feat reveal"><div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h3>Isolamento por empresa</h3><p>Gravações, transcrições e base de conhecimento separados por organização, com controle de acesso em cada consulta.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Para quem + marca própria ────────────────────────────────────────── -->
+<section class="band" id="para-quem">
+  <div class="wrap split">
+    <div class="reveal">
+      <p class="eyebrow">Para quem</p>
+      <h2 style="font-size:clamp(26px,3.4vw,38px);font-weight:700">Feito para quem vende de forma consultiva — e para quem ensina a vender.</h2>
+      <div class="who">
+        <div><b>Times comerciais B2B</b><span>Ciclo consultivo, várias reuniões por oportunidade, discurso que precisa seguir o portfólio.</span></div>
+        <div><b>Gestores e líderes de vendas</b><span>Visão do que acontece nas reuniões sem assistir a todas, e onde cada vendedor precisa evoluir.</span></div>
+        <div><b>Consultorias, franquias e redes</b><span>Uma plataforma com a sua marca e a sua metodologia para várias empresas, cada uma isolada da outra.</span></div>
+      </div>
+    </div>
+    <div class="brandcard reveal">
+      <h3>A sua metodologia, a sua marca</h3>
+      <p>Cada empresa configura os próprios critérios de qualificação, faixas de temperatura, tipos de reunião, ofertas e catálogo de dores. O sistema não carrega o negócio de ninguém — aplica o seu.</p>
+      <div class="swatches" aria-hidden="true">
+        <i style="background:#071A34"></i><i style="background:#0E2B4C"></i><i style="background:#053B6D"></i><i style="background:#15498D"></i><i style="background:#fff"></i>
+      </div>
+      <ul class="sec-list" style="margin-top:24px">
+        <li style="color:rgba(255,255,255,.85)"><span><b style="color:#fff">Dados isolados por empresa.</b> Nenhum cliente enxerga o outro, em nenhuma consulta.</span></li>
+        <li style="color:rgba(255,255,255,.85)"><span><b style="color:#fff">Links com prazo.</b> Compartilhamento externo só quando você ativa, e pelo tempo que decidir.</span></li>
+        <li style="color:rgba(255,255,255,.85)"><span><b style="color:#fff">Consumo medido.</b> Minutos transcritos, análises e dicas ao vivo contabilizados por ciclo.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── Planos ───────────────────────────────────────────────────────────── -->
+<section id="planos">
+  <div class="wrap">
+    <div class="reveal" style="text-align:center">
+      <p class="eyebrow">Planos</p>
+      <h2 style="font-size:clamp(26px,3.4vw,40px);font-weight:700">Simples de começar, feito para crescer com o time.</h2>
+      <div class="toggle">
+        <span>Mensal</span>
+        <button class="switch" id="billing" role="switch" aria-checked="false" aria-label="Alternar para cobrança anual"></button>
+        <span>Anual</span>
+        <span class="save">2 meses grátis</span>
+      </div>
+    </div>
+
+    <div class="plans">
+      <div class="plan reveal">
+        <h3>Essencial</h3>
+        <p class="for">Para o primeiro time que quer parar de perder reunião sem aprender nada com ela.</p>
+        <div class="price"><span class="cur">R$</span><b data-m="890" data-a="742">890</b><small>/mês</small></div>
+        <p class="price-note" data-note></p>
+        <ul>
+          <li>Até 5 usuários</li>
+          <li>60 reuniões analisadas por mês</li>
+          <li>Coach ao vivo (300 min/mês)</li>
+          <li>Base de conhecimento e gerador de argumentos</li>
+          <li>Extensão Chrome para Meet e Teams</li>
+          <li>BANT, MEDDIC e SPIN prontos</li>
+          <li class="dim">Metodologia e marca próprias</li>
+        </ul>
+        <a class="btn btn-ghost" href="#contato">Começar piloto</a>
+      </div>
+
+      <div class="plan featured reveal">
+        <h3>Profissional</h3>
+        <p class="for">Para operações com processo definido, que querem a metodologia da casa dentro da ferramenta.</p>
+        <div class="price"><span class="cur">R$</span><b data-m="2190" data-a="1825">2.190</b><small>/mês</small></div>
+        <p class="price-note" data-note></p>
+        <ul>
+          <li>Até 15 usuários</li>
+          <li>200 reuniões analisadas por mês</li>
+          <li>Coach ao vivo (1.000 min/mês)</li>
+          <li>Metodologia própria: critérios, pesos e faixas</li>
+          <li>Marca própria: logo, cores e nome do produto</li>
+          <li>Tipos de reunião, ofertas e catálogo de dores da empresa</li>
+          <li>Relatórios de gestão e compartilhamento com validade</li>
+        </ul>
+        <a class="btn btn-primary" href="#contato">Começar piloto</a>
+      </div>
+
+      <div class="plan reveal">
+        <h3>Enterprise</h3>
+        <p class="for">Para redes, consultorias e times grandes que precisam operar várias empresas.</p>
+        <div class="price"><b style="font-size:26px">Sob consulta</b></div>
+        <p class="price-note">Contrato anual</p>
+        <ul>
+          <li>Usuários e análises sob medida</li>
+          <li>Várias empresas em uma plataforma, isoladas entre si</li>
+          <li>Domínio próprio e painel do provedor</li>
+          <li>Onboarding da metodologia e da base de conhecimento</li>
+          <li>SLA, suporte dedicado e revisão de segurança</li>
+          <li>Relatório de consumo por empresa</li>
+        </ul>
+        <a class="btn btn-ghost" href="#contato">Falar com a gente</a>
+      </div>
+    </div>
+
+    <div class="pilot reveal">
+      <span><b>Piloto de 14 dias, sem cartão:</b> até 3 usuários, 20 reuniões analisadas e coach ao vivo liberado. A sua base de conhecimento e a sua metodologia já entram no piloto.</span>
+      <a class="btn btn-primary btn-sm" href="#contato">Quero o piloto</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ──────────────────────────────────────────────────────────────── -->
+<section class="band" id="faq">
+  <div class="wrap">
+    <div class="reveal" style="text-align:center">
+      <p class="eyebrow">Perguntas frequentes</p>
+      <h2 style="font-size:clamp(26px,3.4vw,38px);font-weight:700">O que costumam perguntar antes de começar</h2>
+    </div>
+    <div class="faq reveal">
+      <details><summary>Funciona com a nossa metodologia de vendas, não só BANT?</summary><p>Sim. BANT, MEDDIC e SPIN vêm prontos, mas você define os critérios, os pesos, as faixas de temperatura e as regras específicas da sua operação. A análise e o coach ao vivo passam a seguir isso.</p></details>
+      <details><summary>Em quais plataformas de reunião o coach ao vivo funciona?</summary><p>Pela extensão Chrome, no Google Meet e no Microsoft Teams (versão web). Para outras plataformas, a gravação pode ser enviada depois para análise.</p></details>
+      <details><summary>O vendedor precisa fazer alguma coisa durante a reunião?</summary><p>Só clicar em gravar. A transcrição e as dicas aparecem num painel discreto sobre a reunião; ao final, a gravação sobe sozinha e a análise completa fica pronta em minutos.</p></details>
+      <details><summary>Onde ficam as gravações e quem tem acesso?</summary><p>Cada empresa tem seus dados isolados — gravações, transcrições, análises e base de conhecimento. Vendedor vê as próprias reuniões; gestor e admin veem as do time. Links externos só existem quando você ativa, com prazo e revogação.</p></details>
+      <details><summary>A base de conhecimento aceita o quê?</summary><p>PDF, documentos, planilhas, links e texto. O conteúdo é extraído e usado na análise (aderência ao portfólio, cross-sell) e no coach ao vivo (citar o produto ou dado certo na hora).</p></details>
+      <details><summary>Dá para colocar a nossa marca e usar com várias empresas?</summary><p>Sim, a partir do plano Profissional para a marca própria e no Enterprise para operar várias empresas em uma plataforma, cada uma isolada, com o seu domínio e um painel para acompanhar consumo por cliente.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA + contato ────────────────────────────────────────────────────── -->
+<section class="cta" id="contato">
+  <div class="orb" style="width:420px;height:420px;right:-120px;top:-120px;background:rgba(127,179,255,.25)" aria-hidden="true"></div>
+  <div class="orb" style="width:360px;height:360px;left:-100px;bottom:-140px;background:rgba(200,230,255,.18)" aria-hidden="true"></div>
+  <div class="wrap cta-in">
+    <div class="reveal">
+      <h2>Comece o piloto com as reuniões desta semana.</h2>
+      <p>Em 14 dias você vê o score do time, onde o discurso sai do portfólio e como o coach ao vivo muda uma conversa. Sem cartão, sem instalação no servidor.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
+        <a class="btn btn-outline-light" href="#planos">Ver planos</a>
+      </div>
+    </div>
+    <form class="form reveal" id="leadForm">
+      <label>Nome<input name="nome" required autocomplete="name"></label>
+      <label>E-mail corporativo<input name="email" type="email" required autocomplete="email"></label>
+      <label>Empresa<input name="empresa" required autocomplete="organization"></label>
+      <label>Tamanho do time comercial
+        <select name="time">
+          <option>1 a 5</option><option>6 a 15</option><option>16 a 50</option><option>Mais de 50</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" type="submit">Começar piloto grátis</button>
+      <p class="fine">Respondemos em até 1 dia útil. Nada de spam.</p>
+    </form>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top"><img src="assets/mark.png" alt=""><span>Sales Coach</span></a>
+    <nav aria-label="Rodapé">
+      <a href="#produto">Produto</a>
+      <a href="#planos">Planos</a>
+      <a href="#faq">Perguntas</a>
+      <a href="#contato">Contato</a>
+    </nav>
+    <span>© <span id="year"></span> Sales Coach · O copiloto inteligente das suas vendas.</span>
+  </div>
+</footer>
+
+<script>
+  // ── Contato ──
+  // Troque pelo e-mail que vai receber os pedidos de piloto.
+  var CONTACT_EMAIL = "contato@salescoach.com.br";
+
+  document.getElementById("year").textContent = new Date().getFullYear();
+
+  // Navegação ganha borda ao rolar.
+  var nav = document.getElementById("nav");
+  var onScroll = function () { nav.classList.toggle("scrolled", window.scrollY > 8); };
+  window.addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+  // Revelação ao rolar (uma vez por elemento).
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.12 });
+    document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+  } else {
+    document.querySelectorAll(".reveal").forEach(function (el) { el.classList.add("in"); });
+  }
+
+  // Vídeo do hero: toca uma vez e para no logotipo. Sem loop, para não
+  // distrair quem está lendo.
+  var v = document.getElementById("heroVideo");
+  if (v) {
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { v.pause(); v.currentTime = v.duration || 9.8; }
+    v.addEventListener("ended", function () { v.pause(); });
+    v.play && v.play().catch(function () {});
+  }
+
+  // Planos: mensal / anual.
+  var sw = document.getElementById("billing");
+  function renderPrices(annual) {
+    document.querySelectorAll(".price b[data-m]").forEach(function (b) {
+      var val = annual ? b.dataset.a : b.dataset.m;
+      b.textContent = Number(val).toLocaleString("pt-BR");
+      var note = b.closest(".plan").querySelector("[data-note]");
+      if (note) note.textContent = annual ? "cobrado anualmente (R$ " + (Number(val) * 12).toLocaleString("pt-BR") + "/ano)" : "cobrado mensalmente, cancele quando quiser";
+    });
+  }
+  sw.addEventListener("click", function () {
+    var next = sw.getAttribute("aria-checked") !== "true";
+    sw.setAttribute("aria-checked", String(next));
+    renderPrices(next);
+  });
+  renderPrices(false);
+
+  // Formulário: abre o e-mail já preenchido. Troque por um endpoint quando houver.
+  document.getElementById("leadForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var f = new FormData(e.target);
+    var subject = "Piloto Sales Coach — " + f.get("empresa");
+    var body = "Nome: " + f.get("nome") + "\nE-mail: " + f.get("email") + "\nEmpresa: " + f.get("empresa") + "\nTime comercial: " + f.get("time") + "\n\nQuero começar o piloto de 14 dias.";
+    window.location.href = "mailto:" + CONTACT_EMAIL + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+  });
+</script>
+</body>
+</html>
