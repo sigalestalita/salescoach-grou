@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatCard } from "@/components/StatCard";
-import { isSpeechSupported, startListening, speak, cancelSpeaking } from "@/lib/speech";
+import { isMicSupported, startRecording, blobToBase64, speak, cancelSpeaking, type Recorder } from "@/lib/speech";
 import {
   Dumbbell, Loader2, Send, Sparkles, ThumbsUp, ThumbsDown, ListChecks, Target, Thermometer,
   RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone,
@@ -19,9 +19,10 @@ import {
  * catálogo de dores e das objeções reais já vistas nas reuniões da própria
  * organização. Duas formas de conversar:
  *   - texto: digitando, como um chat.
- *   - chamada: fala pelo microfone e ouve a resposta em voz — reconhecimento
- *     e síntese de fala rodam no navegador (Chrome/Edge); o backend recebe e
- *     devolve texto normalmente, igual ao modo texto.
+ *   - chamada: fala pelo microfone e ouve a resposta em voz. A gravação é
+ *     transcrita no servidor pelo AssemblyAI (mesmo serviço das reuniões
+ *     reais), então funciona em qualquer navegador; a fala do lead sai pelas
+ *     vozes do sistema operacional.
  * Ao encerrar, a conversa passa pelo mesmo motor de análise das reuniões
  * reais — mesma nota, mesma metodologia, mesmo formato de feedback.
  */
@@ -70,7 +71,7 @@ interface PainOption {
 }
 
 type Mode = "texto" | "chamada";
-type CallPhase = "idle" | "ouvindo" | "pensando" | "falando";
+type CallPhase = "idle" | "gravando" | "transcrevendo" | "pensando" | "falando";
 
 const DIFFICULTY_LABEL: Record<string, string> = { facil: "Fácil", media: "Média", dificil: "Difícil" };
 const DIFFICULTY_TONE: Record<string, string> = { facil: "bg-success/10 text-success", media: "bg-warning/10 text-warning", dificil: "bg-destructive/10 text-destructive" };
@@ -78,7 +79,7 @@ const DIFFICULTY_TONE: Record<string, string> = { facil: "bg-success/10 text-suc
 const Roleplay = () => {
   const { config } = useOrgConfig();
   const { toast } = useToast();
-  const speechOk = isSpeechSupported();
+  const speechOk = isMicSupported();
 
   const [pains, setPains] = useState<PainOption[]>([]);
   const [meetingType, setMeetingType] = useState<string>("");
@@ -95,9 +96,18 @@ const Roleplay = () => {
   const [showTyping, setShowTyping] = useState(false); // fallback de texto dentro do modo chamada
 
   const [callPhase, setCallPhase] = useState<CallPhase>("idle");
-  const [liveCaption, setLiveCaption] = useState("");
+  const [recordSeconds, setRecordSeconds] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
-  const listenHandleRef = useRef<{ stop: () => void } | null>(null);
+  const recorderRef = useRef<Recorder | null>(null);
+  // As etapas do modo chamada se encadeiam dentro do mesmo render
+  // (gravar → transcrever → enviar). Ler callPhase direto nas guardas pegaria
+  // o valor congelado na closure, e a fala transcrita era descartada em
+  // silêncio. A ref acompanha a fase de verdade.
+  const callPhaseRef = useRef<CallPhase>("idle");
+  const setPhase = (phase: CallPhase) => {
+    callPhaseRef.current = phase;
+    setCallPhase(phase);
+  };
 
   const [finishing, setFinishing] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -108,12 +118,29 @@ const Roleplay = () => {
   useEffect(() => {
     supabase.from("pain_items").select("id, label").order("sort_order").then(({ data }) => setPains(data ?? []));
     loadHistory();
-    return () => cancelSpeaking();
+    return () => {
+      cancelSpeaking();
+      recorderRef.current?.cancel();
+    };
   }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, sending, liveCaption]);
+  }, [messages, sending, callPhase]);
+
+  // Cronômetro da gravação, com teto de 60 s por turno.
+  useEffect(() => {
+    if (callPhase !== "gravando") return;
+    setRecordSeconds(0);
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - started) / 1000);
+      setRecordSeconds(elapsed);
+      if (elapsed >= 60) stopAndSend();
+    }, 250);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callPhase]);
 
   const loadHistory = async () => {
     // A RLS também libera gestor/admin para ver o time (coaching); aqui,
@@ -147,8 +174,7 @@ const Roleplay = () => {
       setMessages([]);
       setFeedback(null);
       setSuggestFinish(false);
-      setCallPhase("idle");
-      setLiveCaption("");
+      setPhase("idle");
       setShowTyping(false);
     } catch (e: any) {
       toast({ title: "Não foi possível iniciar o treino", description: e.message, variant: "destructive" });
@@ -161,12 +187,11 @@ const Roleplay = () => {
   const sendMessage = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content || !session) return;
-    if (mode === "chamada" ? callPhase !== "idle" : sending) return;
+    if (mode === "chamada" ? !["idle", "transcrevendo"].includes(callPhaseRef.current) : sending) return;
 
     if (!text) setDraft("");
-    setLiveCaption("");
     setMessages((prev) => [...prev, { role: "seller", content }]);
-    if (mode === "chamada") setCallPhase("pensando");
+    if (mode === "chamada") setPhase("pensando");
     else setSending(true);
 
     try {
@@ -175,45 +200,75 @@ const Roleplay = () => {
       setMessages((prev) => [...prev, { role: "lead", content: data.reply }]);
       setSuggestFinish(!!data.suggestFinish);
       if (mode === "chamada") {
-        setCallPhase("falando");
+        setPhase("falando");
         await speak(data.reply);
-        setCallPhase("idle");
+        setPhase("idle");
       }
     } catch (e: any) {
       toast({ title: "Erro no treino", description: e.message, variant: "destructive" });
-      if (mode === "chamada") setCallPhase("idle");
+      if (mode === "chamada") setPhase("idle");
     } finally {
       if (mode !== "chamada") setSending(false);
     }
   };
 
-  const toggleMic = () => {
-    if (callPhase === "ouvindo") {
-      listenHandleRef.current?.stop();
+  // Grava a fala, manda para a transcrição no servidor (AssemblyAI) e envia
+  // o texto como um turno normal do treino.
+  const stopAndSend = async () => {
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+    recorderRef.current = null;
+    setPhase("transcrevendo");
+
+    try {
+      const { blob, durationSeconds } = await recorder.stop();
+      if (durationSeconds < 0.7 || blob.size < 1200) {
+        setMicError("Gravação muito curta. Segure a fala por mais tempo.");
+        setPhase("idle");
+        return;
+      }
+
+      const audioBase64 = await blobToBase64(blob);
+      const { data, error } = await supabase.functions.invoke("transcribe-utterance", {
+        body: { sessionId: session?.id, audioBase64, durationSeconds },
+      });
+      if (error) throw new Error(data?.error || error.message);
+
+      if (!data.text) {
+        setMicError("Não consegui entender o áudio. Tente falar um pouco mais alto.");
+        setPhase("idle");
+        return;
+      }
+      await sendMessage(data.text);
+    } catch (e: any) {
+      setMicError(e.message || "Falha ao transcrever o áudio.");
+      setPhase("idle");
+    }
+  };
+
+  const toggleMic = async () => {
+    if (callPhaseRef.current === "gravando") {
+      await stopAndSend();
       return;
     }
-    if (callPhase !== "idle") return;
+    if (callPhaseRef.current !== "idle") return;
 
     setMicError(null);
-    setLiveCaption("");
-    const handle = startListening({
-      onInterim: setLiveCaption,
-      onFinal: (text) => sendMessage(text),
-      onError: (message) => {
-        setMicError(message);
-        setCallPhase((p) => (p === "ouvindo" ? "idle" : p));
-      },
-      onEnd: () => setCallPhase((p) => (p === "ouvindo" ? "idle" : p)),
-    });
-    if (handle) {
-      listenHandleRef.current = handle;
-      setCallPhase("ouvindo");
+    cancelSpeaking();
+    try {
+      recorderRef.current = await startRecording();
+      setPhase("gravando");
+    } catch (e: any) {
+      setMicError(e.message || "Não foi possível abrir o microfone.");
+      setPhase("idle");
     }
   };
 
   const finishSession = async () => {
     if (!session) return;
     cancelSpeaking();
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
     setFinishing(true);
     try {
       const { data, error } = await supabase.functions.invoke("roleplay-finish", { body: { sessionId: session.id } });
@@ -229,18 +284,22 @@ const Roleplay = () => {
 
   const reset = () => {
     cancelSpeaking();
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
     setSession(null);
     setMessages([]);
     setFeedback(null);
     setSuggestFinish(false);
-    setCallPhase("idle");
+    setPhase("idle");
   };
 
+  const leadFirstName = session?.persona.name?.split(" ")[0] ?? "O lead";
   const CALL_PHASE_LABEL: Record<CallPhase, string> = {
     idle: "Toque para falar",
-    ouvindo: "Ouvindo…",
-    pensando: `${session?.persona.name?.split(" ")[0] ?? "O lead"} está pensando…`,
-    falando: `${session?.persona.name?.split(" ")[0] ?? "O lead"} está respondendo…`,
+    gravando: `Gravando ${String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:${String(recordSeconds % 60).padStart(2, "0")} — toque para enviar`,
+    transcrevendo: "Transcrevendo sua fala…",
+    pensando: `${leadFirstName} está pensando…`,
+    falando: `${leadFirstName} está respondendo…`,
   };
 
   return (
@@ -314,13 +373,13 @@ const Roleplay = () => {
                   type="button"
                   onClick={() => speechOk && setMode("chamada")}
                   disabled={!speechOk}
-                  title={speechOk ? undefined : "Reconhecimento de voz disponível só no Chrome e no Edge"}
+                  title={speechOk ? undefined : "Este navegador não permite gravar áudio"}
                   className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${mode === "chamada" ? "border-primary bg-primary/5" : "border-border/70 hover:bg-accent"}`}
                 >
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted"><Phone className="h-4 w-4" /></div>
                   <div>
                     <div className="text-sm font-medium">Chamada (voz)</div>
-                    <div className="text-xs text-muted-foreground">{speechOk ? "Fale e ouça a resposta" : "Precisa do Chrome ou do Edge"}</div>
+                    <div className="text-xs text-muted-foreground">{speechOk ? "Fale e ouça a resposta" : "Este navegador não grava áudio"}</div>
                   </div>
                 </button>
               </div>
@@ -348,7 +407,7 @@ const Roleplay = () => {
           </div>
 
           <div ref={scrollRef} className="flex max-h-[420px] min-h-[280px] flex-col gap-3 overflow-y-auto p-5">
-            {messages.length === 0 && callPhase !== "ouvindo" && (
+            {messages.length === 0 && callPhase !== "gravando" && (
               <p className="m-auto max-w-sm text-center text-sm text-muted-foreground">
                 {mode === "chamada" ? "Toque no microfone e abra a reunião como faria de verdade." : `Comece a conversa como se estivesse abrindo a reunião de verdade — ${session.persona.name} está esperando.`}
               </p>
@@ -360,10 +419,14 @@ const Roleplay = () => {
                 </div>
               </div>
             ))}
-            {mode === "chamada" && callPhase === "ouvindo" && (
+            {mode === "chamada" && (callPhase === "gravando" || callPhase === "transcrevendo") && (
               <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm italic leading-relaxed text-muted-foreground">
-                  {liveCaption || "…"}
+                <div className="flex max-w-[80%] items-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm italic text-muted-foreground">
+                  {callPhase === "gravando" ? (
+                    <><span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />gravando sua fala…</>
+                  ) : (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" />transcrevendo…</>
+                  )}
                 </div>
               </div>
             )}
@@ -408,14 +471,14 @@ const Roleplay = () => {
                   <button
                     type="button"
                     onClick={toggleMic}
-                    disabled={callPhase === "pensando" || callPhase === "falando"}
-                    aria-label={callPhase === "ouvindo" ? "Parar de ouvir" : "Falar"}
+                    disabled={callPhase === "transcrevendo" || callPhase === "pensando" || callPhase === "falando"}
+                    aria-label={callPhase === "gravando" ? "Enviar fala" : "Falar"}
                     className={`relative grid h-16 w-16 place-items-center rounded-full text-white shadow-lg transition-transform disabled:opacity-60 ${
-                      callPhase === "ouvindo" ? "bg-destructive scale-105" : "bg-brand-gradient hover:scale-105"
+                      callPhase === "gravando" ? "bg-destructive scale-105" : "bg-brand-gradient hover:scale-105"
                     }`}
                   >
-                    {callPhase === "ouvindo" && <span className="absolute inset-0 animate-ping rounded-full bg-destructive/50" />}
-                    {callPhase === "pensando" ? <Loader2 className="h-6 w-6 animate-spin" /> : callPhase === "falando" ? <Volume2 className="h-6 w-6" /> : callPhase === "ouvindo" ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                    {callPhase === "gravando" && <span className="absolute inset-0 animate-ping rounded-full bg-destructive/50" />}
+                    {callPhase === "transcrevendo" || callPhase === "pensando" ? <Loader2 className="h-6 w-6 animate-spin" /> : callPhase === "falando" ? <Volume2 className="h-6 w-6" /> : callPhase === "gravando" ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
                   </button>
                   <div className="text-sm text-muted-foreground">{CALL_PHASE_LABEL[callPhase]}</div>
                 </div>

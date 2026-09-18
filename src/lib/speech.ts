@@ -1,98 +1,118 @@
-// Reconhecimento e síntese de voz pelo navegador (Web Speech API).
+// Voz do modo de treino.
 //
-// Usado no modo de chamada do treino: fala do vendedor vira texto aqui, no
-// navegador, antes de ir para a edge function; a resposta do lead simulado
-// volta como texto e é falada aqui também. Nenhum áudio sai da máquina do
-// usuário além da própria função de síntese do sistema operacional.
+// Gravação: MediaRecorder + getUserMedia, que existem em todo navegador
+// moderno. O áudio vai para a edge function transcribe-utterance, que
+// transcreve pelo AssemblyAI — o mesmo serviço das reuniões reais.
 //
-// SpeechRecognition é implementado só por Chrome e Edge (não é padrão W3C
-// estabilizado — por isso não está nos tipos do DOM do TypeScript). Firefox e
-// Safari não têm suporte; isSpeechSupported() cobre essa checagem antes de
-// oferecer o modo de chamada.
+// A versão anterior usava o SpeechRecognition embutido no navegador. Ele
+// depende do serviço de fala do Google e só funciona no Chrome do Google:
+// em Arc, Brave, Vivaldi e afins o objeto existe (a detecção de suporte
+// passava) mas a chamada falhava com erro "network". Daí a troca.
+//
+// Fala do lead: speechSynthesis, que usa as vozes do próprio sistema
+// operacional e não depende de serviço externo — esse continua.
 
-interface SpeechRecognitionResultLike {
-  isFinal: boolean;
-  0: { transcript: string };
-}
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: ArrayLike<SpeechRecognitionResultLike>;
-}
-interface SpeechRecognitionErrorLike {
-  error: string;
-}
-interface SpeechRecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  start(): void;
-  stop(): void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
-  onend: (() => void) | null;
+export interface Recorder {
+  /** Encerra a gravação e devolve o áudio e a duração aproximada. */
+  stop: () => Promise<{ blob: Blob; durationSeconds: number }>;
+  /** Encerra e descarta, liberando o microfone. */
+  cancel: () => void;
 }
 
-function getRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+export function isMicSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof window.MediaRecorder !== "undefined"
+  );
 }
 
-export function isSpeechSupported(): boolean {
-  return typeof window !== "undefined" && !!getRecognitionCtor() && "speechSynthesis" in window;
+export function isSpeechSynthesisSupported(): boolean {
+  return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-export interface ListenHandlers {
-  /** Chamado a cada trecho reconhecido, final ou não — para legenda ao vivo. */
-  onInterim?: (text: string) => void;
-  /** Chamado uma vez, quando o navegador detecta pausa na fala. */
-  onFinal: (text: string) => void;
-  onError?: (message: string) => void;
-  onEnd?: () => void;
-  lang?: string;
+/** Formato de gravação que o navegador aceita, em ordem de preferência. */
+function pickMimeType(): string | undefined {
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  for (const type of candidates) {
+    if (window.MediaRecorder.isTypeSupported?.(type)) return type;
+  }
+  return undefined; // deixa o navegador escolher
 }
 
-/** Começa a ouvir um único trecho de fala. Devolve um handle para parar manualmente, ou null se o navegador não suporta. */
-export function startListening(handlers: ListenHandlers): { stop: () => void } | null {
-  const Ctor = getRecognitionCtor();
-  if (!Ctor) {
-    handlers.onError?.("Reconhecimento de voz não é suportado neste navegador. Use o Chrome, ou digite a fala.");
-    return null;
+export async function startRecording(): Promise<Recorder> {
+  if (!isMicSupported()) {
+    throw new Error("Este navegador não permite gravar áudio. Use o campo de texto para responder.");
   }
 
-  const recognition = new Ctor();
-  recognition.lang = handlers.lang ?? "pt-BR";
-  recognition.continuous = false;
-  recognition.interimResults = true;
-
-  let finalText = "";
-  recognition.onresult = (event) => {
-    let interim = "";
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const result = event.results[i];
-      const transcript = result[0]?.transcript ?? "";
-      if (result.isFinal) finalText += transcript;
-      else interim += transcript;
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+    });
+  } catch (e) {
+    // Cada causa tem uma saída diferente para quem está usando; mensagem
+    // genérica aqui só faz a pessoa ficar tentando de novo sem saber o motivo.
+    const name = (e as DOMException)?.name;
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      throw new Error("Permissão de microfone negada. Libere o microfone para este site nas configurações do navegador e tente de novo.");
     }
-    handlers.onInterim?.((finalText + interim).trim());
-  };
-  recognition.onerror = (event) => {
-    const message = event.error === "not-allowed" || event.error === "permission-denied"
-      ? "Permissão de microfone negada. Libere o microfone para este site e tente de novo."
-      : event.error === "no-speech"
-      ? "Não captei nenhuma fala. Tente de novo."
-      : `Erro no microfone (${event.error}).`;
-    handlers.onError?.(message);
-  };
-  recognition.onend = () => {
-    if (finalText.trim()) handlers.onFinal(finalText.trim());
-    handlers.onEnd?.();
-  };
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      throw new Error("Nenhum microfone encontrado neste computador.");
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      throw new Error("O microfone está ocupado por outro programa (uma chamada aberta, por exemplo). Feche o outro app e tente de novo.");
+    }
+    if (name === "NotSupportedError") {
+      throw new Error("Este navegador não permite gravar áudio nesta página. Use o campo de texto para responder.");
+    }
+    throw new Error(`Não foi possível abrir o microfone${name ? ` (${name})` : ""}.`);
+  }
 
-  recognition.start();
-  return { stop: () => recognition.stop() };
+  const mimeType = pickMimeType();
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const chunks: BlobPart[] = [];
+  const startedAt = Date.now();
+
+  recorder.ondataavailable = (event) => {
+    if (event.data && event.data.size > 0) chunks.push(event.data);
+  };
+  recorder.start();
+
+  const releaseMic = () => stream.getTracks().forEach((track) => track.stop());
+
+  return {
+    stop: () =>
+      new Promise((resolve) => {
+        recorder.onstop = () => {
+          releaseMic();
+          resolve({
+            blob: new Blob(chunks, { type: recorder.mimeType || "audio/webm" }),
+            durationSeconds: (Date.now() - startedAt) / 1000,
+          });
+        };
+        if (recorder.state !== "inactive") recorder.stop();
+        else recorder.onstop?.(new Event("stop"));
+      }),
+    cancel: () => {
+      if (recorder.state !== "inactive") recorder.stop();
+      releaseMic();
+    },
+  };
+}
+
+/** Converte o áudio gravado para base64, formato aceito pela edge function. */
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = String(reader.result ?? "");
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(new Error("Não foi possível ler o áudio gravado."));
+    reader.readAsDataURL(blob);
+  });
 }
 
 let voicesPromise: Promise<SpeechSynthesisVoice[]> | null = null;
@@ -102,7 +122,7 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
     const existing = window.speechSynthesis.getVoices();
     if (existing.length) return resolve(existing);
     window.speechSynthesis.onvoiceschanged = () => resolve(window.speechSynthesis.getVoices());
-    // Alguns navegadores nunca disparam o evento se a lista já é vazia por design; não trava a UI.
+    // Alguns navegadores nunca disparam o evento; não trava a interface.
     setTimeout(() => resolve(window.speechSynthesis.getVoices()), 1200);
   });
   return voicesPromise;
@@ -110,8 +130,8 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
 
 /** Fala um texto em voz alta. Resolve quando termina (ou falha silenciosamente). */
 export async function speak(text: string, lang = "pt-BR"): Promise<void> {
-  if (!("speechSynthesis" in window) || !text.trim()) return;
-  window.speechSynthesis.cancel(); // corta qualquer fala pendente antes de começar a nova
+  if (!isSpeechSynthesisSupported() || !text.trim()) return;
+  window.speechSynthesis.cancel();
   const voices = await loadVoices();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
@@ -127,5 +147,5 @@ export async function speak(text: string, lang = "pt-BR"): Promise<void> {
 }
 
 export function cancelSpeaking(): void {
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
 }
