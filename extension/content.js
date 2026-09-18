@@ -1,4 +1,4 @@
-// Sales Coach AI - Content Script
+// Sales Coach - Content Script
 // Floating overlay with: recording controls, live transcription, real-time coaching tips.
 
 (() => {
@@ -34,12 +34,12 @@
   overlay.innerHTML = `
     <button class="sc-minimize" id="sc-minimize" title="Minimizar">─</button>
     <div class="sc-header">
-      <span>🎯</span>
-      <h2>Sales Coach AI</h2>
+      <img class="sc-mark" src="${chrome.runtime.getURL('icon48.png')}" alt="">
+      <h2>Sales Coach</h2>
       <div class="sc-dot"></div>
     </div>
     <div class="sc-body">
-      <div id="sc-init" class="sc-status sending">🖥 Selecione a tela para compartilhar...</div>
+      <div id="sc-init" class="sc-status sending">Selecione a tela para compartilhar…</div>
       <div id="sc-recording" style="display:none;">
         <div class="sc-recording-indicator">
           <div class="sc-pulse"></div>
@@ -47,7 +47,7 @@
           <span id="sc-live-flag" class="sc-live-flag">LIVE</span>
         </div>
         <div class="sc-timer" id="sc-timer">00:00:00</div>
-        <div class="sc-mode" id="sc-mode">🖥 Tela + 🎙 Áudio</div>
+        <div class="sc-mode" id="sc-mode">Tela + áudio</div>
 
         <div class="sc-section-title">Dicas ao vivo</div>
         <div id="sc-tips" class="sc-tips">
@@ -57,7 +57,7 @@
         <div class="sc-section-title">Transcrição</div>
         <div id="sc-live-text" class="sc-live-text">…</div>
 
-        <button class="sc-btn sc-btn-danger" id="sc-btn-stop">⏹ Parar e Enviar</button>
+        <button class="sc-btn sc-btn-danger" id="sc-btn-stop">Parar e enviar</button>
       </div>
       <div id="sc-status-msg" style="display:none;"></div>
     </div>
@@ -199,7 +199,7 @@
     });
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
-      showStatus('sending', '⏳ Enviando gravação...');
+      showStatus('sending', 'Enviando gravação...');
       notifyBackground('uploadStarted');
       stopLive();
       if (recordedChunks.length === 0) { showStatus('error', '❌ Nada gravado.'); cleanup(); autoRemove(6000); return; }
@@ -213,7 +213,7 @@
     startTime = Date.now();
     initEl.style.display = 'none';
     recordingEl.style.display = '';
-    modeEl.textContent = isVideo ? '🖥 Tela + 🎙 Áudio' : '🎙 Apenas áudio';
+    modeEl.textContent = isVideo ? 'Tela + áudio' : 'Apenas áudio';
     startTimer();
     chrome.storage.local.set({
       recordingState: 'recording', recordingStartTime: startTime,
@@ -459,11 +459,11 @@
 
       chrome.storage.local.set({ recordingState: 'done', lastMeetingId: result.meetingId });
       chrome.storage.local.remove(['meetingData']);
-      showStatus('success', '✅ Gravação enviada! Análise em curso.');
+      showStatus('success', 'Gravação enviada! Análise em curso.');
       notifyBackground('uploadComplete', { meetingId: result.meetingId });
       autoRemove(5000);
     } catch (err) {
-      showStatus('error', '❌ ' + err.message);
+      showStatus('error', err.message);
       notifyBackground('uploadError', { error: err.message });
       autoRemove(6000);
     }

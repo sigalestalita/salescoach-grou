@@ -1,4 +1,4 @@
-// Sales Coach AI - Popup
+// Sales Coach - Popup
 // Handles: login, meeting form, recording state display.
 // On "Start": injects content script into active tab for recording.
 
@@ -155,7 +155,7 @@ function showActiveRecording(mode) {
   formSection.classList.add('hidden');
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
-  screenStatus.textContent = mode === 'audio_only' ? '🎙 Apenas áudio' : '🖥 Tela + 🎙 Áudio';
+  screenStatus.textContent = mode === 'audio_only' ? 'Apenas áudio' : 'Tela + áudio';
   startTimer();
 }
 
@@ -164,7 +164,7 @@ function showUploadingState() {
   activeRecording.classList.add('hidden');
   uploadStatus.classList.remove('hidden');
   uploadStatus.className = 'status sending';
-  uploadStatus.textContent = '⏳ Enviando gravação...';
+  uploadStatus.textContent = 'Enviando gravação…';
   stopTimer();
 }
 
@@ -173,7 +173,7 @@ function showDoneState() {
   activeRecording.classList.add('hidden');
   uploadStatus.classList.remove('hidden');
   uploadStatus.className = 'status success';
-  uploadStatus.textContent = '✅ Gravação enviada! A análise será processada automaticamente.';
+  uploadStatus.textContent = 'Gravação enviada. A análise começa automaticamente.';
   stopTimer();
   setTimeout(async () => {
     await chrome.storage.local.set({ recordingState: 'idle' });
@@ -187,7 +187,7 @@ function showErrorState(msg) {
   activeRecording.classList.add('hidden');
   uploadStatus.classList.remove('hidden');
   uploadStatus.className = 'status error';
-  uploadStatus.textContent = '❌ ' + msg;
+  uploadStatus.textContent = msg;
   stopTimer();
   setTimeout(async () => {
     await chrome.storage.local.set({ recordingState: 'idle' });

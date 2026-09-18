@@ -1,6 +1,6 @@
-// Sales Coach AI - Background Service Worker
+// Sales Coach - Background Service Worker
 
-function setBadge(text, color = '#FF0000') {
+function setBadge(text, color = '#F06B5E') {
   chrome.action.setBadgeText({ text });
   chrome.action.setBadgeBackgroundColor({ color });
 }
@@ -8,7 +8,7 @@ function setBadge(text, color = '#FF0000') {
 // Restore badge on startup
 chrome.storage.local.get(['recordingState'], (data) => {
   if (data.recordingState === 'recording') setBadge('REC');
-  else if (data.recordingState === 'uploading' || data.recordingState === 'stopping') setBadge('...', '#FF8800');
+  else if (data.recordingState === 'uploading' || data.recordingState === 'stopping') setBadge('...', '#15498D');
 });
 
 // Listen for messages from content script and popup
@@ -17,7 +17,7 @@ chrome.runtime.onMessage.addListener((msg) => {
     setBadge('REC');
   }
   if (msg.action === 'uploadStarted') {
-    setBadge('...', '#FF8800');
+    setBadge('...', '#15498D');
   }
   if (msg.action === 'uploadComplete') {
     setBadge('');

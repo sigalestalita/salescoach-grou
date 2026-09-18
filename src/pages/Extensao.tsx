@@ -121,7 +121,7 @@ export default function Extensao() {
           <p>4. Clique em <strong className="text-foreground">"Iniciar Gravação"</strong> e selecione a tela/aba</p>
           <p>5. Realize sua reunião normalmente</p>
           <p>6. Ao finalizar, clique em <strong className="text-foreground">"Parar e Enviar"</strong></p>
-          <p>7. A gravação será enviada e analisada automaticamente 🎯</p>
+          <p>7. A gravação será enviada e analisada automaticamente</p>
         </CardContent>
       </Card>
     </div>

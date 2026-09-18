@@ -1,4 +1,4 @@
-/* Sales Coach AI - Content Script Overlay */
+/* Sales Coach - overlay na reunião */
 #salescoach-overlay {
   position: fixed;
   top: 16px;
@@ -7,11 +7,11 @@
   max-height: 80vh;
   overflow-y: auto;
   background: #071a34;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  border: 1px solid rgba(143,193,255,.22);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.03) inset;
+  color: #E6EEF9;
+  font-family: Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   z-index: 2147483647;
   padding: 16px;
   font-size: 13px;
@@ -20,10 +20,11 @@
   display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
 }
 #salescoach-overlay .sc-header h2 {
-  font-size: 14px; font-weight: 700; color: #fb923c; margin: 0;
+  font-size: 13.5px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: -.01em;
 }
+#salescoach-overlay .sc-mark { width: 22px; height: 22px; border-radius: 6px; }
 #salescoach-overlay .sc-header .sc-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+  width: 8px; height: 8px; border-radius: 50%; background: #4FCB8A; box-shadow: 0 0 8px #4FCB8A;
 }
 #salescoach-overlay .sc-recording-indicator {
   display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;
@@ -34,34 +35,34 @@
 }
 #salescoach-overlay .sc-live-flag {
   font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
-  background: #334155; color: #94a3b8; letter-spacing: 0.5px;
+  background: rgba(255,255,255,.08); color: #A9B7CC; letter-spacing: 0.5px;
 }
 #salescoach-overlay .sc-live-flag.on { background: #15498d; color: #ffffff; }
 @keyframes sc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 #salescoach-overlay .sc-timer {
-  text-align: center; font-size: 28px; font-weight: 700; color: #f87171;
+  text-align: center; font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -.02em;
   margin: 6px 0; font-variant-numeric: tabular-nums;
 }
 #salescoach-overlay .sc-mode {
-  text-align: center; font-size: 11px; color: #22c55e; margin-bottom: 10px;
+  text-align: center; font-size: 11px; color: #4FCB8A; margin-bottom: 10px;
 }
 #salescoach-overlay .sc-section-title {
-  font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;
+  font-size: 10px; font-weight: 700; color: #6F82A0; text-transform: uppercase;
   letter-spacing: 1px; margin: 12px 0 6px;
 }
 
 #salescoach-overlay .sc-tips { display: flex; flex-direction: column; gap: 6px; }
 #salescoach-overlay .sc-tips-empty {
-  font-size: 12px; color: #64748b; text-align: center; padding: 8px;
-  border: 1px dashed #334155; border-radius: 8px;
+  font-size: 12px; color: #6F82A0; text-align: center; padding: 8px;
+  border: 1px dashed rgba(143,193,255,.25); border-radius: 8px;
 }
 #salescoach-overlay .sc-tip {
   background: #0e2b4c; border-left: 3px solid #15498d; border-radius: 6px;
   padding: 8px 10px; animation: sc-slidein 0.3s ease;
 }
 @keyframes sc-slidein { from { opacity: 0; transform: translateY(-4px);} to { opacity:1; transform:none;} }
-#salescoach-overlay .sc-tip-alta { border-left-color: #ef4444; background: #2a1a1a; }
+#salescoach-overlay .sc-tip-alta { border-left-color: #F06B5E; background: #2A1A22; }
 #salescoach-overlay .sc-tip-baixa { border-left-color: #64748b; }
 #salescoach-overlay .sc-tip-head {
   display: flex; justify-content: space-between; font-size: 9px;
@@ -73,7 +74,7 @@
 #salescoach-overlay .sc-tip-say { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7fb3ff; margin-bottom: 3px; }
 
 #salescoach-overlay .sc-live-text {
-  font-size: 11px; color: #94a3b8; background: #0a1320; padding: 8px;
+  font-size: 11px; color: #A9B7CC; background: #050F20; padding: 8px;
   border-radius: 6px; min-height: 32px; max-height: 60px; overflow-y: auto;
 }
 
@@ -81,21 +82,22 @@
   width: 100%; padding: 10px; border: none; border-radius: 8px;
   font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 12px;
 }
-#salescoach-overlay .sc-btn-danger { background: #ef4444; color: white; }
-#salescoach-overlay .sc-btn-danger:hover { background: #dc2626; }
+#salescoach-overlay .sc-btn { font-family: inherit; }
+#salescoach-overlay .sc-btn-danger { background: #F06B5E; color: white; }
+#salescoach-overlay .sc-btn-danger:hover { background: #E25A4D; }
 
 #salescoach-overlay .sc-status {
   text-align: center; padding: 10px; border-radius: 8px; font-size: 13px; margin-top: 8px;
 }
-#salescoach-overlay .sc-status.sending { background: #1e3a5f; color: #60a5fa; }
-#salescoach-overlay .sc-status.success { background: #14532d; color: #4ade80; }
-#salescoach-overlay .sc-status.error { background: #450a0a; color: #fca5a5; }
+#salescoach-overlay .sc-status.sending { background: rgba(79,139,240,.15); color: #8FC1FF; }
+#salescoach-overlay .sc-status.success { background: rgba(79,203,138,.15); color: #BFF0D4; }
+#salescoach-overlay .sc-status.error { background: rgba(240,107,94,.15); color: #FFB3A8; }
 
 #salescoach-overlay .sc-minimize {
   position: absolute; top: 8px; right: 8px; background: none; border: none;
-  color: #64748b; cursor: pointer; font-size: 16px; padding: 4px; line-height: 1;
+  color: #6F82A0; cursor: pointer; font-size: 16px; padding: 4px; line-height: 1;
 }
-#salescoach-overlay .sc-minimize:hover { color: #e2e8f0; }
+#salescoach-overlay .sc-minimize:hover { color: #ffffff; }
 #salescoach-overlay.minimized { width: auto; padding: 8px 12px; cursor: pointer; max-height: none; }
 #salescoach-overlay.minimized .sc-body { display: none; }
 #salescoach-overlay.minimized .sc-header { margin-bottom: 0; }

@@ -3,50 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales Coach AI</title>
+  <title>Sales Coach</title>
   <style>
+    :root { --navy: #071A34; --navy-2: #0E2B4C; --blue: #053B6D; --primary: #15498D; --glow: #4F8BF0; --ink: #E6EEF9; --ink-soft: #A9B7CC; --ink-faint: #6F82A0; --line: rgba(143,193,255,.18); --ok: #4FCB8A; --danger: #F06B5E; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { width: 360px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+    body { width: 360px; font-family: Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(160deg, var(--navy), #0A2244); color: var(--ink); }
     .container { padding: 16px; }
     .header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-    .header h1 { font-size: 16px; font-weight: 700; color: #60a5fa; }
-    .header .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
-    .header .dot.offline { background: #ef4444; }
+    .header img { width: 28px; height: 28px; border-radius: 7px; }
+    .header h1 { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -.01em; flex: 1; }
+    .header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+    .header .dot.offline { background: var(--danger); box-shadow: none; }
     .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
-    .field label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-    .field input, .field select { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; color: #e2e8f0; font-size: 13px; outline: none; }
-    .field input:focus, .field select:focus { border-color: #60a5fa; }
-    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-bottom: 6px; }
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-danger { background: #ef4444; color: white; }
-    .btn-danger:hover { background: #dc2626; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .recording-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px; }
-    .pulse { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .timer { text-align: center; font-size: 28px; font-weight: 700; color: #f87171; margin: 8px 0; font-variant-numeric: tabular-nums; }
-    .screen-status { text-align: center; font-size: 12px; color: #22c55e; margin-bottom: 8px; }
+    .field label { font-size: 10.5px; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; }
+    .field input, .field select { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; color: var(--ink); font-size: 13px; font-family: inherit; outline: none; transition: border-color .2s, box-shadow .2s; }
+    .field input::placeholder { color: var(--ink-faint); }
+    .field input:focus, .field select:focus { border-color: var(--glow); box-shadow: 0 0 0 3px rgba(79,139,240,.18); }
+    .field select option { background: var(--navy-2); color: var(--ink); }
+    .btn { width: 100%; padding: 11px; border: none; border-radius: 9px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; transition: transform .15s, box-shadow .2s, background .2s; margin-bottom: 6px; }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), #1E5BB0); color: #fff; box-shadow: 0 8px 20px -10px rgba(79,139,240,.8); }
+    .btn-primary:hover { background: linear-gradient(135deg, #1A56A6, #2466C2); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #E25A4D; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .recording-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px; font-weight: 500; }
+    .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 10px var(--danger); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+    .timer { text-align: center; font-size: 30px; font-weight: 700; color: #fff; margin: 8px 0; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .screen-status { text-align: center; font-size: 12px; color: var(--ok); margin-bottom: 8px; }
     .status { text-align: center; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; }
-    .status.sending { background: #1e3a5f; color: #60a5fa; }
-    .status.success { background: #14532d; color: #4ade80; }
-    .status.error { background: #450a0a; color: #fca5a5; }
-    .separator { height: 1px; background: #334155; margin: 10px 0; }
-    .logout-link { font-size: 11px; color: #64748b; text-align: center; cursor: pointer; }
-    .logout-link:hover { color: #94a3b8; }
+    .status.sending { background: rgba(79,139,240,.15); color: #8FC1FF; }
+    .status.success { background: rgba(79,203,138,.15); color: #BFF0D4; }
+    .status.error { background: rgba(240,107,94,.15); color: #FFB3A8; }
+    .separator { height: 1px; background: var(--line); margin: 10px 0; }
+    .logout-link { font-size: 11px; color: var(--ink-faint); text-align: center; cursor: pointer; }
+    .logout-link:hover { color: var(--ink-soft); }
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🎯 Sales Coach AI</h1>
+      <img src="icon48.png" alt=""><h1>Sales Coach</h1>
       <div class="dot" id="status-dot"></div>
     </div>
 
     <!-- Login -->
     <div id="login-section">
-      <h2 style="font-size:14px;color:#94a3b8;margin-bottom:12px;">Faça login para começar</h2>
+      <h2 style="font-size:13px;font-weight:500;color:#A9B7CC;margin-bottom:12px;">Entre com a sua conta do Sales Coach</h2>
       <div class="field">
         <label>Email</label>
         <input type="email" id="login-email" placeholder="seu@email.com">
@@ -64,7 +69,7 @@
       <!-- Form -->
       <div id="form-section">
         <div class="field">
-          <label>Título da Agenda</label>
+          <label>Título da agenda</label>
           <input type="text" id="meeting-title" placeholder="Ex: Reunião com Empresa X">
         </div>
         <div class="field">
@@ -72,18 +77,18 @@
           <select id="meeting-type"></select>
         </div>
         <div class="field">
-          <label>Nome do Lead</label>
+          <label>Nome do lead</label>
           <input type="text" id="lead-name" placeholder="Nome do contato">
         </div>
         <div class="field">
-          <label>Empresa do Lead</label>
+          <label>Empresa do lead</label>
           <input type="text" id="lead-company" placeholder="Nome da empresa">
         </div>
         <div class="field">
-          <label>Email do Lead</label>
+          <label>E-mail do lead</label>
           <input type="email" id="lead-email" placeholder="email@empresa.com">
         </div>
-        <button class="btn btn-primary" id="btn-start">🎙 Iniciar Gravação (Tela + Áudio)</button>
+        <button class="btn btn-primary" id="btn-start">Iniciar gravação (tela + áudio)</button>
       </div>
 
       <!-- Active recording -->
@@ -93,8 +98,8 @@
           <span>Gravando...</span>
         </div>
         <div class="timer" id="timer">00:00:00</div>
-        <div class="screen-status" id="screen-status">🖥 Tela + 🎙 Áudio</div>
-        <button class="btn btn-danger" id="btn-stop">⏹ Parar e Enviar</button>
+        <div class="screen-status" id="screen-status">Tela + áudio</div>
+        <button class="btn btn-danger" id="btn-stop">Parar e enviar</button>
       </div>
 
       <!-- Status -->
