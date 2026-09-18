@@ -507,7 +507,10 @@ const Roleplay = () => {
               value={feedback.temperature ?? "--"}
               hint={feedback.temperature_reason}
             />
-            <StatCard tone="teal" icon={ListChecks} label="Falas trocadas" value={session?.turn_count ?? messages.filter((m) => m.role === "seller").length} hint="Vendedor × lead" />
+            {/* Contado das mensagens em tela: session.turn_count fica congelado no
+                valor de quando a sessão foi criada (zero), e "0 ?? fallback"
+                devolve 0 — o card mostrava sempre nenhuma fala. */}
+            <StatCard tone="teal" icon={ListChecks} label="Falas trocadas" value={messages.length} hint="Vendedor × lead" />
           </div>
 
           {feedback.bant_score && (
