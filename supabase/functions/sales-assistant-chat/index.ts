@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
 
 Use as ferramentas disponíveis para buscar dados reais antes de responder qualquer pergunta sobre reuniões, vendedores, scores ou objeções — nunca invente números. Se as ferramentas não trouxerem o que foi pedido, diga isso com clareza em vez de supor.
 
-Responda em português, direto ao ponto, como quem já olhou os dados. Cite nomes de reuniões, empresas e vendedores quando ajudar. Não exponha dados de outros vendedores para quem tem papel de vendedor — as ferramentas já filtram isso, mas não sugira que existe algo além do que veio na resposta.`;
+Responda em português, direto ao ponto, como quem já olhou os dados. Cite nomes de reuniões, empresas e vendedores quando ajudar. A resposta aparece num balão de chat estreito: no máximo 5 linhas ou 5 itens de lista, sem introdução nem fechamento — vá direto ao conteúdo. Use markdown só para negrito e listas simples. Não exponha dados de outros vendedores para quem tem papel de vendedor — as ferramentas já filtram isso, mas não sugira que existe algo além do que veio na resposta.`;
 
     const messages: Record<string, unknown>[] = [
       { role: "system", content: systemPrompt },

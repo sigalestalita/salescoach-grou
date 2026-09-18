@@ -19,6 +19,35 @@ interface Msg {
   content: string;
 }
 
+/**
+ * O modelo responde em markdown. Em vez de puxar uma biblioteca inteira só
+ * para negrito e lista — ou mostrar os asteriscos crus na tela, como estava
+ * acontecendo — o texto é quebrado aqui em elementos React.
+ */
+function renderRich(text: string) {
+  const bold = (line: string) =>
+    line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+      part.startsWith("**") && part.endsWith("**") && part.length > 4
+        ? <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+        : <span key={i}>{part}</span>,
+    );
+
+  return text.split("\n").map((raw, i) => {
+    const line = raw.trimEnd();
+    const bullet = line.match(/^\s*[*-]\s+(.*)$/);
+    if (bullet) {
+      return (
+        <div key={i} className="flex gap-1.5 pl-0.5">
+          <span aria-hidden="true" className="select-none opacity-60">•</span>
+          <span>{bold(bullet[1])}</span>
+        </div>
+      );
+    }
+    if (!line.trim()) return <div key={i} className="h-1.5" />;
+    return <div key={i}>{bold(line)}</div>;
+  });
+}
+
 const SUGGESTIONS = [
   "Quais agendas ficaram mornas essa semana?",
   "Como está o score médio do time este mês?",
@@ -135,8 +164,8 @@ export function SalesAssistant() {
             )}
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${m.role === "user" ? "bg-brand-gradient text-white" : "bg-muted text-foreground"}`}>
-                  {m.content}
+                <div className={`max-w-[85%] space-y-0.5 rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${m.role === "user" ? "whitespace-pre-wrap bg-brand-gradient text-white" : "bg-muted text-foreground"}`}>
+                  {m.role === "assistant" ? renderRich(m.content) : m.content}
                 </div>
               </div>
             ))}
