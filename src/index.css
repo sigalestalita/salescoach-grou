@@ -167,6 +167,17 @@
   box-shadow: 0 14px 34px -18px hsl(var(--brand-navy) / 0.35);
 }
 
+/* ===== Tons dos cartões de indicador (StatCard) =====
+ * navy e blue seguem a marca da organização; os outros são fixos.
+ */
+.tone-navy  { background-image: linear-gradient(135deg, hsl(var(--brand-navy)) 0%, hsl(var(--primary)) 100%); }
+.tone-blue  { background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--brand-accent) / 0.85) 100%); background-color: hsl(var(--primary)); }
+.tone-teal  { background-image: linear-gradient(135deg, #0B6E62 0%, #17A398 100%); }
+.tone-coral { background-image: linear-gradient(135deg, #B8362E 0%, #F0793F 100%); }
+.tone-amber { background-image: linear-gradient(135deg, #A65A00 0%, #E8A03A 100%); }
+.tone-sky   { background-image: linear-gradient(135deg, #0B5C8E 0%, #3FA9E0 100%); }
+.tone-slate { background-image: linear-gradient(135deg, #3B4A60 0%, #6B7A93 100%); }
+
 /* ===== Menu lateral flutuante ===== */
 .sidebar-pill {
   @apply relative grid grid-cols-2 rounded-full p-1;

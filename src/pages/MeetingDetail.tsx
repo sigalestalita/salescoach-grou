@@ -18,7 +18,7 @@ import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 const MetricTooltip = ({ text }: { text: string }) => (
   <Tooltip>
     <TooltipTrigger asChild>
-      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help shrink-0" />
+      <Info className="h-3.5 w-3.5 cursor-help shrink-0 opacity-60" />
     </TooltipTrigger>
     <TooltipContent side="top" className="max-w-xs text-xs">
       <p>{text}</p>
@@ -172,12 +172,13 @@ const MeetingDetail = () => {
 
   const tempLabels = temperatureLabels(config.temperatureLevels);
 
+  // Cartão de temperatura em cor cheia, do frio ao quente.
   const tempColors: Record<string, string> = {
-    congelado: "bg-muted/30 text-muted-foreground border-muted/30",
-    frio: "bg-info/10 text-info border-info/20",
-    morno: "bg-warning/10 text-warning border-warning/20",
-    quente: "bg-destructive/10 text-destructive border-destructive/20",
-    muito_quente: "bg-destructive/20 text-destructive border-destructive/40",
+    congelado: "tone-slate",
+    frio: "tone-sky",
+    morno: "tone-amber",
+    quente: "tone-coral",
+    muito_quente: "tone-coral",
   };
 
   return (
@@ -550,9 +551,9 @@ const MeetingDetail = () => {
               </CardContent>
             </Card>
 
-            <Card className={meeting.temperature ? tempColors[meeting.temperature] : ""}>
+            <Card className={meeting.temperature ? `border-0 text-white ${tempColors[meeting.temperature]}` : ""}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+                <CardTitle className={`text-sm flex items-center gap-2 ${meeting.temperature ? "text-white/85" : ""}`}>
                   <Thermometer className="h-4 w-4" />
                   Temperatura
                   <MetricTooltip text="Classificação NATO/BANT: Congelado = sem perfil para o negócio; Frio = sem demanda clara; Morno = necessidade sem urgência; Quente = prontos para venda em até 90 dias; Muito Quente = venda imediata." />
@@ -565,14 +566,14 @@ const MeetingDetail = () => {
                     : "--"}
                 </div>
                 {rawAnalysis?.temperature_reason && (
-                  <p className="text-xs text-muted-foreground mt-2 text-center italic">{rawAnalysis.temperature_reason}</p>
+                  <p className={`text-xs mt-2 text-center italic ${meeting.temperature ? "text-white/75" : "text-muted-foreground"}`}>{rawAnalysis.temperature_reason}</p>
                 )}
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-0 text-white tone-teal">
               <CardHeader className="pb-2">
-               <CardTitle className="text-sm flex items-center gap-2">
+               <CardTitle className="text-sm flex items-center gap-2 text-white/85">
                   <MessageSquare className="h-4 w-4" />
                   Talk Ratio
                   <MetricTooltip text="Proporção de tempo de fala entre vendedor e lead. O ideal é que o vendedor fale entre 30-50% do tempo, dando espaço para o lead expor suas necessidades. Vendedores que falam demais perdem oportunidades de entender o cliente." />
@@ -585,13 +586,13 @@ const MeetingDetail = () => {
                       <span>Vendedor: {talkRatio.seller}%</span>
                       <span>Lead: {talkRatio.lead}%</span>
                     </div>
-                    <Progress value={talkRatio.seller} />
+                    <Progress value={talkRatio.seller} className="bg-white/25 [&>div]:bg-white" />
                     {talkRatio.reason && (
-                      <p className="text-xs text-muted-foreground italic">{talkRatio.reason}</p>
+                      <p className="text-xs text-white/75 italic">{talkRatio.reason}</p>
                     )}
                   </div>
                 ) : (
-                  <div className="text-center text-muted-foreground">--</div>
+                  <div className="text-center text-white/75">--</div>
                 )}
               </CardContent>
             </Card>

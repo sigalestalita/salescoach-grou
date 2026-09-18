@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard } from "@/components/StatCard";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -316,46 +317,16 @@ const Dashboard = () => {
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger">
-        <Card className="glass-card card-hover-glow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Agendas</CardTitle>
-            <Calendar className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{data.totalMeetings}</div>
-            <p className="text-xs text-muted-foreground">{data.completedMeetings} analisadas</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-card card-hover-glow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Score Médio</CardTitle>
-            <Target className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{data.avgScore ?? "--"}</div>
-            <p className="text-xs text-muted-foreground">de 100 pontos</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-card card-hover-glow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reuniões Quentes</CardTitle>
-            <Thermometer className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{data.hotRate}%</div>
-            <p className="text-xs text-muted-foreground">Taxa de agendas quentes</p>
-          </CardContent>
-        </Card>
-        <Card className="glass-card card-hover-glow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{isFiltered ? "Agendas Analisadas" : "Vendedores Ativos"}</CardTitle>
-            <Users className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{isFiltered ? data.completedMeetings : data.activeSellers}</div>
-            <p className="text-xs text-muted-foreground">{isFiltered ? "deste vendedor" : "Com agendas analisadas"}</p>
-          </CardContent>
-        </Card>
+        <StatCard tone="navy" icon={Calendar} label="Total de Agendas" value={data.totalMeetings} hint={`${data.completedMeetings} analisadas`} />
+        <StatCard tone="blue" icon={Target} label="Score Médio" value={data.avgScore ?? "--"} hint="de 100 pontos" />
+        <StatCard tone="coral" icon={Thermometer} label="Reuniões Quentes" value={`${data.hotRate}%`} hint="Taxa de agendas quentes" />
+        <StatCard
+          tone="teal"
+          icon={Users}
+          label={isFiltered ? "Agendas Analisadas" : "Vendedores Ativos"}
+          value={isFiltered ? data.completedMeetings : data.activeSellers}
+          hint={isFiltered ? "deste vendedor" : "Com agendas analisadas"}
+        />
       </div>
 
       {/* Charts Row */}
