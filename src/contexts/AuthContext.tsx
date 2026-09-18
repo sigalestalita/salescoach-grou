@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -35,6 +35,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Id do usuário cujo perfil/papel já estão carregados. O Supabase dispara
+  // onAuthStateChange (evento TOKEN_REFRESHED) toda vez que a aba volta a
+  // ficar visível, mesmo sem o usuário ter feito nada — sem essa referência,
+  // cada refresh de token acendia "loading" de novo, o que desmontava
+  // AppLayout inteiro (via ProtectedRoute) e apagava o estado de qualquer
+  // tela aberta, como uma conversa de treino em andamento.
+  const loadedForUserId = useRef<string | null>(null);
+
   // Perfil e papel definem a organização e o roteamento. Enquanto não chegam,
   // a aplicação continua em estado de carregamento — sem isso, a rota
   // protegida enxergaria "usuário sem organização" a cada abertura.
@@ -46,6 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
       setProfile(profileRes.data ?? null);
       setRole((roleRes.data?.role as AppRole) ?? null);
+      loadedForUserId.current = userId;
     } finally {
       setLoading(false);
     }
@@ -56,10 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        // Mesmo usuário de antes (refresh de token, aba voltando a ficar
+        // visível): só atualiza o token, sem recarregar nada visível.
+        if (loadedForUserId.current === session.user.id) return;
         setLoading(true);
         // Fora da callback para não segurar o lock interno do Supabase Auth.
         setTimeout(() => { fetchUserData(session.user.id); }, 0);
       } else {
+        loadedForUserId.current = null;
         setProfile(null);
         setRole(null);
         setLoading(false);
