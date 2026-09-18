@@ -131,12 +131,19 @@
     .scroll-cue { display: none; }
   }
 
-  /* ── Manifesto ── */
-  .manifesto { padding-block: 140px; }
-  .manifesto p { font-size: clamp(26px, 4vw, 52px); font-weight: 600; line-height: 1.18; letter-spacing: -.02em; max-width: 20ch; }
-  .manifesto .w { display: inline-block; opacity: .16; transition: opacity .4s ease, color .4s ease; }
-  .manifesto .w.on { opacity: 1; }
-  .manifesto .w.key.on { color: var(--glow-2); text-shadow: 0 0 24px rgba(143,193,255,.5); }
+  /* ── Manifesto: três afirmações que acendem ── */
+  .manifesto { padding-block: 120px; }
+  .claims { display: grid; gap: 56px; }
+  .claim { display: grid; grid-template-columns: 80px 1fr; gap: 24px; align-items: start; }
+  .claim .k { font-size: 13px; font-weight: 700; letter-spacing: .14em; color: var(--glow-2); padding-top: 14px; display: flex; align-items: center; gap: 12px; }
+  .claim .k::after { content: ""; flex: 1; height: 1px; background: var(--line-strong); }
+  .claim p { font-size: clamp(24px, 3.6vw, 46px); font-weight: 600; line-height: 1.15; letter-spacing: -.02em; max-width: 22ch; }
+  .claim .w { display: inline-block; opacity: .14; transition: opacity .35s ease, color .35s ease, text-shadow .35s ease; }
+  .claim .w.on { opacity: 1; }
+  .claim .w.key.on { color: var(--glow-2); text-shadow: 0 0 26px rgba(143,193,255,.5); }
+  .claim .sub { margin-top: 14px; font-size: 16px; color: var(--ink-soft); max-width: 56ch; opacity: 0; transform: translateY(8px); transition: opacity .6s ease .2s, transform .6s ease .2s; }
+  .claim.lit .sub { opacity: 1; transform: none; }
+  @media (max-width: 720px) { .claim { grid-template-columns: 1fr; gap: 8px; } .claim .k { padding-top: 0; } }
 
   /* ── Como funciona: linha que se desenha ── */
   .how { background: linear-gradient(180deg, var(--navy-0), var(--navy) 50%, var(--navy-0)); }
@@ -152,76 +159,171 @@
   .tstep p { margin-top: 10px; color: var(--ink-soft); font-size: 15.5px; max-width: 34ch; }
   @media (max-width: 860px) { .timeline { grid-template-columns: 1fr; } .timeline::before, .timeline .progress { display: none; } .tstep { padding-top: 0; } .tstep .dot { display: none; } }
 
-  /* ── Produto: mockups em parallax ── */
+  /* ── Produto: cenas ── */
   .product { overflow: hidden; }
   .product .bg-glow { position: absolute; width: 900px; height: 900px; border-radius: 50%; background: radial-gradient(closest-side, rgba(21,73,141,.5), transparent 70%); filter: blur(60px); pointer-events: none; }
-  .show { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; margin-top: 80px; }
-  .show + .show { margin-top: 140px; }
+  .show { display: grid; grid-template-columns: 1fr 1.15fr; gap: 64px; align-items: center; margin-top: 80px; }
+  .show + .show { margin-top: 150px; }
+  .show.flip { grid-template-columns: 1.15fr 1fr; }
   .show.flip .txt { order: 2; }
   .show h3 { font-size: clamp(26px, 3vw, 40px); font-weight: 700; }
   .show p { font-size: 17px; color: var(--ink-soft); margin-top: 14px; }
   .show ul { margin: 22px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
   .show li { position: relative; padding-left: 22px; font-size: 15px; color: var(--ink); }
   .show li::before { content: ""; position: absolute; left: 0; top: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 10px var(--glow); }
-  @media (max-width: 900px) { .show { grid-template-columns: 1fr; gap: 32px; } .show.flip .txt { order: 0; } .show + .show { margin-top: 90px; } }
+  @media (max-width: 900px) { .show, .show.flip { grid-template-columns: 1fr; gap: 32px; } .show.flip .txt { order: 0; } .show + .show { margin-top: 90px; } }
 
-  .frame { position: relative; transform-style: preserve-3d; will-change: transform; }
-  .frame::before { content: ""; position: absolute; inset: -1px; border-radius: 18px; background: linear-gradient(135deg, rgba(143,193,255,.55), rgba(21,73,141,.1) 40%, rgba(143,193,255,.35)); z-index: -1; filter: blur(.5px); }
-  .frame::after { content: ""; position: absolute; inset: -40px; border-radius: 40px; background: radial-gradient(closest-side, rgba(79,139,240,.35), transparent 70%); filter: blur(30px); z-index: -2; opacity: .8; }
-  .mock { background: #fff; color: #071A34; border-radius: 16px; overflow: hidden; font-size: 13px; box-shadow: 0 40px 80px -30px rgba(0,0,0,.7); }
-  .mock-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #E3E9F2; background: #F7F9FC; }
-  .mock-bar i { width: 9px; height: 9px; border-radius: 50%; background: #CAD3E0; }
-  .mock-bar span { margin-left: 8px; font-size: 12px; color: #7C8A9E; font-weight: 500; }
-  .mock-body { padding: 18px; }
-  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .kpi { border: 1px solid #E3E9F2; border-radius: 10px; padding: 12px; }
-  .kpi small { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: #7C8A9E; font-weight: 600; }
-  .kpi b { display: block; font-size: 22px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em; }
-  .kpi.hot b { color: #B93326; }
-  .bars { margin-top: 14px; display: grid; gap: 10px; }
-  .bar-row { display: grid; grid-template-columns: 90px 1fr 44px; align-items: center; gap: 10px; font-size: 12px; }
-  .bar-row .track { height: 8px; border-radius: 999px; background: #EEF2F8; overflow: hidden; }
-  .bar-row .fill { height: 100%; border-radius: 999px; background: var(--gradient); width: 0; transition: width 1.4s cubic-bezier(.22,1,.36,1); }
-  .in .bar-row .fill { width: var(--w); }
-  .bar-row .val { text-align: right; font-variant-numeric: tabular-nums; color: #4A5A70; }
-  .insights { margin-top: 14px; border-top: 1px solid #E3E9F2; padding-top: 12px; display: grid; gap: 8px; }
-  .insights div { display: flex; gap: 8px; align-items: flex-start; color: #4A5A70; font-size: 12.5px; }
-  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
-  .tag.ok { background: #E6F4EC; color: #1F7A4D; }
-  .tag.warn { background: #FBEEDD; color: #B8651A; }
+  /* Cena: painel de vidro escuro com brilho na borda */
+  .scene { position: relative; transform-style: preserve-3d; will-change: transform; margin-bottom: 64px; }
+  .panel { position: relative; border-radius: 18px; background: linear-gradient(180deg, rgba(14,43,76,.85), rgba(7,26,52,.92)); border: 1px solid rgba(143,193,255,.22); box-shadow: 0 40px 90px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.08); backdrop-filter: blur(10px); overflow: hidden; }
+  .panel::before { content: ""; position: absolute; inset: 0; background: radial-gradient(60% 40% at 20% 0%, rgba(79,139,240,.22), transparent 60%); pointer-events: none; }
+  .scene .glow { position: absolute; inset: -60px; border-radius: 60px; background: radial-gradient(closest-side, rgba(79,139,240,.32), transparent 70%); filter: blur(34px); z-index: -1; }
+  .phead { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid rgba(143,193,255,.12); font-size: 12.5px; color: var(--ink-soft); }
+  .phead b { color: #fff; font-weight: 600; }
+  .phead .st { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ok); }
+  .phead .st i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .pbody { padding: 18px; display: grid; gap: 16px; }
 
-  .live { background: #071A34; color: #E6EDF7; border-radius: 16px; overflow: hidden; font-size: 13px; box-shadow: 0 40px 80px -30px rgba(0,0,0,.8); border: 1px solid var(--line-strong); }
-  .live-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
-  .live-head .name { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 12.5px; }
-  .live-head .name img { width: 18px; height: 18px; }
-  .live-flag { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; }
-  .live-flag i { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blink 1.4s infinite; }
+  /* Cena 1: análise */
+  .an-top { display: grid; grid-template-columns: 150px 1fr; gap: 18px; align-items: center; }
+  .ring { position: relative; width: 150px; height: 150px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring .bg { stroke: rgba(143,193,255,.14); }
+  .ring .fg { stroke: url(#rg); stroke-linecap: round; stroke-dasharray: 402; stroke-dashoffset: 402; transition: stroke-dashoffset 1.6s cubic-bezier(.22,1,.36,1) .2s; filter: drop-shadow(0 0 8px rgba(79,139,240,.8)); }
+  .in .ring .fg { stroke-dashoffset: calc(402 - 402 * .78); }
+  .ring .val { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .ring .val b { font-size: 40px; font-weight: 800; letter-spacing: -.04em; color: #fff; line-height: 1; }
+  .ring .val small { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  .an-meta { display: grid; gap: 10px; }
+  .temp { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: linear-gradient(90deg, rgba(240,107,94,.18), rgba(240,162,74,.12)); border: 1px solid rgba(240,107,94,.35); width: max-content; }
+  .temp b { color: #FFB3A8; font-weight: 700; }
+  .temp span { font-size: 12px; color: var(--ink-soft); }
+  .temp .flame { width: 10px; height: 10px; border-radius: 50% 50% 50% 0; background: linear-gradient(180deg, #FFD27A, #F06B5E); transform: rotate(-45deg); box-shadow: 0 0 12px rgba(240,107,94,.8); animation: flick 1.2s ease-in-out infinite alternate; }
+  @keyframes flick { to { transform: rotate(-45deg) scale(1.15); } }
+  .crit { display: grid; gap: 8px; }
+  .crit .row { display: grid; grid-template-columns: 86px 1fr 46px; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-soft); }
+  .crit .row b { color: #fff; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .crit .track { height: 7px; border-radius: 999px; background: rgba(143,193,255,.12); overflow: hidden; }
+  .crit .fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #15498D, #4F8BF0); box-shadow: 0 0 12px rgba(79,139,240,.6); transition: width 1.4s cubic-bezier(.22,1,.36,1); }
+  .in .crit .fill { width: var(--w); }
+  .crit .row:nth-child(2) .fill { transition-delay: .1s; } .crit .row:nth-child(3) .fill { transition-delay: .2s; } .crit .row:nth-child(4) .fill { transition-delay: .3s; }
+  .hlrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .hl-chip { font-size: 11.5px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: rgba(255,255,255,.03); color: var(--ink); }
+  .hl-chip.buy { border-color: rgba(79,203,138,.4); color: #BFF0D4; }
+  .hl-chip.obj { border-color: rgba(240,162,74,.4); color: #FFDDB0; }
+  .next { border-top: 1px solid rgba(143,193,255,.12); padding-top: 12px; font-size: 13px; color: var(--ink-soft); }
+  .next b { color: #fff; font-weight: 600; }
+  .float { position: absolute; padding: 12px 14px; border-radius: 12px; background: rgba(7,26,52,.9); border: 1px solid rgba(143,193,255,.3); box-shadow: 0 20px 50px -20px rgba(0,0,0,.9), 0 0 30px -10px rgba(79,139,240,.5); font-size: 12.5px; backdrop-filter: blur(10px); max-width: 260px; opacity: 0; transform: translateY(12px); transition: opacity .7s ease .6s, transform .7s cubic-bezier(.22,1,.36,1) .6s; }
+  .in .float { opacity: 1; transform: none; }
+  .float small { display: block; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--glow-2); font-weight: 700; margin-bottom: 4px; }
+  .float b { color: #fff; font-weight: 600; }
+  .f1 { left: -28px; bottom: -88px; }
+  .f2 { right: -22px; bottom: -84px; }
+  @media (max-width: 900px) { .float { position: static; margin-top: 12px; max-width: none; } }
+
+  /* Cena 2: chamada de vídeo com o overlay */
+  .call { position: relative; border-radius: 18px; overflow: hidden; background: #0A1424; border: 1px solid rgba(143,193,255,.18); box-shadow: 0 40px 90px -30px rgba(0,0,0,.85); aspect-ratio: 16/10; }
+  .call .tiles { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 6px 54px; }
+  .call .tile { position: relative; border-radius: 10px; overflow: hidden; background: radial-gradient(60% 60% at 50% 40%, rgba(21,73,141,.9), #0E2B4C 70%); display: grid; place-items: center; }
+  .call .tile.b { background: radial-gradient(60% 60% at 50% 40%, rgba(70,60,120,.9), #1A1F3A 70%); }
+  .call .tile .av { width: 26%; aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.25); display: grid; place-items: center; font-weight: 700; font-size: 26px; color: #fff; }
+  .call .tile .nm { position: absolute; left: 10px; bottom: 8px; font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,.45); color: #fff; }
+  .call .tile .spk { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; align-items: flex-end; height: 14px; }
+  .call .tile .spk i { width: 3px; background: var(--ok); border-radius: 2px; animation: eq .9s ease-in-out infinite alternate; }
+  .call .tile .spk i:nth-child(2) { animation-delay: .2s; } .call .tile .spk i:nth-child(3) { animation-delay: .4s; }
+  @keyframes eq { from { height: 4px; } to { height: 14px; } }
+  .call .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 48px; background: rgba(6,12,24,.9); border-top: 1px solid rgba(255,255,255,.06); display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .call .bar i { width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1); }
+  .call .bar i.red { background: #D9433A; border-color: #D9433A; width: 54px; border-radius: 18px; }
+  .overlay { position: absolute; right: 12px; top: 12px; width: 46%; max-width: 300px; background: rgba(7,26,52,.94); border: 1px solid rgba(143,193,255,.3); border-radius: 12px; box-shadow: 0 20px 50px -16px rgba(0,0,0,.9), 0 0 40px -12px rgba(79,139,240,.6); backdrop-filter: blur(12px); font-size: 12px; overflow: hidden; }
+  .overlay .oh { display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; border-bottom: 1px solid rgba(255,255,255,.08); }
+  .overlay .oh .name { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 11.5px; color: #fff; }
+  .overlay .oh .name img { width: 14px; height: 14px; }
+  .live-flag { display: inline-flex; align-items: center; gap: 5px; background: var(--primary); color: #fff; font-size: 9.5px; font-weight: 700; letter-spacing: .08em; padding: 3px 7px; border-radius: 4px; }
+  .live-flag i { width: 5px; height: 5px; border-radius: 50%; background: #fff; animation: blink 1.4s infinite; }
   @keyframes blink { 50% { opacity: .25; } }
-  .live-transcript { padding: 12px 14px; font-size: 12px; color: #A9B7CC; border-bottom: 1px solid rgba(255,255,255,.08); }
-  .live-transcript b { color: #fff; font-weight: 500; }
+  .overlay .tr { padding: 9px 11px; color: #A9B7CC; border-bottom: 1px solid rgba(255,255,255,.08); font-size: 11px; line-height: 1.45; }
+  .overlay .tr b { color: #fff; font-weight: 500; }
   .typing::after { content: "▍"; color: var(--glow-2); animation: blink 1s infinite; }
-  .tips { padding: 12px 14px; display: grid; gap: 8px; }
-  .tip { background: #0E2B4C; border-left: 3px solid var(--primary); border-radius: 6px; padding: 10px 12px; transform: translateY(8px); opacity: 0; transition: transform .6s cubic-bezier(.22,1,.36,1), opacity .6s; }
+  .overlay .tips { padding: 9px 11px; display: grid; gap: 7px; }
+  .tip { background: #0E2B4C; border-left: 3px solid var(--primary); border-radius: 6px; padding: 8px 10px; transform: translateY(8px); opacity: 0; transition: transform .6s cubic-bezier(.22,1,.36,1), opacity .6s; }
   .in .tip { transform: none; opacity: 1; }
-  .in .tip:nth-child(2) { transition-delay: .5s; }
+  .in .tip:nth-child(2) { transition-delay: .6s; }
   .tip.alta { border-left-color: #E37567; box-shadow: 0 0 0 1px rgba(227,117,103,.15), 0 0 30px -10px rgba(227,117,103,.5); }
-  .tip .meta { display: flex; justify-content: space-between; font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: #7FB3FF; font-weight: 700; margin-bottom: 6px; }
-  .tip .say { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #7FB3FF; font-weight: 700; margin-bottom: 3px; }
-  .tip .phrase { font-size: 13.5px; font-weight: 600; color: #fff; line-height: 1.4; }
-  .tip .why { font-size: 11.5px; color: #A9B7CC; margin-top: 5px; }
+  .tip .meta { display: flex; justify-content: space-between; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: #7FB3FF; font-weight: 700; margin-bottom: 5px; }
+  .tip .say { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: #7FB3FF; font-weight: 700; margin-bottom: 2px; }
+  .tip .phrase { font-size: 12px; font-weight: 600; color: #fff; line-height: 1.4; }
+  .tip .why { font-size: 10.5px; color: #A9B7CC; margin-top: 4px; }
+  @media (max-width: 600px) { .overlay { width: 62%; } .call .tile .av { font-size: 18px; } }
 
-  .rank { display: grid; gap: 8px; margin-top: 12px; }
-  .rank-row { display: grid; grid-template-columns: 22px 1fr 110px 40px; gap: 10px; align-items: center; font-size: 12.5px; }
-  .rank-row .pos { color: #7C8A9E; font-weight: 600; }
-  .rank-row .track { height: 8px; border-radius: 999px; background: #EEF2F8; overflow: hidden; }
-  .rank-row .fill { height: 100%; background: var(--primary); width: 0; transition: width 1.4s cubic-bezier(.22,1,.36,1); border-radius: 999px; }
-  .in .rank-row .fill { width: var(--w); }
-  .rank-row .val { text-align: right; font-variant-numeric: tabular-nums; }
-  .spark { margin-top: 14px; border-top: 1px solid #E3E9F2; padding-top: 12px; }
-  .spark small { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: #7C8A9E; font-weight: 600; }
-  .spark svg { width: 100%; height: 70px; display: block; margin-top: 6px; }
-  .spark .draw { stroke-dasharray: 600; stroke-dashoffset: 600; transition: stroke-dashoffset 1.8s ease .2s; }
-  .in .spark .draw { stroke-dashoffset: 0; }
+  /* Cena 3: gestor */
+  .kp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kp div { border: 1px solid rgba(143,193,255,.14); border-radius: 10px; padding: 12px; background: rgba(255,255,255,.02); }
+  .kp small { display: block; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  .kp b { display: block; font-size: 24px; font-weight: 800; color: #fff; margin-top: 4px; letter-spacing: -.03em; }
+  .kp b em { font-style: normal; font-size: 12px; color: var(--ok); margin-left: 6px; font-weight: 600; }
+  .rk { display: grid; gap: 8px; }
+  .rk .row { display: grid; grid-template-columns: 18px 1fr 120px 36px; gap: 10px; align-items: center; font-size: 12.5px; color: var(--ink); }
+  .rk .row span:first-child { color: var(--ink-faint); font-weight: 600; }
+  .rk .track { height: 7px; border-radius: 999px; background: rgba(143,193,255,.12); overflow: hidden; }
+  .rk .fill { height: 100%; width: 0; background: linear-gradient(90deg, #15498D, #4F8BF0); box-shadow: 0 0 12px rgba(79,139,240,.6); border-radius: 999px; transition: width 1.4s cubic-bezier(.22,1,.36,1); }
+  .in .rk .fill { width: var(--w); }
+  .rk b { text-align: right; font-variant-numeric: tabular-nums; }
+  .chart svg { width: 100%; height: 86px; display: block; }
+  .chart .area { fill: url(#ag); }
+  .chart .ln { fill: none; stroke: #4F8BF0; stroke-width: 2.5; stroke-linejoin: round; stroke-dasharray: 700; stroke-dashoffset: 700; transition: stroke-dashoffset 2s ease .3s; filter: drop-shadow(0 0 6px rgba(79,139,240,.8)); }
+  .in .chart .ln { stroke-dashoffset: 0; }
+  .gaps { display: grid; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+  .gaps div { display: grid; grid-template-columns: 1fr 70px; gap: 10px; align-items: center; }
+  .gaps i { height: 5px; border-radius: 999px; background: linear-gradient(90deg, #F0A24A, #F06B5E); display: block; }
+
+  /* ── Antes / depois ── */
+  .versus { background: linear-gradient(180deg, var(--navy-0), var(--navy)); }
+  .vs-grid { margin-top: 56px; display: grid; gap: 2px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+  .vs-head { display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,.02); }
+  .vs-head div { padding: 14px 24px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+  .vs-head div:last-child { color: var(--glow-2); background: rgba(21,73,141,.18); }
+  .vs { display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,.015); }
+  .vs > div { padding: 22px 24px; font-size: 16px; }
+  .vs .a { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: rgba(240,107,94,.5); text-decoration-thickness: 1px; }
+  .vs .b { color: #fff; background: rgba(21,73,141,.12); border-left: 1px solid rgba(143,193,255,.14); position: relative; }
+  .vs .b::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--glow); box-shadow: 0 0 12px var(--glow); transform: scaleY(0); transform-origin: top; transition: transform .6s cubic-bezier(.22,1,.36,1); }
+  .vs.in .b::before { transform: scaleY(1); }
+  .vs .t { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); font-weight: 700; margin-bottom: 6px; }
+  .vs .b .t { color: var(--glow-2); }
+  @media (max-width: 720px) { .vs, .vs-head { grid-template-columns: 1fr; } .vs-head div:first-child { display: none; } }
+
+  /* ── Ecossistema ── */
+  .eco { overflow: hidden; }
+  .eco-in { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .hub { position: relative; aspect-ratio: 1; max-width: 520px; margin-inline: auto; width: 100%; }
+  .hub .orbit { position: absolute; inset: 0; border-radius: 50%; border: 1px dashed rgba(143,193,255,.22); }
+  .hub .orbit.o2 { inset: 17%; border-style: solid; border-color: rgba(143,193,255,.14); }
+  .hub .core { position: absolute; left: 50%; top: 50%; width: 21%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle at 40% 35%, #1E5BB0, #071A34 70%); border: 1px solid rgba(143,193,255,.5); box-shadow: 0 0 60px rgba(79,139,240,.6), inset 0 1px 0 rgba(255,255,255,.2); display: grid; place-items: center; }
+  .hub .core img { width: 52%; }
+  .hub .core::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; border: 1px solid rgba(143,193,255,.35); animation: pulse 2.6s ease-out infinite; }
+  @keyframes pulse { from { transform: scale(1); opacity: .9; } to { transform: scale(1.6); opacity: 0; } }
+  .hub svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .hub .link { stroke: rgba(143,193,255,.28); stroke-width: 1; }
+  .hub .flow { stroke: var(--glow-2); stroke-width: 1.5; stroke-dasharray: 6 90; stroke-linecap: round; animation: flow 2.4s linear infinite; filter: drop-shadow(0 0 4px rgba(143,193,255,.9)); }
+  @keyframes flow { to { stroke-dashoffset: -96; } }
+  .node { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: rgba(7,26,52,.92); border: 1px solid rgba(143,193,255,.28); font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; box-shadow: 0 12px 30px -14px rgba(0,0,0,.9); animation: bob 5s ease-in-out infinite; }
+  .node i { width: 9px; height: 9px; border-radius: 3px; }
+  @keyframes bob { 50% { transform: translate(-50%, calc(-50% - 5px)); } }
+  .node:nth-child(odd) { animation-delay: -2.5s; }
+  .eco h2 { margin-top: 0; }
+  .eco-list { margin: 24px 0 0; padding: 0; list-style: none; display: grid; gap: 14px; }
+  .eco-list li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
+  .eco-list i { width: 34px; height: 34px; border-radius: 9px; background: rgba(79,139,240,.15); border: 1px solid rgba(143,193,255,.3); display: grid; place-items: center; color: var(--glow-2); }
+  .eco-list b { display: block; color: #fff; font-weight: 600; font-size: 16px; }
+  .eco-list span { font-size: 14.5px; color: var(--ink-soft); }
+  .marquee { margin-top: 64px; position: relative; overflow: hidden; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+  .marquee .track { display: flex; gap: 14px; width: max-content; animation: marquee 38s linear infinite; }
+  .marquee:hover .track { animation-play-state: paused; }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+  .logo { display: inline-flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.025); font-weight: 600; font-size: 14.5px; color: var(--ink); white-space: nowrap; }
+  .logo i { width: 10px; height: 10px; border-radius: 3px; }
+  @media (max-width: 900px) { .eco-in { grid-template-columns: 1fr; } .hub { max-width: 380px; } .node { font-size: 11px; padding: 6px 9px; } }
 
   /* ── Capacidades: título fixo + lista que revela ── */
   .caps { background: var(--navy); }
@@ -245,20 +347,6 @@
   .num b small { font-size: .45em; font-weight: 600; color: var(--glow-2); margin-left: 4px; }
   .num span { display: block; margin-top: 10px; font-size: 14px; color: var(--ink-soft); }
   @media (max-width: 900px) { .nums { grid-template-columns: 1fr 1fr; } }
-
-  /* ── Marca própria ── */
-  .brandband { position: relative; overflow: hidden; background: var(--gradient); background-size: 200% 200%; animation: auroraPan 20s ease-in-out infinite; }
-  @keyframes auroraPan { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-  .brandband .orb { position: absolute; border-radius: 50%; filter: blur(50px); pointer-events: none; }
-  .brand-in { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; position: relative; }
-  .brand-in p { color: rgba(255,255,255,.82); }
-  .swatch-row { display: flex; gap: 10px; margin-top: 28px; }
-  .swatch-row i { width: 44px; height: 44px; border-radius: 12px; border: 1px solid rgba(255,255,255,.35); box-shadow: 0 10px 30px -12px rgba(0,0,0,.6); }
-  .shield { display: grid; gap: 14px; }
-  .shield div { padding: 18px 20px; border-radius: 14px; background: rgba(3,11,24,.35); border: 1px solid rgba(255,255,255,.14); backdrop-filter: blur(10px); }
-  .shield b { display: block; font-weight: 600; color: #fff; }
-  .shield span { font-size: 14px; color: rgba(255,255,255,.75); }
-  @media (max-width: 900px) { .brand-in { grid-template-columns: 1fr; } }
 
   /* ── Planos ── */
   .toggle { display: inline-flex; align-items: center; gap: 12px; margin-top: 26px; font-size: 14px; color: var(--ink-soft); }
@@ -386,8 +474,28 @@
 
 <!-- ── Manifesto ────────────────────────────────────────────────────────── -->
 <section class="manifesto">
-  <div class="wrap">
-    <p id="manifesto" data-px="0.06">Transcrever é fácil. Difícil é fazer o vendedor <span class="key">melhorar</span> a cada conversa — com a <span class="key">metodologia</span> da casa, o <span class="key">portfólio</span> certo e a orientação no <span class="key">momento</span> em que ela importa.</p>
+  <div class="wrap claims" data-px="0.05">
+    <div class="claim" data-claim>
+      <div class="k">01</div>
+      <div>
+        <p>O gestor não está em todas as reuniões. <span class="key">O Sales Coach está em todas.</span></p>
+        <div class="sub">Um time de 8 vendedores faz mais de 150 reuniões por mês. Nenhum gestor ouve isso. O Sales Coach ouve, pontua cada uma e devolve em duas linhas o que importa: o que foi bem, o que faltou, o próximo passo.</div>
+      </div>
+    </div>
+    <div class="claim" data-claim>
+      <div class="k">02</div>
+      <div>
+        <p>Intuição diz que a agenda está quente. <span class="key">Evidência diz quais critérios foram atendidos</span> — e quais faltam.</p>
+        <div class="sub">A temperatura sai da sua metodologia, não de um palpite: orçamento confirmado, decisor presente, dor quantificada. Cada critério com nota e justificativa, tirada do que o lead disse. O forecast para de mentir.</div>
+      </div>
+    </div>
+    <div class="claim" data-claim>
+      <div class="k">03</div>
+      <div>
+        <p>Treinamento acontece uma vez por ano. <span class="key">A reunião acontece todo dia.</span> É nela que o vendedor evolui.</p>
+        <div class="sub">O coach ao vivo diz o que falar enquanto a conversa acontece. A análise mostra depois. O gerador de argumentos aprende com as reuniões de maior score do próprio time. Quem entrou ontem vende com o repertório de quem está há cinco anos.</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -417,114 +525,198 @@
       <h2 class="h2">Não é transcrição.<br>É a sua <span class="hl">metodologia</span> aplicada em cada conversa.</h2>
     </div>
 
+    <!-- Cena 1: análise -->
     <div class="show">
       <div class="txt reveal">
-        <h3>Análise por metodologia, com justificativa</h3>
-        <p>Cada critério recebe nota e motivo, com base no que foi dito. A temperatura da agenda segue as faixas que você define — não uma régua genérica.</p>
+        <h3>Cada reunião sai com nota, temperatura e o que faltou perguntar</h3>
+        <p>Minutos depois da conversa, o vendedor e o gestor veem a mesma coisa: score, temperatura pela metodologia da empresa, cada critério com justificativa, objeções, sinais de compra e o próximo passo.</p>
         <ul>
-          <li>Score e temperatura explicados em uma frase</li>
-          <li>BANT, MEDDIC e SPIN prontos, ou critérios próprios com pesos</li>
-          <li>Objeções, sinais de compra e momentos-chave destacados</li>
-          <li>Aderência ao portfólio: o que foi apresentado, o que faltou</li>
+          <li>Transcrição com falas separadas e talk ratio vendedor × lead</li>
+          <li>BANT, MEDDIC e SPIN prontos — ou os seus critérios, com pesos</li>
+          <li>Aderência ao portfólio: o que foi apresentado e a oportunidade perdida</li>
+          <li>Resumo executivo: participantes, dores, proposta e valor citado</li>
         </ul>
       </div>
-      <div class="frame reveal tilt" data-px="0.1">
-        <div class="mock">
-          <div class="mock-bar"><i></i><i></i><i></i><span>Reunião · Discovery com Cliente A</span></div>
-          <div class="mock-body">
-            <div class="kpis">
-              <div class="kpi"><small>Score geral</small><b>78</b></div>
-              <div class="kpi hot"><small>Temperatura</small><b>Quente</b></div>
-              <div class="kpi"><small>Talk ratio</small><b>42%</b></div>
+      <div class="scene reveal tilt" data-px="0.08">
+        <div class="glow" aria-hidden="true"></div>
+        <div class="panel">
+          <div class="phead"><span><b>Discovery · Cliente A</b> · 47 min</span><span class="st"><i></i>Analisada</span></div>
+          <div class="pbody">
+            <div class="an-top">
+              <div class="ring">
+                <svg viewBox="0 0 150 150" aria-hidden="true">
+                  <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F8BF0"/><stop offset="1" stop-color="#8FC1FF"/></linearGradient></defs>
+                  <circle class="bg" cx="75" cy="75" r="64" fill="none" stroke-width="10"/>
+                  <circle class="fg" cx="75" cy="75" r="64" fill="none" stroke-width="10"/>
+                </svg>
+                <div class="val"><div><b data-count="78">0</b><small>score</small></div></div>
+              </div>
+              <div class="an-meta">
+                <div class="temp"><span class="flame"></span><b>Quente</b><span>3 de 4 critérios atendidos</span></div>
+                <div class="crit">
+                  <div class="row"><span>Budget</span><div class="track"><div class="fill" style="--w:76%"></div></div><b>19/25</b></div>
+                  <div class="row"><span>Authority</span><div class="track"><div class="fill" style="--w:92%"></div></div><b>23/25</b></div>
+                  <div class="row"><span>Need</span><div class="track"><div class="fill" style="--w:88%"></div></div><b>22/25</b></div>
+                  <div class="row"><span>Timeline</span><div class="track"><div class="fill" style="--w:40%"></div></div><b>10/25</b></div>
+                </div>
+              </div>
             </div>
-            <div class="bars">
-              <div class="bar-row"><span>Budget</span><div class="track"><div class="fill" style="--w:76%"></div></div><span class="val">19/25</span></div>
-              <div class="bar-row"><span>Authority</span><div class="track"><div class="fill" style="--w:92%"></div></div><span class="val">23/25</span></div>
-              <div class="bar-row"><span>Need</span><div class="track"><div class="fill" style="--w:88%"></div></div><span class="val">22/25</span></div>
-              <div class="bar-row"><span>Timeline</span><div class="track"><div class="fill" style="--w:40%"></div></div><span class="val">10/25</span></div>
+            <div class="hlrow">
+              <span class="hl-chip buy">Sinal de compra · "manda a proposta ainda essa semana"</span>
+              <span class="hl-chip obj">Objeção · "o time não usou a última ferramenta"</span>
             </div>
-            <div class="insights">
-              <div><span class="tag ok">Positivo</span>Decisor presente e dor quantificada em horas perdidas por semana.</div>
-              <div><span class="tag warn">Explorar</span>Prazo de decisão não foi perguntado; proposta sem data.</div>
-            </div>
+            <div class="next"><b>Próximo passo:</b> confirmar prazo de decisão com o diretor e enviar proposta com onboarding assistido.</div>
           </div>
         </div>
+        <div class="float f1"><small>Oportunidade não explorada</small><b>Onboarding assistido</b> — o lead citou medo de adoção e o item está no portfólio.</div>
       </div>
     </div>
 
+    <!-- Cena 2: coach ao vivo dentro da reunião -->
     <div class="show flip">
       <div class="txt reveal">
-        <h3>Coach ao vivo, na tela, durante a reunião</h3>
-        <p>A extensão acompanha a conversa e mostra ao vendedor a frase exata para dizer nos próximos segundos — com base na sua base de conhecimento e na metodologia configurada.</p>
+        <h3>O coach está na reunião. Na tela. Na hora.</h3>
+        <p>A extensão acompanha a conversa no Meet ou no Teams e mostra ao vendedor a frase exata para dizer nos próximos segundos — pela metodologia da empresa, com o portfólio certo, sem inventar preço ou funcionalidade.</p>
         <ul>
-          <li>Prioriza objeção e sinal de compra que acabaram de surgir</li>
-          <li>Puxa o critério de qualificação ainda não coberto</li>
-          <li>Cita produto, dado e diferencial pelo nome que está na base</li>
-          <li>Nunca inventa preço ou funcionalidade</li>
+          <li>Objeção ou sinal de compra que acabou de surgir vem primeiro</li>
+          <li>Critério de qualificação ainda não coberto vira a próxima pergunta</li>
+          <li>Produto, dado e diferencial citados pelo nome que está na base</li>
+          <li>Painel discreto, sem trocar de tela, sem o lead perceber</li>
         </ul>
       </div>
-      <div class="frame reveal tilt" data-px="-0.08">
-        <div class="live">
-          <div class="live-head">
-            <div class="name"><img src="assets/mark-white.png" alt="">Sales Coach</div>
-            <span class="live-flag"><i></i>LIVE</span>
+      <div class="scene reveal tilt" data-px="-0.06">
+        <div class="glow" aria-hidden="true"></div>
+        <div class="call">
+          <div class="tiles">
+            <div class="tile"><div class="av">MB</div><span class="nm">Mariana · você</span></div>
+            <div class="tile b"><div class="av">RC</div><span class="nm">Ricardo · Cliente A</span><span class="spk"><i></i><i></i><i></i></span></div>
           </div>
-          <div class="live-transcript"><p><b>Lead:</b> …a gente já testou uma ferramenta assim e o time não usou. Tenho medo de pagar de novo por algo que fica parado<span class="typing"></span></p></div>
-          <div class="tips">
-            <div class="tip alta">
-              <div class="meta"><span>objeção</span><span>alta</span></div>
-              <div class="say">Fale agora</div>
-              <div class="phrase">"Entendo. O que fez o time parar de usar: era complexo ou não mostrava resultado? Pergunto porque aqui a orientação aparece dentro da própria reunião, sem abrir outra tela."</div>
-              <div class="why">Objeção de adoção — responda com pergunta e conecte ao coach ao vivo.</div>
-            </div>
-            <div class="tip">
-              <div class="meta"><span>budget</span><span>media</span></div>
-              <div class="say">Fale agora</div>
-              <div class="phrase">"Quanto vocês investem hoje em treinamento do comercial por ano?"</div>
-              <div class="why">Budget ainda não coberto nesta conversa.</div>
+          <div class="bar" aria-hidden="true"><i></i><i></i><i class="red"></i><i></i><i></i></div>
+          <div class="overlay">
+            <div class="oh"><span class="name"><img src="assets/mark-white.png" alt="">Sales Coach</span><span class="live-flag"><i></i>LIVE</span></div>
+            <div class="tr"><b>Ricardo:</b> …a gente já testou uma ferramenta assim e o time não usou. Tenho medo de pagar de novo por algo que fica parado<span class="typing"></span></div>
+            <div class="tips">
+              <div class="tip alta">
+                <div class="meta"><span>objeção</span><span>alta</span></div>
+                <div class="say">Fale agora</div>
+                <div class="phrase">"O que fez o time parar: era complexo ou não mostrava resultado? Pergunto porque aqui a orientação aparece dentro da própria reunião."</div>
+                <div class="why">Objeção de adoção — devolva com pergunta e conecte ao coach ao vivo.</div>
+              </div>
+              <div class="tip">
+                <div class="meta"><span>budget</span><span>media</span></div>
+                <div class="say">Fale agora</div>
+                <div class="phrase">"Quanto vocês investem hoje em treinamento do comercial por ano?"</div>
+                <div class="why">Budget ainda não coberto.</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
+    <!-- Cena 3: gestor -->
     <div class="show">
       <div class="txt reveal">
-        <h3>A visão do gestor: quem precisa de ajuda, e em quê</h3>
-        <p>Ranking por score, evolução mês a mês, distribuição de temperatura e os gaps mais frequentes. Compare executivos e veja onde o discurso sai do portfólio.</p>
+        <h3>O gestor vê o time inteiro sem ouvir uma gravação</h3>
+        <p>Ranking por score, evolução mês a mês, distribuição de temperatura e os critérios em que o time mais falha. Em vinte minutos, o que levaria uma semana de escuta.</p>
         <ul>
-          <li>Score médio por vendedor e por time</li>
-          <li>Lacunas por critério da metodologia</li>
-          <li>Taxa de agendas quentes e evolução no tempo</li>
-          <li>Análise compartilhável por link, com validade e revogação</li>
+          <li>Score médio por vendedor, por time e por período</li>
+          <li>Gaps por critério: onde o discurso perde pontos, em todo mundo</li>
+          <li>Taxa de agendas quentes e o que separa os melhores dos demais</li>
+          <li>Análise compartilhável por link com prazo — para diretoria ou cliente</li>
         </ul>
       </div>
-      <div class="frame reveal tilt" data-px="0.1">
-        <div class="mock">
-          <div class="mock-bar"><i></i><i></i><i></i><span>Visão geral · Setembro</span></div>
-          <div class="mock-body">
-            <div class="kpis">
-              <div class="kpi"><small>Reuniões</small><b>178</b></div>
-              <div class="kpi"><small>Score médio</small><b>71</b></div>
-              <div class="kpi"><small>Agendas quentes</small><b>38%</b></div>
+      <div class="scene reveal tilt" data-px="0.08">
+        <div class="glow" aria-hidden="true"></div>
+        <div class="panel">
+          <div class="phead"><span><b>Visão geral</b> · Setembro</span><span style="color:var(--ink-faint)">8 executivos</span></div>
+          <div class="pbody">
+            <div class="kp">
+              <div><small>Reuniões</small><b>178</b></div>
+              <div><small>Score médio</small><b>71<em>+6</em></b></div>
+              <div><small>Agendas quentes</small><b>38%<em>+9</em></b></div>
             </div>
-            <div class="rank">
-              <div class="rank-row"><span class="pos">1</span><span>Mariana B.</span><div class="track"><div class="fill" style="--w:86%"></div></div><span class="val">86</span></div>
-              <div class="rank-row"><span class="pos">2</span><span>Fabricio F.</span><div class="track"><div class="fill" style="--w:79%"></div></div><span class="val">79</span></div>
-              <div class="rank-row"><span class="pos">3</span><span>Taís O.</span><div class="track"><div class="fill" style="--w:74%"></div></div><span class="val">74</span></div>
-              <div class="rank-row"><span class="pos">4</span><span>Lisiane B.</span><div class="track"><div class="fill" style="--w:61%"></div></div><span class="val">61</span></div>
+            <div class="rk">
+              <div class="row"><span>1</span><span>Mariana B.</span><div class="track"><div class="fill" style="--w:86%"></div></div><b>86</b></div>
+              <div class="row"><span>2</span><span>Fabricio F.</span><div class="track"><div class="fill" style="--w:79%"></div></div><b>79</b></div>
+              <div class="row"><span>3</span><span>Taís O.</span><div class="track"><div class="fill" style="--w:74%"></div></div><b>74</b></div>
+              <div class="row"><span>4</span><span>Lisiane B.</span><div class="track"><div class="fill" style="--w:61%"></div></div><b>61</b></div>
             </div>
-            <div class="spark">
-              <small>Evolução do score médio</small>
-              <svg viewBox="0 0 320 70" preserveAspectRatio="none" aria-hidden="true">
-                <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#15498D" stop-opacity=".22"/><stop offset="1" stop-color="#15498D" stop-opacity="0"/></linearGradient></defs>
-                <path d="M0,52 L46,48 L92,50 L138,40 L184,36 L230,28 L276,24 L320,16 L320,70 L0,70 Z" fill="url(#sg)"/>
-                <path class="draw" d="M0,52 L46,48 L92,50 L138,40 L184,36 L230,28 L276,24 L320,16" fill="none" stroke="#15498D" stroke-width="2.5" stroke-linejoin="round"/>
+            <div class="chart">
+              <svg viewBox="0 0 320 86" preserveAspectRatio="none" aria-hidden="true">
+                <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4F8BF0" stop-opacity=".35"/><stop offset="1" stop-color="#4F8BF0" stop-opacity="0"/></linearGradient></defs>
+                <path class="area" d="M0,64 L46,58 L92,60 L138,48 L184,44 L230,34 L276,28 L320,18 L320,86 L0,86 Z"/>
+                <path class="ln" d="M0,64 L46,58 L92,60 L138,48 L184,44 L230,34 L276,28 L320,18"/>
               </svg>
+            </div>
+            <div class="gaps">
+              <div><span>Timeline não perguntado</span><i style="width:82%"></i></div>
+              <div><span>Proposta sem valor citado</span><i style="width:58%"></i></div>
+              <div><span>Cross-sell não explorado</span><i style="width:41%"></i></div>
             </div>
           </div>
         </div>
+        <div class="float f2"><small>Gap do time</small><b>Timeline</b> não é perguntado em 82% das reuniões. Sugestão de script enviada aos executivos.</div>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Antes / depois ───────────────────────────────────────────────────── -->
+<section class="versus">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="eyebrow">Na prática</p>
+      <h2 class="h2">O que muda quando toda reunião vira dado.</h2>
+    </div>
+    <div class="vs-grid">
+      <div class="vs-head"><div>Hoje</div><div>Com o Sales Coach</div></div>
+      <div class="vs reveal"><div class="a"><span class="t">Feedback</span>Uma vez por trimestre, de memória, sobre a reunião que o gestor conseguiu assistir.</div><div class="b"><span class="t">Feedback</span>A cada reunião, com a transcrição na mão e cada critério justificado.</div></div>
+      <div class="vs reveal"><div class="a"><span class="t">Qualificação</span>"Está quente" — na intuição do vendedor, no CRM e no forecast.</div><div class="b"><span class="t">Qualificação</span>Quente porque 3 de 4 critérios foram atendidos, com a fala do lead como evidência.</div></div>
+      <div class="vs reveal"><div class="a"><span class="t">Portfólio</span>Cada vendedor apresenta o que lembra. O que ninguém lembrou, ninguém vendeu.</div><div class="b"><span class="t">Portfólio</span>Oportunidade não explorada apontada na hora, com o item do portfólio que resolvia a dor.</div></div>
+      <div class="vs reveal"><div class="a"><span class="t">Rampagem</span>Meses observando os melhores, sem saber exatamente o que eles fazem diferente.</div><div class="b"><span class="t">Rampagem</span>Os padrões das reuniões de maior score já dentro do gerador de argumentos e do coach ao vivo.</div></div>
+      <div class="vs reveal"><div class="a"><span class="t">CRM</span>Preenchido no fim do dia, de memória, com "reunião boa" no campo de observações.</div><div class="b"><span class="t">CRM</span>Resumo, próximos passos, temperatura e critérios enviados para a oportunidade sozinhos.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Ecossistema ──────────────────────────────────────────────────────── -->
+<section class="eco">
+  <div class="wrap eco-in">
+    <div class="hub reveal" data-px="-0.05" aria-hidden="true">
+      <div class="orbit"></div><div class="orbit o2"></div>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line class="link" x1="50" y1="50" x2="14" y2="22"/><line class="flow" x1="14" y1="22" x2="50" y2="50"/>
+        <line class="link" x1="50" y1="50" x2="86" y2="22"/><line class="flow" x1="86" y1="22" x2="50" y2="50"/>
+        <line class="link" x1="50" y1="50" x2="8" y2="58"/><line class="flow" x1="50" y1="50" x2="8" y2="58"/>
+        <line class="link" x1="50" y1="50" x2="92" y2="58"/><line class="flow" x1="50" y1="50" x2="92" y2="58"/>
+        <line class="link" x1="50" y1="50" x2="26" y2="90"/><line class="flow" x1="50" y1="50" x2="26" y2="90"/>
+        <line class="link" x1="50" y1="50" x2="74" y2="90"/><line class="flow" x1="50" y1="50" x2="74" y2="90"/>
+        <line class="link" x1="50" y1="50" x2="50" y2="6"/><line class="flow" x1="50" y1="6" x2="50" y2="50"/>
+      </svg>
+      <div class="core"><img src="assets/mark-white.png" alt=""></div>
+      <div class="node" style="left:50%;top:6%"><i style="background:#00A65A"></i>Google Meet</div>
+      <div class="node" style="left:14%;top:22%"><i style="background:#5B5FC7"></i>Microsoft Teams</div>
+      <div class="node" style="left:86%;top:22%"><i style="background:#2D8CFF"></i>Zoom</div>
+      <div class="node" style="left:8%;top:58%"><i style="background:#FF7A59"></i>HubSpot</div>
+      <div class="node" style="left:92%;top:58%"><i style="background:#00A1E0"></i>Salesforce</div>
+      <div class="node" style="left:26%;top:90%"><i style="background:#1AA260"></i>Pipedrive</div>
+      <div class="node" style="left:74%;top:90%"><i style="background:#1E9BD7"></i>RD Station</div>
+    </div>
+    <div class="reveal">
+      <p class="eyebrow">Ecossistema</p>
+      <h2 class="h2">Entra na reunião. Sai no CRM. Sem ninguém digitar.</h2>
+      <p class="lead" style="margin-top:18px">O Sales Coach se conecta ao que o time já usa. A reunião acontece onde sempre aconteceu, e o resultado dela vai parar onde sempre deveria estar.</p>
+      <ul class="eco-list">
+        <li><i><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h5"/></svg></i><div><b>Preenche o CRM sozinho</b><span>Resumo, próximos passos, temperatura e critérios da metodologia vão para a oportunidade ao fim da reunião. O campo de observações para de dizer "reunião boa".</span></div></li>
+        <li><i><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></i><div><b>Grava onde a reunião acontece</b><span>Google Meet e Microsoft Teams pela extensão, com o coach ao vivo. Zoom e gravações de qualquer origem por upload ou link.</span></div></li>
+        <li><i><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M12 4v16"/></svg></i><div><b>Aberto por API</b><span>Cada análise é um dado estruturado. Puxe para o BI, dispare alerta no Slack quando uma agenda esfria, ou monte o fluxo que quiser.</span></div></li>
+      </ul>
+    </div>
+  </div>
+  <div class="marquee" aria-hidden="true">
+    <div class="track" id="marquee">
+      <span class="logo"><i style="background:#00A1E0"></i>Salesforce</span><span class="logo"><i style="background:#FF7A59"></i>HubSpot</span><span class="logo"><i style="background:#1AA260"></i>Pipedrive</span><span class="logo"><i style="background:#1E9BD7"></i>RD Station CRM</span><span class="logo"><i style="background:#0B6BCB"></i>Agendor</span><span class="logo"><i style="background:#3B6EF6"></i>Ploomes</span><span class="logo"><i style="background:#E42527"></i>Zoho CRM</span><span class="logo"><i style="background:#2FC7F7"></i>Bitrix24</span><span class="logo"><i style="background:#3F51B5"></i>Kommo</span><span class="logo"><i style="background:#7B61FF"></i>Moskit</span><span class="logo"><i style="background:#00A65A"></i>Google Meet</span><span class="logo"><i style="background:#5B5FC7"></i>Microsoft Teams</span><span class="logo"><i style="background:#2D8CFF"></i>Zoom</span><span class="logo"><i style="background:#4285F4"></i>Google Calendar</span><span class="logo"><i style="background:#611F69"></i>Slack</span><span class="logo"><i style="background:#25D366"></i>WhatsApp</span>
     </div>
   </div>
 </section>
@@ -545,7 +737,7 @@
       <div class="cap reveal"><div class="idx">05</div><div><h3>Gestão do time</h3><p>Ranking, evolução, gaps por critério e comparação entre executivos. Papéis de admin, gestor e vendedor.</p></div></div>
       <div class="cap reveal"><div class="idx">06</div><div><h3>Extensão Chrome</h3><p>Grava tela e áudio no Meet e no Teams, sobe a gravação e mostra o coach ao vivo — sem sair da reunião.</p></div></div>
       <div class="cap reveal"><div class="idx">07</div><div><h3>Compartilhamento controlado</h3><p>Análise por link para quem não tem conta, com validade e revogação a um clique.</p></div></div>
-      <div class="cap reveal"><div class="idx">08</div><div><h3>Marca própria e isolamento</h3><p>Nome, logo e cores da sua empresa em toda a interface. Dados separados por organização em cada consulta.</p></div></div>
+      <div class="cap reveal"><div class="idx">08</div><div><h3>Integração com o CRM</h3><p>Resumo, próximos passos e temperatura enviados para a oportunidade ao fim da reunião. Salesforce, HubSpot, Pipedrive, RD Station e outros.</p></div></div>
     </div>
   </div>
 </section>
@@ -553,34 +745,11 @@
 <!-- ── Números ──────────────────────────────────────────────────────────── -->
 <section>
   <div class="wrap">
-    <div class="reveal">
-      <p class="eyebrow">Na prática</p>
-      <h2 class="h2">O que muda a partir da primeira reunião.</h2>
-    </div>
     <div class="nums">
       <div class="num reveal"><b><span data-count="8">0</span><small>s</small></b><span>até a primeira orientação ao vivo depois de uma fala</span></div>
       <div class="num reveal"><b><span data-count="100">0</span><small>%</small></b><span>da conversa analisada — não uma amostra</span></div>
       <div class="num reveal"><b><span data-count="3">0</span><small>+</small></b><span>metodologias prontas, ou a sua, com critérios e pesos</span></div>
       <div class="num reveal"><b><span data-count="14">0</span><small>dias</small></b><span>de piloto sem cartão, com o seu portfólio já dentro</span></div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Marca própria ────────────────────────────────────────────────────── -->
-<section class="brandband">
-  <div class="orb" style="width:520px;height:520px;right:-160px;top:-160px;background:rgba(143,193,255,.22)" data-px="-0.25" aria-hidden="true"></div>
-  <div class="orb" style="width:420px;height:420px;left:-140px;bottom:-160px;background:rgba(201,224,255,.16)" data-px="0.2" aria-hidden="true"></div>
-  <div class="wrap brand-in">
-    <div class="reveal">
-      <p class="eyebrow" style="color:#C9E0FF">Marca própria</p>
-      <h2 class="h2">A sua metodologia. A sua marca. Várias empresas, uma plataforma.</h2>
-      <p style="margin-top:18px;font-size:17px">Cada empresa configura critérios, faixas de temperatura, tipos de reunião, ofertas e catálogo de dores. O sistema não carrega o negócio de ninguém — aplica o seu. Para consultorias, franquias e redes, cada cliente opera isolado, com o próprio logo e as próprias cores.</p>
-      <div class="swatch-row" aria-hidden="true"><i style="background:#071A34"></i><i style="background:#0E2B4C"></i><i style="background:#053B6D"></i><i style="background:#15498D"></i><i style="background:#fff"></i></div>
-    </div>
-    <div class="shield reveal">
-      <div><b>Dados isolados por empresa</b><span>Nenhum cliente enxerga o outro, em nenhuma consulta.</span></div>
-      <div><b>Links com prazo</b><span>Compartilhamento externo só quando você ativa, pelo tempo que decidir.</span></div>
-      <div><b>Consumo medido</b><span>Minutos transcritos, análises e dicas ao vivo contabilizados por ciclo.</span></div>
     </div>
   </div>
 </section>
@@ -606,7 +775,7 @@
         <div class="price"><span class="cur">R$</span><b data-m="890" data-a="742">890</b><small>/mês</small></div>
         <p class="price-note" data-note></p>
         <ul>
-          <li>Até 5 usuários</li><li>60 reuniões analisadas por mês</li><li>Coach ao vivo (300 min/mês)</li><li>Base de conhecimento e gerador de argumentos</li><li>Extensão Chrome para Meet e Teams</li><li>BANT, MEDDIC e SPIN prontos</li><li class="dim">Metodologia e marca próprias</li>
+          <li>Até 5 usuários</li><li>60 reuniões analisadas por mês</li><li>Coach ao vivo (300 min/mês)</li><li>Base de conhecimento e gerador de argumentos</li><li>Extensão Chrome para Meet e Teams</li><li>BANT, MEDDIC e SPIN prontos</li><li class="dim">Metodologia própria e integração com o CRM</li>
         </ul>
         <a class="btn btn-ghost" href="#contato">Começar piloto</a>
       </div>
@@ -616,17 +785,17 @@
         <div class="price"><span class="cur">R$</span><b data-m="2190" data-a="1825">2.190</b><small>/mês</small></div>
         <p class="price-note" data-note></p>
         <ul>
-          <li>Até 15 usuários</li><li>200 reuniões analisadas por mês</li><li>Coach ao vivo (1.000 min/mês)</li><li>Metodologia própria: critérios, pesos e faixas</li><li>Marca própria: logo, cores e nome do produto</li><li>Tipos de reunião, ofertas e catálogo de dores</li><li>Relatórios de gestão e compartilhamento com validade</li>
+          <li>Até 15 usuários</li><li>200 reuniões analisadas por mês</li><li>Coach ao vivo (1.000 min/mês)</li><li>Metodologia própria: critérios, pesos e faixas</li><li>Integração com o CRM: oportunidade preenchida sozinha</li><li>Tipos de reunião, ofertas e catálogo de dores</li><li>Relatórios de gestão e compartilhamento com validade</li>
         </ul>
         <a class="btn btn-primary" href="#contato">Começar piloto</a>
       </div>
       <div class="plan reveal">
         <h3>Enterprise</h3>
-        <p class="for">Para redes, consultorias e times grandes que precisam operar várias empresas.</p>
+        <p class="for">Para operações grandes, com vários times, integrações próprias e exigências de segurança.</p>
         <div class="price"><b style="font-size:28px">Sob consulta</b></div>
         <p class="price-note">Contrato anual</p>
         <ul>
-          <li>Usuários e análises sob medida</li><li>Várias empresas isoladas em uma plataforma</li><li>Domínio próprio e painel do provedor</li><li>Onboarding da metodologia e da base</li><li>SLA, suporte dedicado e revisão de segurança</li><li>Relatório de consumo por empresa</li>
+          <li>Usuários e análises sob medida</li><li>Integrações dedicadas e acesso à API</li><li>Onboarding da metodologia e da base de conhecimento</li><li>SSO e revisão de segurança</li><li>SLA e suporte dedicado</li><li>Relatório de consumo por time</li>
         </ul>
         <a class="btn btn-ghost" href="#contato">Falar com a gente</a>
       </div>
@@ -652,7 +821,7 @@
       <details><summary>O vendedor precisa fazer algo durante a reunião?</summary><p>Só clicar em gravar. A transcrição e as dicas aparecem num painel discreto sobre a reunião; ao final, a gravação sobe sozinha e a análise fica pronta em minutos.</p></details>
       <details><summary>Onde ficam as gravações e quem tem acesso?</summary><p>Cada empresa tem seus dados isolados — gravações, transcrições, análises e base. Vendedor vê as próprias reuniões; gestor e admin veem as do time. Links externos só existem quando você ativa, com prazo e revogação.</p></details>
       <details><summary>A base de conhecimento aceita o quê?</summary><p>PDF, documentos, planilhas, links e texto. O conteúdo é extraído e usado na análise (aderência ao portfólio, cross-sell) e no coach ao vivo (citar o produto ou dado certo na hora).</p></details>
-      <details><summary>Dá para colocar a nossa marca e usar com várias empresas?</summary><p>Marca própria a partir do Profissional; várias empresas em uma plataforma, cada uma isolada, com domínio próprio e painel de consumo por cliente, no Enterprise.</p></details>
+      <details><summary>Como funciona a integração com o CRM?</summary><p>Ao fim de cada reunião analisada, o Sales Coach envia para a oportunidade correspondente o resumo, os próximos passos, a temperatura e os critérios da metodologia. Salesforce, HubSpot, Pipedrive e RD Station têm conexão direta; outros CRMs entram pela API. A configuração é feita uma vez, pelo administrador.</p></details>
     </div>
   </div>
 </section>
@@ -760,7 +929,7 @@
 
   // ── Revelação ao rolar ──
   var io = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); if (e.target.querySelector("[data-count]")) count(e.target.querySelector("[data-count]")); } }); }, { rootMargin: "0px 0px -10% 0px", threshold: .15 });
-  document.querySelectorAll(".reveal, .frame").forEach(function (el) { io.observe(el); });
+  document.querySelectorAll(".reveal, .scene, .vs").forEach(function (el) { io.observe(el); });
 
   // ── Contadores ──
   function count(el) {
@@ -769,23 +938,28 @@
     (function step(now) { var k = Math.min(1, (now - t0) / dur); k = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(end * k); if (k < 1) requestAnimationFrame(step); })(t0);
   }
 
-  // ── Manifesto: palavras acendem com a rolagem ──
-  var man = document.getElementById("manifesto");
-  (function split() {
-    var html = "", nodes = [].slice.call(man.childNodes);
-    nodes.forEach(function (n) {
+  // ── Manifesto: cada afirmação acende palavra a palavra com a rolagem ──
+  var claims = [].slice.call(document.querySelectorAll("[data-claim]")).map(function (c) {
+    var p = c.querySelector("p"), html = "";
+    [].slice.call(p.childNodes).forEach(function (n) {
       if (n.nodeType === 3) html += n.textContent.split(/(\s+)/).map(function (w) { return /\s+/.test(w) || !w ? w : '<span class="w">' + w + "</span>"; }).join("");
-      else html += '<span class="w key">' + n.textContent + "</span>";
+      else html += n.textContent.split(/(\s+)/).map(function (w) { return /\s+/.test(w) || !w ? w : '<span class="w key">' + w + "</span>"; }).join("");
     });
-    man.innerHTML = html;
-  })();
-  var words = [].slice.call(man.querySelectorAll(".w"));
+    p.innerHTML = html;
+    return { el: c, words: [].slice.call(p.querySelectorAll(".w")) };
+  });
   function manifesto() {
-    var r = man.getBoundingClientRect(), vh = window.innerHeight;
-    var k = Math.min(1, Math.max(0, (vh * .8 - r.top) / (r.height + vh * .3)));
-    var n = Math.round(k * words.length);
-    words.forEach(function (w, i) { w.classList.toggle("on", i < n); });
+    var vh = window.innerHeight;
+    claims.forEach(function (c) {
+      var r = c.el.getBoundingClientRect();
+      var k = Math.min(1, Math.max(0, (vh * .78 - r.top) / (r.height * .9)));
+      var n = Math.round(k * c.words.length);
+      c.words.forEach(function (w, i) { w.classList.toggle("on", i < n); });
+      c.el.classList.toggle("lit", k >= .98);
+    });
   }
+  // Marquee: duplica o trilho para o loop ser contínuo.
+  var mq = document.getElementById("marquee"); if (mq) mq.innerHTML += mq.innerHTML;
 
   // ── Linha do "como funciona" ──
   var tl = document.getElementById("timeline"), tp = document.getElementById("tprogress"), steps = [].slice.call(document.querySelectorAll(".tstep"));
