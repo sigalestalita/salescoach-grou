@@ -243,7 +243,7 @@ const MeetingDetail = () => {
         );
       })()}
 
-      {/* Video/Audio Player — Google Drive link */}
+      {/* Video/Audio Player — Google Drive link ou link direto para o arquivo */}
       {meeting.youtube_url && (() => {
         const getGoogleDriveEmbedUrl = (url: string): string | null => {
           let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -253,6 +253,39 @@ const MeetingDetail = () => {
           return null;
         };
         const embedUrl = getGoogleDriveEmbedUrl(meeting.youtube_url);
+        const directMedia = meeting.youtube_url.match(/\.(mp4|webm|m4a|mp3|ogg)(\?.*)?$/i)?.[1]?.toLowerCase() ?? null;
+
+        if (directMedia) {
+          const isVideo = directMedia === "mp4" || directMedia === "webm";
+          return (
+            <Collapsible defaultOpen>
+              <Card>
+                <CollapsibleTrigger className="w-full">
+                  <CardHeader className="flex flex-row items-center justify-between py-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      {isVideo ? <Video className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                      Gravação da Reunião
+                    </CardTitle>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    {isVideo ? (
+                      <video controls className="w-full rounded-md border" preload="metadata" src={meeting.youtube_url}>
+                        Seu navegador não suporta o player de vídeo.
+                      </video>
+                    ) : (
+                      <audio controls className="w-full" preload="metadata" src={meeting.youtube_url}>
+                        Seu navegador não suporta o player de áudio.
+                      </audio>
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          );
+        }
 
         return embedUrl ? (
           <Collapsible defaultOpen>

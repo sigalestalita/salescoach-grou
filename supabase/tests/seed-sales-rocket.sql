@@ -11,6 +11,8 @@
 --   • ~50 reuniões em 6 meses, com análise, transcrição, destaques e dicas
 --     ao vivo; algumas em processamento, uma com erro, duas compartilhadas
 --   • consumo do plano no mês corrente
+--   • gravação de vídeo em cada reunião concluída (4 vídeos sintéticos em
+--     public/demo, servidos pelo app — publique o app antes de rodar)
 --
 -- Cole no SQL do backend e execute. Pode rodar de novo: os registros têm ids
 -- fixos e são substituídos. Se a organização não existir, ela é criada.
@@ -26,6 +28,8 @@ DECLARE
   v_team_in  UUID := 'e0000000-0000-4000-8000-000000000001';
   v_team_out UUID := 'e0000000-0000-4000-8000-000000000002';
   v_tpl    UUID;
+  -- Onde os vídeos de demonstração ficam publicados (pasta public/demo do app).
+  v_video_base TEXT := 'https://salescoach.grougp.com.br/demo/';
 
   -- Ids fixos (prefixo por tipo + sequência) para o seed ser reexecutável.
   seller  UUID[] := ARRAY[
@@ -252,11 +256,11 @@ BEGIN
     lead_first := split_part(hero_lead[i], ' ', 1); seller_first_n := seller_first[s_idx];
     dur := hero_dur[i];
 
-    INSERT INTO public.meetings (id, org_id, title, seller_id, team_id, status, meeting_type, meeting_date, lead_name, lead_company, lead_email, duration_seconds, file_type, overall_score, temperature, created_at, updated_at,
+    INSERT INTO public.meetings (id, org_id, title, seller_id, team_id, status, meeting_type, meeting_date, lead_name, lead_company, lead_email, duration_seconds, file_type, youtube_url, overall_score, temperature, created_at, updated_at,
                                  share_enabled, share_token, share_expires_at)
     VALUES (m_id, v_org, mtype_lbl[t_idx] || ' · ' || hero_company[i], seller[s_idx], CASE WHEN s_idx IN (1,3,5) THEN v_team_in ELSE v_team_out END, 'completo', mtypes[t_idx], m_date,
             hero_lead[i], hero_company[i], lower(replace(lead_first, 'ç', 'c')) || '@' || lower(regexp_replace(translate(hero_company[i], 'çãáéíóúâêô ', 'caaeiouaeo'), '[^a-z]', '', 'g')) || '.com.br',
-            dur, 'mp4', overall, temp, m_date + interval '2 hours', m_date + interval '2 hours',
+            dur, 'mp4', v_video_base || 'reuniao-' || lpad((1 + ((i - 1) % 4))::text, 2, '0') || '.mp4', overall, temp, m_date + interval '2 hours', m_date + interval '2 hours',
             i IN (2, 8), CASE WHEN i IN (2, 8) THEN gen_random_uuid() END, CASE WHEN i IN (2, 8) THEN now() + interval '6 days' END);
 
     temp_reason := attended || ' de 4 critérios BANT atendidos' ||
@@ -394,10 +398,10 @@ BEGIN
     temp_reason := attended || ' de 4 critérios BANT atendidos' ||
       CASE attended WHEN 0 THEN '.' ELSE ': ' || array_to_string(ARRAY(SELECT x FROM unnest(ARRAY[CASE WHEN sb>=15 THEN 'Budget' END, CASE WHEN sa>=15 THEN 'Authority' END, CASE WHEN sn>=15 THEN 'Need' END, CASE WHEN st>=15 THEN 'Timeline' END]) x WHERE x IS NOT NULL), ', ') || '.' END;
 
-    INSERT INTO public.meetings (id, org_id, title, seller_id, team_id, status, meeting_type, meeting_date, lead_name, lead_company, lead_email, duration_seconds, file_type, overall_score, temperature, created_at, updated_at)
+    INSERT INTO public.meetings (id, org_id, title, seller_id, team_id, status, meeting_type, meeting_date, lead_name, lead_company, lead_email, duration_seconds, file_type, youtube_url, overall_score, temperature, created_at, updated_at)
     VALUES (m_id, v_org, mtype_lbl[t_idx] || ' · ' || companies[c_idx], seller[s_idx], CASE WHEN s_idx IN (1,3,5) THEN v_team_in ELSE v_team_out END, 'completo', mtypes[t_idx], m_date,
             leads[l_idx], companies[c_idx], lower(translate(lead_first, 'çãáéíóúâêô', 'caaeiouaeo')) || '@' || lower(regexp_replace(translate(companies[c_idx], 'çãáéíóúâêô ', 'caaeiouaeo'), '[^a-z]', '', 'g')) || '.com.br',
-            dur, CASE WHEN n % 4 = 0 THEN 'mp3' ELSE 'mp4' END, overall, temp, m_date + interval '2 hours', m_date + interval '2 hours');
+            dur, 'mp4', v_video_base || 'reuniao-' || lpad((1 + (n % 4))::text, 2, '0') || '.mp4', overall, temp, m_date + interval '2 hours', m_date + interval '2 hours');
 
     bant := jsonb_build_object(
       'budget',    jsonb_build_object('score', sb, 'reason', CASE WHEN sb>=15 THEN r_budget_ok[1 + (n % 3)] ELSE r_budget_no[1 + (n % 3)] END),

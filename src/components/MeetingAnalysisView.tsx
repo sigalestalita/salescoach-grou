@@ -69,12 +69,14 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
     return null;
   };
 
-  const isVideo = meeting.file_type === "webm" || meeting.file_type === "mp4" || (meeting.file_url?.endsWith(".webm") || meeting.file_url?.endsWith(".mp4"));
+  const mediaExt = (mediaUrl ?? "").split("?")[0].match(/\.(mp4|webm|m4a|mp3|ogg)$/i)?.[1]?.toLowerCase() ?? null;
+  const isVideo = meeting.file_type === "webm" || meeting.file_type === "mp4" || mediaExt === "mp4" || mediaExt === "webm" || (meeting.file_url?.endsWith(".webm") || meeting.file_url?.endsWith(".mp4"));
+  const mediaMime = mediaExt === "mp4" ? "video/mp4" : mediaExt === "m4a" ? "audio/mp4" : mediaExt === "mp3" ? "audio/mpeg" : mediaExt === "ogg" ? "audio/ogg" : isVideo ? "video/webm" : "audio/webm";
 
   return (
     <div className="space-y-6">
-      {/* Storage media */}
-      {meeting.file_url && !meeting.youtube_url && mediaUrl && (
+      {/* Gravação: arquivo no storage (URL assinada) ou link direto para o arquivo */}
+      {mediaUrl && (meeting.file_url || mediaExt) && (
         <Collapsible defaultOpen>
           <Card>
             <CollapsibleTrigger className="w-full">
@@ -90,11 +92,11 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
               <CardContent className="pt-0">
                 {isVideo ? (
                   <video controls className="w-full rounded-md border" preload="metadata">
-                    <source src={mediaUrl} type="video/webm" />
+                    <source src={mediaUrl} type={mediaMime} />
                   </video>
                 ) : (
                   <audio controls className="w-full" preload="metadata">
-                    <source src={mediaUrl} type="audio/webm" />
+                    <source src={mediaUrl} type={mediaMime} />
                   </audio>
                 )}
               </CardContent>

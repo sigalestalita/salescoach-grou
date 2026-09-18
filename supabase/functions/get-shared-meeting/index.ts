@@ -79,6 +79,9 @@ Deno.serve(async (req) => {
         .from("meeting-files")
         .createSignedUrl(meeting.file_url, 60 * 60 * 6);
       mediaUrl = signed?.signedUrl ?? null;
+    } else if (meeting.youtube_url && /\.(mp4|webm|m4a|mp3|ogg)(\?.*)?$/i.test(meeting.youtube_url)) {
+      // Link direto para o arquivo de mídia: toca no player da página pública.
+      mediaUrl = meeting.youtube_url;
     }
 
     await admin.from("audit_log").insert({
