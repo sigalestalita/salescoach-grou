@@ -20,3 +20,8 @@ verify_jwt = false
 # próprio. Devolve uma organização por vez e nunca lista.
 [functions.get-branding]
 verify_jwt = false
+
+# Formulário do site institucional. Público por natureza; a função tem
+# campo-isca, validação e limite de envios por IP.
+[functions.site-lead]
+verify_jwt = false
