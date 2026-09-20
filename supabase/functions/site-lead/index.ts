@@ -5,7 +5,7 @@
 // veem, validação de tamanho, e no máximo 5 envios por IP por hora.
 // Uma falha no aviso por e-mail não derruba o lead: ele já está gravado.
 
-import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { preflight, json } from "../_shared/cors.ts";
 
 const SITE_HOSTS = ["salescoach.app.br", "www.salescoach.app.br"];
