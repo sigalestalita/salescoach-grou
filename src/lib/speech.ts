@@ -10,7 +10,8 @@
 // passava) mas a chamada falhava com erro "network". Daí a troca.
 //
 // Fala do lead: speechSynthesis, que usa as vozes do próprio sistema
-// operacional e não depende de serviço externo — esse continua.
+// operacional e não depende de serviço externo. A escolha da voz prefere
+// as neurais que o sistema já tem (Edge, Mac) e fala frase a frase.
 
 export interface Recorder {
   /** Encerra a gravação e devolve o áudio e a duração aproximada. */
@@ -128,24 +129,176 @@ function loadVoices(): Promise<SpeechSynthesisVoice[]> {
   return voicesPromise;
 }
 
-/** Fala um texto em voz alta. Resolve quando termina (ou falha silenciosamente). */
-export async function speak(text: string, lang = "pt-BR"): Promise<void> {
-  if (!isSpeechSynthesisSupported() || !text.trim()) return;
-  window.speechSynthesis.cancel();
-  const voices = await loadVoices();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
-  utterance.rate = 1;
-  const voice = voices.find((v) => v.lang === lang) ?? voices.find((v) => v.lang.toLowerCase().startsWith("pt"));
-  if (voice) utterance.voice = voice;
+// ── Escolha da voz ─────────────────────────────────────────────────────
+// Os navegadores expõem vozes muito diferentes entre si. O Edge traz as
+// vozes neurais da Microsoft ("Francisca Online (Natural)"), o Mac tem as
+// "Aprimoradas" que a pessoa baixa nos Ajustes, o Chrome tem a do Google.
+// Pegar a primeira em português, como antes, costumava cair na pior de
+// todas. Aqui cada voz ganha uma pontuação e a melhor vence; quem quiser
+// escolhe à mão e a escolha fica salva neste navegador.
 
-  return new Promise((resolve) => {
-    utterance.onend = () => resolve();
-    utterance.onerror = () => resolve();
-    window.speechSynthesis.speak(utterance);
-  });
+export type VoiceGender = "f" | "m" | null;
+
+export interface VoiceOption {
+  uri: string;
+  /** Nome limpo, para mostrar na lista. */
+  name: string;
+  lang: string;
+  /** Voz neural (Natural, Aprimorada, WaveNet…), bem mais humana. */
+  neural: boolean;
+  gender: VoiceGender;
+}
+
+const FEMININOS = ["francisca", "thalita", "brenda", "elza", "giovanna", "leila", "leticia", "manuela", "yara", "luciana", "joana",
+  "fernanda", "camila", "vitoria", "maria", "ana", "julia", "raquel", "beatriz", "isabela", "isabella", "carla", "paula", "simone",
+  "alice", "helena", "laura", "larissa", "renata", "patricia", "marina", "carolina", "amanda", "bruna", "leticia", "juliana", "flavia", "gabriela"];
+const MASCULINOS = ["antonio", "donato", "fabio", "humberto", "julio", "nicolau", "valerio", "felipe", "daniel", "ricardo", "carlos",
+  "joao", "pedro", "lucas", "rafael", "bruno", "eduardo", "marcos", "paulo", "rodrigo", "thiago", "tiago", "gustavo", "andre",
+  "fernando", "marcelo", "leonardo", "diego", "vinicius", "henrique", "guilherme", "mateus", "matheus", "caio", "sergio"];
+
+const semAcento = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+/** Adivinha o gênero pelo primeiro nome; null quando não dá para saber. */
+export function guessGender(fullName: string | null | undefined): VoiceGender {
+  if (!fullName) return null;
+  const first = semAcento(fullName).trim().split(/[\s(,·-]+/)[0];
+  if (!first) return null;
+  if (FEMININOS.includes(first)) return "f";
+  if (MASCULINOS.includes(first)) return "m";
+  if (first.endsWith("a")) return "f";
+  if (first.endsWith("o")) return "m";
+  return null;
+}
+
+function voiceGender(v: SpeechSynthesisVoice): VoiceGender {
+  const tokens = semAcento(v.name).split(/[^a-z]+/).filter(Boolean);
+  if (tokens.some((t) => FEMININOS.includes(t))) return "f";
+  if (tokens.some((t) => MASCULINOS.includes(t))) return "m";
+  return null;
+}
+
+const isNeural = (v: SpeechSynthesisVoice) => /natural|online|enhanced|premium|aprimorad|neural|wavenet|studio/i.test(v.name);
+const isPtBr = (v: SpeechSynthesisVoice) => /^pt[-_]br$/i.test(v.lang);
+const isPt = (v: SpeechSynthesisVoice) => /^pt\b/i.test(v.lang);
+
+function scoreVoice(v: SpeechSynthesisVoice, gender: VoiceGender): number {
+  let s = 0;
+  if (isPtBr(v)) s += 100;
+  else if (isPt(v)) s += 60;
+  else return -1;
+  if (isNeural(v)) s += 50;
+  if (/google/i.test(v.name)) s += 15; // a do Chrome é razoável, sem ser neural
+  if (gender && voiceGender(v) === gender) s += 30;
+  return s;
+}
+
+function cleanName(v: SpeechSynthesisVoice): string {
+  return v.name
+    .replace(/^Microsoft\s+/i, "")
+    .replace(/\s*Online\s*\(Natural\)/i, "")
+    .replace(/\s*-\s*Portuguese\s*\(Brazil\)/i, "")
+    .replace(/\s*\(Brazil\)/i, "")
+    .replace(/^Google\s+/i, "Google · ")
+    .trim();
+}
+
+/** Vozes em português disponíveis neste navegador, da melhor para a pior. */
+export async function listVoices(): Promise<VoiceOption[]> {
+  if (!isSpeechSynthesisSupported()) return [];
+  const voices = await loadVoices();
+  return voices
+    .filter(isPt)
+    .map((v) => ({ v, s: scoreVoice(v, null) }))
+    .sort((a, b) => b.s - a.s)
+    .map(({ v }) => ({ uri: v.voiceURI, name: cleanName(v), lang: v.lang, neural: isNeural(v), gender: voiceGender(v) }));
+}
+
+const VOICE_KEY = "sc:voz-treino";
+export function getSavedVoice(): string | null {
+  try { return localStorage.getItem(VOICE_KEY); } catch { return null; }
+}
+export function saveVoice(uri: string | null): void {
+  try { uri ? localStorage.setItem(VOICE_KEY, uri) : localStorage.removeItem(VOICE_KEY); } catch { /* sem armazenamento, sem problema */ }
+}
+
+async function pickVoice(voiceURI: string | undefined, gender: VoiceGender): Promise<SpeechSynthesisVoice | null> {
+  const voices = await loadVoices();
+  if (voiceURI) {
+    const escolhida = voices.find((v) => v.voiceURI === voiceURI);
+    if (escolhida) return escolhida;
+  }
+  let best: SpeechSynthesisVoice | null = null, bestScore = -1;
+  for (const v of voices) {
+    const s = scoreVoice(v, gender);
+    if (s > bestScore) { best = v; bestScore = s; }
+  }
+  return best;
+}
+
+// ── Fala ────────────────────────────────────────────────────────────────
+// Frase a frase, e não o texto inteiro de uma vez: o Chrome corta falas
+// longas depois de uns quinze segundos, e a pausa entre frases soa mais
+// humana do que uma leitura corrida.
+
+/** Quebra o texto em frases; frases muito longas quebram na vírgula. */
+export function splitSentences(text: string): string[] {
+  const frases = text.replace(/\s+/g, " ").match(/[^.!?…]+[.!?…]*/g) ?? [text];
+  const out: string[] = [];
+  for (const f of frases) {
+    const t = f.trim();
+    if (!t) continue;
+    if (t.length <= 220) { out.push(t); continue; }
+    let atual = "";
+    for (const parte of t.split(/(?<=[,;:])\s+/)) {
+      if (atual && (atual + " " + parte).length > 220) { out.push(atual); atual = parte; }
+      else atual = atual ? atual + " " + parte : parte;
+    }
+    if (atual) out.push(atual);
+  }
+  return out;
+}
+
+let falaAtiva = 0;
+
+export interface SpeakOptions {
+  lang?: string;
+  /** voiceURI escolhida pela pessoa; sem ela, a melhor disponível. */
+  voiceURI?: string;
+  /** Gênero da persona, para a voz combinar com o nome do lead. */
+  gender?: VoiceGender;
+}
+
+/** Fala um texto em voz alta. Resolve quando termina (ou falha silenciosamente). */
+export async function speak(text: string, opts: SpeakOptions = {}): Promise<void> {
+  if (!isSpeechSynthesisSupported() || !text.trim()) return;
+  const meu = ++falaAtiva;
+  window.speechSynthesis.cancel();
+  const lang = opts.lang ?? "pt-BR";
+  const voice = await pickVoice(opts.voiceURI, opts.gender ?? null);
+
+  for (const frase of splitSentences(text)) {
+    if (meu !== falaAtiva) return; // alguém cancelou ou começou outra fala
+    await new Promise<void>((resolve) => {
+      const u = new SpeechSynthesisUtterance(frase);
+      u.lang = voice?.lang ?? lang;
+      u.rate = 1.03;
+      u.pitch = 1;
+      if (voice) u.voice = voice;
+      u.onend = () => resolve();
+      u.onerror = () => resolve();
+      window.speechSynthesis.speak(u);
+    });
+    // Respiro curto entre frases, como numa conversa.
+    await new Promise((r) => setTimeout(r, 140));
+  }
+}
+
+/** Uma frase curta na voz escolhida, para a pessoa comparar as opções. */
+export function previewVoice(voiceURI?: string, gender: VoiceGender = null): Promise<void> {
+  return speak("Oi, tudo bem? Pode falar, estou te ouvindo.", { voiceURI, gender });
 }
 
 export function cancelSpeaking(): void {
+  falaAtiva++;
   if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
 }

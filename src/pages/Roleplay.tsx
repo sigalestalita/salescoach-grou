@@ -8,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatCard } from "@/components/StatCard";
-import { isMicSupported, startRecording, blobToBase64, speak, cancelSpeaking, type Recorder } from "@/lib/speech";
+import {
+  isMicSupported, startRecording, blobToBase64, speak, cancelSpeaking, listVoices, guessGender,
+  getSavedVoice, saveVoice, previewVoice, type Recorder, type VoiceOption,
+} from "@/lib/speech";
 import {
   Dumbbell, Loader2, Send, Sparkles, ThumbsUp, ThumbsDown, ListChecks, Target, Thermometer,
   RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone,
@@ -86,6 +89,9 @@ const Roleplay = () => {
   const [difficulty, setDifficulty] = useState<string>("media");
   const [focusPain, setFocusPain] = useState<string>("aleatoria");
   const [mode, setMode] = useState<Mode>("texto");
+  // Voz do lead: "auto" escolhe a melhor voz do sistema; a escolha manual fica salva no navegador.
+  const [voices, setVoices] = useState<VoiceOption[]>([]);
+  const [voiceUri, setVoiceUri] = useState<string>(() => getSavedVoice() ?? "auto");
   const [starting, setStarting] = useState(false);
 
   const [session, setSession] = useState<Session | null>(null);
@@ -127,6 +133,16 @@ const Roleplay = () => {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, sending, callPhase]);
+
+  // As vozes só carregam quando o modo chamada entra em cena.
+  useEffect(() => {
+    if (mode !== "chamada") return;
+    listVoices().then((lista) => {
+      setVoices(lista);
+      // Uma voz salva que não existe mais neste navegador volta para a automática.
+      setVoiceUri((atual) => (atual === "auto" || lista.some((v) => v.uri === atual) ? atual : "auto"));
+    });
+  }, [mode]);
 
   // Cronômetro da gravação, com teto de 60 s por turno.
   useEffect(() => {
@@ -201,7 +217,7 @@ const Roleplay = () => {
       setSuggestFinish(!!data.suggestFinish);
       if (mode === "chamada") {
         setPhase("falando");
-        await speak(data.reply);
+        await speak(data.reply, { voiceURI: voiceUri === "auto" ? undefined : voiceUri, gender: guessGender(session.persona.name) });
         setPhase("idle");
       }
     } catch (e: any) {
@@ -384,6 +400,35 @@ const Roleplay = () => {
                 </button>
               </div>
             </div>
+
+            {mode === "chamada" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Voz do lead</label>
+                <div className="flex gap-2">
+                  <Select
+                    value={voiceUri}
+                    onValueChange={(v) => { setVoiceUri(v); saveVoice(v === "auto" ? null : v); }}
+                  >
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Automática — a melhor voz disponível neste computador</SelectItem>
+                      {voices.map((v) => (
+                        <SelectItem key={v.uri} value={v.uri}>{v.name}{v.neural ? " · natural" : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" size="icon" title="Ouvir esta voz" aria-label="Ouvir esta voz"
+                    onClick={() => previewVoice(voiceUri === "auto" ? undefined : voiceUri)}>
+                    <Volume2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {voices.some((v) => v.neural)
+                    ? "As vozes marcadas como natural são as mais humanas. A automática já prefere uma delas e combina com o nome do lead."
+                    : "Para uma voz mais humana sem custo: no Microsoft Edge as vozes Natural já vêm prontas; no Mac, baixe a Luciana (Aprimorada) em Ajustes › Acessibilidade › Conteúdo Falado."}
+                </p>
+              </div>
+            )}
 
             <Button onClick={startSession} disabled={starting} className="w-full md:w-auto">
               {starting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
