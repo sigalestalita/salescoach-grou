@@ -6,11 +6,19 @@
 // Uma falha no aviso por e-mail não derruba o lead: ele já está gravado.
 
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
-import { preflight, json } from "../_shared/cors.ts";
+import { corsHeaders, preflight } from "../_shared/cors.ts";
 
 const SITE_HOSTS = ["salescoach.app.br", "www.salescoach.app.br"];
 const NOTIFY_TO = Deno.env.get("SITE_LEAD_NOTIFY_TO") ?? "contato@salescoach.app.br";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+// Respostas sempre com o CORS do site, não só o da plataforma.
+function json(req: Request, body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(req, SITE_HOSTS), "Content-Type": "application/json" },
+  });
+}
 
 Deno.serve(async (req) => {
   const pf = preflight(req, SITE_HOSTS);
