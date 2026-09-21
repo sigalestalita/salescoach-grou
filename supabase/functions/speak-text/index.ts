@@ -27,12 +27,11 @@ const MAX_CHARS = 700;
 /** Vozes padrão por gênero, por provedor. Podem ser trocadas por env. */
 const VOZES = {
   elevenlabs: {
-    // Vozes padrão da conta, que o plano free libera pela API. São multilíngues
-    // e falam português, com leve sotaque estrangeiro. As vozes brasileiras da
-    // biblioteca (Nayara 5p4THmLc2S6kXKO1pOM5, Talis E9a8LlXPNWtyvvSoZzrb) só
-    // funcionam do plano Starter para cima: ao assinar, é só apontar as env.
-    f: Deno.env.get("ELEVENLABS_VOICE_F") ?? "EXAVITQu4vr4xnSDxMaL", // Sarah
-    m: Deno.env.get("ELEVENLABS_VOICE_M") ?? "iP95p4xoKVk53GoZ742B", // Chris
+    // Vozes brasileiras da biblioteca, que o plano Starter libera pela API.
+    // Medidas em 21/09/2026: 0,53 a 0,60 s por frase depois da primeira
+    // chamada — as duas mais rápidas entre as brasileiras testadas.
+    f: Deno.env.get("ELEVENLABS_VOICE_F") ?? "5p4THmLc2S6kXKO1pOM5", // Nayara Técia
+    m: Deno.env.get("ELEVENLABS_VOICE_M") ?? "E9a8LlXPNWtyvvSoZzrb", // Talis
   },
   openai: {
     f: Deno.env.get("OPENAI_VOICE_F") ?? "shimmer",
