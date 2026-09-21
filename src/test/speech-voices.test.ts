@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { guessGender, splitSentences } from "@/lib/speech";
+import { guessGender, splitSentences, trechosProntos } from "@/lib/speech";
 
 describe("guessGender", () => {
   it("reconhece nomes comuns e a terminação", () => {
@@ -29,5 +29,25 @@ describe("splitSentences", () => {
   });
   it("texto sem pontuação vira uma frase só", () => {
     expect(splitSentences("sem pontuação nenhuma")).toEqual(["sem pontuação nenhuma"]);
+  });
+});
+
+describe("trechosProntos", () => {
+  it("só entrega o que já dá para falar", () => {
+    const { trechos, resto } = trechosProntos("Bom dia. A gente usa planil");
+    expect(trechos).toEqual(["Bom dia."]);
+    expect(resto).toBe("A gente usa planil");
+  });
+
+  it("junta frases curtas para a fala não picotar", () => {
+    const { trechos } = trechosProntos("Oi. Tudo bem? Sim, a gente tem esse problema todo mês.");
+    expect(trechos[0]).toBe("Oi. Tudo bem?");
+    expect(trechos[1]).toBe("Sim, a gente tem esse problema todo mês.");
+  });
+
+  it("sem pontuação, segura o texto até a frase fechar", () => {
+    const { trechos, resto } = trechosProntos("a gente ainda está falando");
+    expect(trechos).toEqual([]);
+    expect(resto).toBe("a gente ainda está falando");
   });
 });

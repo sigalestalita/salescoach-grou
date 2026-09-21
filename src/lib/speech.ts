@@ -302,3 +302,277 @@ export function cancelSpeaking(): void {
   falaAtiva++;
   if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Transcrição ao vivo (streaming)
+//
+// O caminho antigo — gravar tudo, subir em base64 e esperar a transcrição em
+// lote — custava de 5 a 7 segundos de silêncio depois que a pessoa parava de
+// falar. Aqui o áudio sobe enquanto ela fala, pela função roleplay-listen, e o
+// texto já está pronto quando ela solta o botão. Se o WebSocket não abrir, a
+// página volta sozinha para o caminho antigo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface LiveTranscription {
+  /** Encerra a fala e devolve o texto reconhecido. */
+  stop: () => Promise<string>;
+  /** Interrompe e libera o microfone, sem devolver texto. */
+  cancel: () => void;
+}
+
+export interface LiveOptions {
+  url: string;          // wss://<projeto>.functions.supabase.co/roleplay-listen
+  token: string;        // access token do usuário
+  sessionId: string;
+  onPartial?: (texto: string) => void;
+}
+
+/** Converte float32 [-1,1] em PCM16 little-endian. */
+function paraPcm16(entrada: Float32Array): ArrayBuffer {
+  const saida = new Int16Array(entrada.length);
+  for (let i = 0; i < entrada.length; i++) {
+    const s = Math.max(-1, Math.min(1, entrada[i]));
+    saida[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return saida.buffer;
+}
+
+export async function startLiveTranscription(opts: LiveOptions): Promise<LiveTranscription> {
+  if (!isMicSupported()) throw new Error("Este navegador não permite gravar áudio. Use o campo de texto para responder.");
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+
+  const ws = new WebSocket(
+    `${opts.url}?sessionId=${encodeURIComponent(opts.sessionId)}&token=${encodeURIComponent(opts.token)}`,
+  );
+  ws.binaryType = "arraybuffer";
+
+  let ultimoParcial = "";
+  let resolveFinal: ((texto: string) => void) | null = null;
+  let erro: string | null = null;
+
+  const aberto = new Promise<void>((resolve, reject) => {
+    const limite = setTimeout(() => reject(new Error("timeout")), 4000);
+    ws.onopen = () => { clearTimeout(limite); resolve(); };
+    ws.onerror = () => { clearTimeout(limite); reject(new Error("websocket")); };
+  });
+
+  ws.onmessage = (ev) => {
+    if (typeof ev.data !== "string") return;
+    try {
+      const m = JSON.parse(ev.data);
+      if (m.kind === "parcial") { ultimoParcial = m.text ?? ""; opts.onPartial?.(ultimoParcial); }
+      if (m.kind === "final") { resolveFinal?.(String(m.text ?? ultimoParcial).trim()); resolveFinal = null; }
+      if (m.kind === "error") erro = String(m.message ?? "erro");
+    } catch { /* ignore */ }
+  };
+
+  try {
+    await aberto;
+  } catch (e) {
+    stream.getTracks().forEach((t) => t.stop());
+    try { ws.close(); } catch { /* ignore */ }
+    throw new Error("Não foi possível abrir a transcrição ao vivo.");
+  }
+
+  const ctx = new AudioContext({ sampleRate: 16000 });
+  const fonte = ctx.createMediaStreamSource(stream);
+  const processador = ctx.createScriptProcessor(4096, 1, 1);
+  fonte.connect(processador);
+  processador.connect(ctx.destination);
+  processador.onaudioprocess = (e) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try { ws.send(paraPcm16(e.inputBuffer.getChannelData(0))); } catch { /* ignore */ }
+  };
+
+  const desliga = () => {
+    try { processador.disconnect(); fonte.disconnect(); } catch { /* ignore */ }
+    ctx.close().catch(() => { /* ignore */ });
+    stream.getTracks().forEach((t) => t.stop());
+  };
+
+  return {
+    async stop() {
+      desliga();
+      if (erro) { try { ws.close(); } catch { /* ignore */ } throw new Error(erro); }
+      const final = new Promise<string>((resolve) => {
+        resolveFinal = resolve;
+        // Se o fechamento do turno não voltar, vale o que já foi reconhecido.
+        setTimeout(() => { if (resolveFinal) { resolveFinal = null; resolve(ultimoParcial.trim()); } }, 2500);
+      });
+      try { ws.send(JSON.stringify({ action: "stop" })); } catch { /* ignore */ }
+      const texto = await final;
+      try { ws.close(); } catch { /* ignore */ }
+      return texto;
+    },
+    cancel() {
+      desliga();
+      try { ws.close(); } catch { /* ignore */ }
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fala do lead: voz neural quando o servidor tem provedor, voz do sistema quando não
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FalaOptions {
+  /** https://<projeto>.functions.supabase.co/speak-text */
+  url?: string;
+  token?: string;
+  gender?: VoiceGender;
+  /** voiceURI escolhida para o caminho de fallback (voz do sistema). */
+  voiceURI?: string;
+}
+
+/** Guarda entre sessões se o servidor tem voz neural, para não tentar à toa. */
+let neuralDisponivel: boolean | null = null;
+export function neuralStatus(): boolean | null { return neuralDisponivel; }
+
+async function audioNeural(texto: string, opts: FalaOptions): Promise<HTMLAudioElement | null> {
+  if (!opts.url || !opts.token || neuralDisponivel === false) return null;
+  try {
+    const r = await fetch(opts.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.token}` },
+      body: JSON.stringify({ text: texto, gender: opts.gender === "m" ? "male" : "female" }),
+    });
+    if (r.status === 501) { neuralDisponivel = false; return null; } // sem provedor configurado
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    if (blob.size < 200) return null;
+    neuralDisponivel = true;
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.preload = "auto";
+    return audio;
+  } catch {
+    return null;
+  }
+}
+
+export interface FilaDeFala {
+  /** Enfileira um trecho já fechado do texto. */
+  push: (trecho: string) => void;
+  /** Avisa que não vem mais texto e espera a fala terminar. */
+  encerrar: () => Promise<void>;
+  /** Corta a fala na hora. */
+  cancelar: () => void;
+}
+
+/**
+ * Fala trecho a trecho, na ordem, enquanto o texto ainda está chegando.
+ * Cada trecho é preparado (áudio neural) durante a reprodução do anterior, de
+ * modo que a conversa não tem buraco entre as frases.
+ */
+export function criaFilaDeFala(opts: FalaOptions = {}): FilaDeFala {
+  const meu = ++falaAtiva;
+  const pendentes: string[] = [];
+  let acabou = false;
+  let tocando: HTMLAudioElement | null = null;
+  let aviso: (() => void) | null = null;
+  const vivo = () => meu === falaAtiva;
+
+  const esperaTrecho = () =>
+    new Promise<void>((resolve) => {
+      aviso = () => { aviso = null; resolve(); };
+    });
+
+  async function tocaNeural(audio: HTMLAudioElement) {
+    tocando = audio;
+    await new Promise<void>((resolve) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
+    });
+    tocando = null;
+  }
+
+  async function tocaSistema(texto: string) {
+    if (!isSpeechSynthesisSupported()) return;
+    const voice = await pickVoice(opts.voiceURI, opts.gender ?? null);
+    await new Promise<void>((resolve) => {
+      const u = new SpeechSynthesisUtterance(texto);
+      u.lang = voice?.lang ?? "pt-BR";
+      u.rate = 1.03;
+      if (voice) u.voice = voice;
+      u.onend = () => resolve();
+      u.onerror = () => resolve();
+      window.speechSynthesis.speak(u);
+    });
+  }
+
+  const laco = (async () => {
+    // Prepara o próximo áudio enquanto o atual toca.
+    let proximo: Promise<HTMLAudioElement | null> | null = null;
+    let proximoTexto: string | null = null;
+    while (vivo()) {
+      if (!pendentes.length && !proximoTexto) {
+        if (acabou) break;
+        await esperaTrecho();
+        continue;
+      }
+      const texto = proximoTexto ?? pendentes.shift()!;
+      const preparado = proximo ?? audioNeural(texto, opts);
+      proximo = null;
+      proximoTexto = null;
+
+      // Já engatilha o trecho seguinte, se ele existir.
+      if (pendentes.length) {
+        proximoTexto = pendentes.shift()!;
+        proximo = audioNeural(proximoTexto, opts);
+      }
+
+      const audio = await preparado;
+      if (!vivo()) return;
+      if (audio) await tocaNeural(audio);
+      else await tocaSistema(texto);
+    }
+  })();
+
+  return {
+    push(trecho: string) {
+      const t = trecho.trim();
+      if (!t) return;
+      pendentes.push(t);
+      aviso?.();
+    },
+    async encerrar() {
+      acabou = true;
+      aviso?.();
+      await laco;
+    },
+    cancelar() {
+      acabou = true;
+      falaAtiva++;
+      aviso?.();
+      if (tocando) { try { tocando.pause(); } catch { /* ignore */ } tocando = null; }
+      if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
+    },
+  };
+}
+
+/**
+ * Quebra um texto que ainda está chegando em trechos faláveis: devolve os
+ * trechos já fechados e o resto que ainda não dá para falar.
+ */
+export function trechosProntos(buffer: string): { trechos: string[]; resto: string } {
+  const trechos: string[] = [];
+  let resto = buffer;
+  // Fala a cada frase; frases muito curtas se juntam à seguinte para não picotar.
+  const re = /[^.!?…]+[.!?…]+[\s]*/g;
+  let consumido = 0;
+  let acumulado = "";
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(buffer)) !== null) {
+    acumulado += m[0];
+    consumido = m.index + m[0].length;
+    // 12 caracteres: curto o bastante para a primeira fala sair rápido, longo
+    // o bastante para "Oi." não virar um trecho sozinho.
+    if (acumulado.trim().length >= 12) { trechos.push(acumulado.trim()); acumulado = ""; }
+  }
+  if (acumulado.trim()) { trechos.push(acumulado.trim()); }
+  resto = buffer.slice(consumido);
+  return { trechos, resto };
+}

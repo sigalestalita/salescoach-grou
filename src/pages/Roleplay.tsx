@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatCard } from "@/components/StatCard";
 import {
   isMicSupported, startRecording, blobToBase64, speak, cancelSpeaking, listVoices, guessGender,
-  getSavedVoice, saveVoice, previewVoice, type Recorder, type VoiceOption,
+  getSavedVoice, saveVoice, previewVoice, startLiveTranscription, criaFilaDeFala, trechosProntos,
+  type Recorder, type VoiceOption, type LiveTranscription, type FilaDeFala,
 } from "@/lib/speech";
 import {
   Dumbbell, Loader2, Send, Sparkles, ThumbsUp, ThumbsDown, ListChecks, Target, Thermometer,
@@ -22,10 +23,11 @@ import {
  * catálogo de dores e das objeções reais já vistas nas reuniões da própria
  * organização. Duas formas de conversar:
  *   - texto: digitando, como um chat.
- *   - chamada: fala pelo microfone e ouve a resposta em voz. A gravação é
- *     transcrita no servidor pelo AssemblyAI (mesmo serviço das reuniões
- *     reais), então funciona em qualquer navegador; a fala do lead sai pelas
- *     vozes do sistema operacional.
+ *   - chamada: fala pelo microfone e ouve a resposta em voz. O áudio é
+ *     transcrito enquanto a pessoa fala (AssemblyAI streaming, o mesmo das
+ *     reuniões ao vivo), a resposta do lead chega em streaming e a fala
+ *     começa na primeira frase — sem o silêncio de antes. A voz é neural
+ *     quando o servidor tem provedor de TTS; se não tiver, usa a do sistema.
  * Ao encerrar, a conversa passa pelo mesmo motor de análise das reuniões
  * reais — mesma nota, mesma metodologia, mesmo formato de feedback.
  */
@@ -79,6 +81,17 @@ type CallPhase = "idle" | "gravando" | "transcrevendo" | "pensando" | "falando";
 const DIFFICULTY_LABEL: Record<string, string> = { facil: "Fácil", media: "Média", dificil: "Difícil" };
 const DIFFICULTY_TONE: Record<string, string> = { facil: "bg-success/10 text-success", media: "bg-warning/10 text-warning", dificil: "bg-destructive/10 text-destructive" };
 
+const BASE_URL: string = import.meta.env.VITE_SUPABASE_URL ?? "";
+const FUNCOES = BASE_URL.replace(".supabase.co", ".functions.supabase.co");
+const URL_OUVIR = FUNCOES.replace(/^http/, "ws") + "/roleplay-listen";
+const URL_FALAR = FUNCOES + "/speak-text";
+const URL_TURNO = FUNCOES + "/roleplay-chat";
+
+async function tokenAtual(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
 const Roleplay = () => {
   const { config } = useOrgConfig();
   const { toast } = useToast();
@@ -105,6 +118,9 @@ const Roleplay = () => {
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
   const recorderRef = useRef<Recorder | null>(null);
+  const escutaRef = useRef<LiveTranscription | null>(null);
+  const filaFalaRef = useRef<FilaDeFala | null>(null);
+  const [parcial, setParcial] = useState("");
   // As etapas do modo chamada se encadeiam dentro do mesmo render
   // (gravar → transcrever → enviar). Ler callPhase direto nas guardas pegaria
   // o valor congelado na closure, e a fala transcrita era descartada em
@@ -126,7 +142,9 @@ const Roleplay = () => {
     loadHistory();
     return () => {
       cancelSpeaking();
+      filaFalaRef.current?.cancelar();
       recorderRef.current?.cancel();
+      escutaRef.current?.cancel();
     };
   }, []);
 
@@ -211,13 +229,94 @@ const Roleplay = () => {
     else setSending(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("roleplay-chat", { body: { sessionId: session.id, message: content } });
-      if (error) throw new Error(data?.error || error.message);
-      setMessages((prev) => [...prev, { role: "lead", content: data.reply }]);
-      setSuggestFinish(!!data.suggestFinish);
-      if (mode === "chamada") {
-        setPhase("falando");
-        await speak(data.reply, { voiceURI: voiceUri === "auto" ? undefined : voiceUri, gender: guessGender(session.persona.name) });
+      const token = await tokenAtual();
+      const emVoz = mode === "chamada";
+
+      // Sem token (sessão expirada) cai no caminho simples, que o supabase-js resolve.
+      if (!token) {
+        const { data, error } = await supabase.functions.invoke("roleplay-chat", { body: { sessionId: session.id, message: content } });
+        if (error) throw new Error(data?.error || error.message);
+        setMessages((prev) => [...prev, { role: "lead", content: data.reply }]);
+        setSuggestFinish(!!data.suggestFinish);
+        if (emVoz) {
+          setPhase("falando");
+          await speak(data.reply, { voiceURI: voiceUri === "auto" ? undefined : voiceUri, gender: guessGender(session.persona.name) });
+          setPhase("idle");
+        }
+        return;
+      }
+
+      const resposta = await fetch(URL_TURNO, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId: session.id, message: content, stream: true }),
+      });
+      if (!resposta.ok || !resposta.body) {
+        const erro = await resposta.json().catch(() => ({}));
+        throw new Error(erro.error || `Falha no treino (${resposta.status})`);
+      }
+
+      // A fala começa na primeira frase fechada, enquanto o resto ainda chega.
+      const fala = emVoz
+        ? criaFilaDeFala({
+            url: URL_FALAR,
+            token,
+            gender: guessGender(session.persona.name),
+            voiceURI: voiceUri === "auto" ? undefined : voiceUri,
+          })
+        : null;
+      filaFalaRef.current = fala;
+      if (emVoz) setPhase("falando");
+
+      // A bolha do lead aparece vazia e vai sendo preenchida.
+      setMessages((prev) => [...prev, { role: "lead", content: "" }]);
+      const atualizaBolha = (texto: string) =>
+        setMessages((prev) => {
+          const copia = [...prev];
+          for (let i = copia.length - 1; i >= 0; i--) {
+            if (copia[i].role === "lead") { copia[i] = { role: "lead", content: texto }; break; }
+          }
+          return copia;
+        });
+
+      const leitor = resposta.body.getReader();
+      const decoder = new TextDecoder();
+      let bruto = "";
+      let completo = "";
+      let porFalar = "";
+      let evento = "";
+
+      while (true) {
+        const { done, value } = await leitor.read();
+        if (done) break;
+        bruto += decoder.decode(value, { stream: true });
+        const linhas = bruto.split("\n");
+        bruto = linhas.pop() ?? "";
+        for (const linha of linhas) {
+          const l = linha.trim();
+          if (l.startsWith("event:")) { evento = l.slice(6).trim(); continue; }
+          if (!l.startsWith("data:")) continue;
+          const dado = JSON.parse(l.slice(5).trim());
+          if (evento === "pedaco") {
+            completo += dado.text;
+            porFalar += dado.text;
+            atualizaBolha(completo);
+            const { trechos, resto } = trechosProntos(porFalar);
+            porFalar = resto;
+            for (const t of trechos) fala?.push(t);
+          }
+          if (evento === "fim") {
+            completo = dado.reply ?? completo;
+            atualizaBolha(completo);
+            setSuggestFinish(!!dado.suggestFinish);
+          }
+        }
+      }
+
+      if (porFalar.trim()) fala?.push(porFalar);
+      if (fala) {
+        await fala.encerrar();
+        filaFalaRef.current = null;
         setPhase("idle");
       }
     } catch (e: any) {
@@ -228,8 +327,30 @@ const Roleplay = () => {
     }
   };
 
-  // Grava a fala, manda para a transcrição no servidor (AssemblyAI) e envia
-  // o texto como um turno normal do treino.
+  // Encerra a escuta ao vivo: o texto já está pronto quando o botão é solto.
+  const pararEscutaAoVivo = async () => {
+    const escuta = escutaRef.current;
+    if (!escuta) return;
+    escutaRef.current = null;
+    setPhase("transcrevendo");
+    try {
+      const texto = (await escuta.stop()).trim();
+      setParcial("");
+      if (!texto) {
+        setMicError("Não consegui entender o áudio. Tente falar um pouco mais alto.");
+        setPhase("idle");
+        return;
+      }
+      await sendMessage(texto);
+    } catch (e: any) {
+      setParcial("");
+      setMicError(e.message || "Falha ao transcrever o áudio.");
+      setPhase("idle");
+    }
+  };
+
+  // Caminho reserva: grava tudo e transcreve em lote (usado quando o
+  // WebSocket da transcrição ao vivo não abre).
   const stopAndSend = async () => {
     const recorder = recorderRef.current;
     if (!recorder) return;
@@ -264,13 +385,34 @@ const Roleplay = () => {
 
   const toggleMic = async () => {
     if (callPhaseRef.current === "gravando") {
-      await stopAndSend();
+      if (escutaRef.current) await pararEscutaAoVivo();
+      else await stopAndSend();
       return;
     }
     if (callPhaseRef.current !== "idle") return;
 
     setMicError(null);
     cancelSpeaking();
+    filaFalaRef.current?.cancelar();
+    setParcial("");
+
+    // Primeiro a transcrição ao vivo; se ela não abrir, grava e transcreve depois.
+    try {
+      const token = await tokenAtual();
+      if (token && session) {
+        escutaRef.current = await startLiveTranscription({
+          url: URL_OUVIR,
+          token,
+          sessionId: session.id,
+          onPartial: setParcial,
+        });
+        setPhase("gravando");
+        return;
+      }
+    } catch {
+      escutaRef.current = null;
+    }
+
     try {
       recorderRef.current = await startRecording();
       setPhase("gravando");
@@ -283,8 +425,11 @@ const Roleplay = () => {
   const finishSession = async () => {
     if (!session) return;
     cancelSpeaking();
+    filaFalaRef.current?.cancelar();
     recorderRef.current?.cancel();
     recorderRef.current = null;
+    escutaRef.current?.cancel();
+    escutaRef.current = null;
     setFinishing(true);
     try {
       const { data, error } = await supabase.functions.invoke("roleplay-finish", { body: { sessionId: session.id } });
@@ -300,8 +445,12 @@ const Roleplay = () => {
 
   const reset = () => {
     cancelSpeaking();
+    filaFalaRef.current?.cancelar();
     recorderRef.current?.cancel();
     recorderRef.current = null;
+    escutaRef.current?.cancel();
+    escutaRef.current = null;
+    setParcial("");
     setSession(null);
     setMessages([]);
     setFeedback(null);
@@ -468,7 +617,11 @@ const Roleplay = () => {
               <div className="flex justify-end">
                 <div className="flex max-w-[80%] items-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm italic text-muted-foreground">
                   {callPhase === "gravando" ? (
-                    <><span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />gravando sua fala…</>
+                    <>
+                      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
+                      {/* Com a transcrição ao vivo, a fala aparece enquanto a pessoa fala. */}
+                      <span className="not-italic text-foreground">{parcial || "ouvindo…"}</span>
+                    </>
                   ) : (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />transcrevendo…</>
                   )}

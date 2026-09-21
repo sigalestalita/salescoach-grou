@@ -5,6 +5,11 @@ project_id = "xgpfuunmmjkgwjefofcd"
 [functions.live-transcribe]
 verify_jwt = false
 
+# Transcrição ao vivo da fala no modo de treino. O navegador não consegue
+# mandar cabeçalho em WebSocket: o token vai na querystring e a função o valida.
+[functions.roleplay-listen]
+verify_jwt = false
+
 # A função valida sozinha: aceita chamada interna (segredo compartilhado ou
 # service role) ou usuário autenticado com acesso à reunião. Antes aceitava
 # qualquer meetingId vindo de qualquer origem.

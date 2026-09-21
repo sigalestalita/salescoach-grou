@@ -11,11 +11,12 @@
 // treino soa como o negócio real da empresa, não um cenário genérico.
 
 import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
-import { json, preflight } from "../_shared/cors.ts";
+import { corsHeaders, json, preflight } from "../_shared/cors.ts";
 import { assertQuota, getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
 import { loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
 
-const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flash";
+const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flash-lite";
+const MODELO_RESERVA = "google/gemini-2.5-flash";
 const MAX_TURNS_HINT = 14; // ~7 idas e vindas — a partir daqui sugerimos encerrar, sem bloquear.
 
 const LEAD_FIRST_NAMES = ["Ricardo", "Patrícia", "João", "Fernanda", "Marcos", "Luciana", "André", "Simone", "Eduardo", "Beatriz", "Cláudio", "Renata", "Gustavo", "Vanessa", "Paulo", "Aline", "Rodrigo", "Juliana", "Sérgio", "Carla"];
@@ -150,18 +151,23 @@ Deno.serve(async (req) => {
 
     const persona = session.persona as Persona;
 
-    const [{ data: history }, template, meetingTypeContext, orgRes] = await Promise.all([
+    const [{ data: history }, template, meetingTypeContext, orgRes, tipoRes] = await Promise.all([
       ctx.admin.from("roleplay_messages").select("role, content").eq("session_id", sessionId).order("created_at"),
       loadTemplate(ctx.admin, ctx.orgId),
       loadMeetingTypeContext(ctx.admin, ctx.orgId, session.meeting_type),
       ctx.admin.from("organizations").select("name").eq("id", ctx.orgId).maybeSingle(),
+      session.meeting_type
+        ? ctx.admin.from("meeting_types").select("label").eq("org_id", ctx.orgId).eq("key", session.meeting_type).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
-    const meetingTypeLabel = session.meeting_type
-      ? (await ctx.admin.from("meeting_types").select("label").eq("org_id", ctx.orgId).eq("key", session.meeting_type).maybeSingle()).data?.label ?? null
-      : null;
+    const meetingTypeLabel = (tipoRes as { data: { label?: string } | null }).data?.label ?? null;
 
-    await ctx.admin.from("roleplay_messages").insert({ session_id: sessionId, org_id: ctx.orgId, role: "seller", content: message.trim() });
+    // A fala do vendedor é gravada em paralelo: ela não precisa estar no banco
+    // para o lead começar a responder.
+    const gravaFalaDoVendedor = ctx.admin
+      .from("roleplay_messages")
+      .insert({ session_id: sessionId, org_id: ctx.orgId, role: "seller", content: message.trim() });
 
     const chatMessages = [
       { role: "system", content: systemPrompt(persona, orgRes.data?.name ?? "a empresa", meetingTypeLabel, meetingTypeContext) },
@@ -172,11 +178,32 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: ROLEPLAY_MODEL, messages: chatMessages, temperature: 0.85, max_tokens: 220 }),
-    });
+    // Com stream, a primeira frase do lead sai em ~1 s e o navegador já começa
+    // a falar enquanto o resto vem vindo.
+    const querStream = body.stream === true;
+
+    const chamaGateway = (modelo: string, semRaciocinio: boolean) =>
+      fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: modelo,
+          messages: chatMessages,
+          temperature: 0.85,
+          max_tokens: 220,
+          stream: querStream,
+          // Um lead de treino responde de cabeça; raciocínio longo só atrasa a fala.
+          ...(semRaciocinio ? { reasoning_effort: "none" } : {}),
+        }),
+      });
+
+    let aiResponse = await chamaGateway(ROLEPLAY_MODEL, true);
+    // Se o gateway não conhecer o modelo rápido ou o parâmetro, repete no
+    // formato antigo em vez de deixar o treino sem resposta.
+    if (aiResponse.status === 400) {
+      console.warn("roleplay-chat: gateway recusou o pedido rápido, repetindo no formato antigo");
+      aiResponse = await chamaGateway(MODELO_RESERVA, false);
+    }
 
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) return json(req, { error: "Muitas mensagens em pouco tempo. Tente de novo em instantes." }, 429);
@@ -184,27 +211,84 @@ Deno.serve(async (req) => {
       throw new Error(`AI gateway error: ${aiResponse.status}`);
     }
 
-    const aiData = await aiResponse.json();
-    const leadReply: string = aiData.choices?.[0]?.message?.content?.trim() || "Desculpa, pode repetir?";
-
-    await ctx.admin.from("roleplay_messages").insert({ session_id: sessionId, org_id: ctx.orgId, role: "lead", content: leadReply });
-
     const turnCount = (session.turn_count ?? 0) + 1;
-    await ctx.admin.from("roleplay_sessions").update({ turn_count: turnCount, updated_at: new Date().toISOString() }).eq("id", sessionId);
 
-    await logUsage(ctx.admin, {
-      orgId: ctx.orgId,
-      userId: ctx.userId,
-      operation: "roleplay",
-      quantity: 0, // a cota é cobrada na criação da sessão, não por mensagem
-      unit: "mensagens",
-      model: ROLEPLAY_MODEL,
-      provider: "lovable-gateway",
-      inputTokens: aiData.usage?.prompt_tokens ?? 0,
-      outputTokens: aiData.usage?.completion_tokens ?? 0,
+    /** Fecha o turno no banco depois que a fala do lead ficou pronta. */
+    const fechaTurno = async (leadReply: string, uso?: { prompt_tokens?: number; completion_tokens?: number }) => {
+      await gravaFalaDoVendedor;
+      await ctx.admin.from("roleplay_messages").insert({ session_id: sessionId, org_id: ctx.orgId, role: "lead", content: leadReply });
+      await ctx.admin.from("roleplay_sessions").update({ turn_count: turnCount, updated_at: new Date().toISOString() }).eq("id", sessionId);
+      await logUsage(ctx.admin, {
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        operation: "roleplay",
+        quantity: 0, // a cota é cobrada na criação da sessão, não por mensagem
+        unit: "mensagens",
+        model: ROLEPLAY_MODEL,
+        provider: "lovable-gateway",
+        inputTokens: uso?.prompt_tokens ?? 0,
+        outputTokens: uso?.completion_tokens ?? 0,
+      });
+    };
+
+    if (!querStream) {
+      const aiData = await aiResponse.json();
+      const leadReply: string = aiData.choices?.[0]?.message?.content?.trim() || "Desculpa, pode repetir?";
+      await fechaTurno(leadReply, aiData.usage);
+      return json(req, { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT });
+    }
+
+    // ── Streaming ──
+    // Repassamos o texto em pedaços no formato SSE; o navegador fala frase a
+    // frase. No fim mandamos um evento "fim" com o turno já contabilizado.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const manda = (evento: string, dado: unknown) =>
+          controller.enqueue(encoder.encode(`event: ${evento}\ndata: ${JSON.stringify(dado)}\n\n`));
+
+        let completo = "";
+        let uso: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+        try {
+          const leitor = aiResponse.body!.getReader();
+          const decoder = new TextDecoder();
+          let resto = "";
+          while (true) {
+            const { done, value } = await leitor.read();
+            if (done) break;
+            resto += decoder.decode(value, { stream: true });
+            const linhas = resto.split("\n");
+            resto = linhas.pop() ?? "";
+            for (const linha of linhas) {
+              const l = linha.trim();
+              if (!l.startsWith("data:")) continue;
+              const payload = l.slice(5).trim();
+              if (payload === "[DONE]") continue;
+              try {
+                const j = JSON.parse(payload);
+                const pedaco: string = j.choices?.[0]?.delta?.content ?? "";
+                if (j.usage) uso = j.usage;
+                if (pedaco) {
+                  completo += pedaco;
+                  manda("pedaco", { text: pedaco });
+                }
+              } catch { /* pedaço partido ao meio: o próximo laço completa */ }
+            }
+          }
+        } catch (e) {
+          console.error("roleplay-chat stream error:", e);
+        }
+
+        const leadReply = completo.trim() || "Desculpa, pode repetir?";
+        try { await fechaTurno(leadReply, uso); } catch (e) { console.error("roleplay-chat: falha ao fechar o turno", e); }
+        manda("fim", { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT });
+        controller.close();
+      },
     });
 
-    return json(req, { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT });
+    return new Response(stream, {
+      headers: { ...corsHeaders(req), "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    });
   } catch (e) {
     if (e instanceof HttpError) return json(req, { error: e.message, code: e.code }, e.status);
     console.error("roleplay-chat error:", e);
