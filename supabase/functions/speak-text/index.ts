@@ -6,10 +6,13 @@
 // áudio pronto para tocar. Sem chave configurada a função responde 501 e o
 // navegador cai de volta na voz do sistema — nada quebra.
 //
-// Provedor: TTS_PROVIDER = lovable | elevenlabs | openai | gemini. Sem ele,
-// usa a primeira chave dedicada que existir e, por último, o gateway da
-// Lovable — que já tem voz neural e já é pago pela conta do projeto, então
-// funciona sem configurar nada.
+// Os provedores entram em fila, não em escolha única: se o primeiro recusar
+// (cota estourada, voz bloqueada no plano, fora do ar), o seguinte assume e a
+// pessoa não cai na voz robótica do sistema no meio de um treino.
+//
+// Ordem: TTS_PROVIDER, se estiver definido, vai na frente; depois as chaves
+// dedicadas que existirem; por último o gateway da Lovable, que já é pago pela
+// conta do projeto e por isso nunca fica sem cota.
 
 import { corsHeaders, json, preflight } from "../_shared/cors.ts";
 import { getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
@@ -24,9 +27,12 @@ const MAX_CHARS = 700;
 /** Vozes padrão por gênero, por provedor. Podem ser trocadas por env. */
 const VOZES = {
   elevenlabs: {
-    // Vozes multilíngues que falam português do Brasil sem sotaque estrangeiro.
+    // Vozes padrão da conta, que o plano free libera pela API. São multilíngues
+    // e falam português, com leve sotaque estrangeiro. As vozes brasileiras da
+    // biblioteca (Nayara 5p4THmLc2S6kXKO1pOM5, Talis E9a8LlXPNWtyvvSoZzrb) só
+    // funcionam do plano Starter para cima: ao assinar, é só apontar as env.
     f: Deno.env.get("ELEVENLABS_VOICE_F") ?? "EXAVITQu4vr4xnSDxMaL", // Sarah
-    m: Deno.env.get("ELEVENLABS_VOICE_M") ?? "onwK4e9ZLuTAKqWW03F9", // Daniel
+    m: Deno.env.get("ELEVENLABS_VOICE_M") ?? "iP95p4xoKVk53GoZ742B", // Chris
   },
   openai: {
     f: Deno.env.get("OPENAI_VOICE_F") ?? "shimmer",
@@ -53,18 +59,19 @@ let modeloLovableOk: string | null = null;
 
 type Provedor = "elevenlabs" | "openai" | "gemini" | "lovable";
 
-function provedor(): Provedor | null {
-  const escolhido = (Deno.env.get("TTS_PROVIDER") ?? "").trim().toLowerCase();
-  if (escolhido === "elevenlabs" && ELEVEN_KEY) return "elevenlabs";
-  if (escolhido === "openai" && OPENAI_KEY) return "openai";
-  if (escolhido === "gemini" && GEMINI_KEY) return "gemini";
-  if (escolhido === "lovable" && LOVABLE_KEY) return "lovable";
-  if (escolhido) return null; // pediram um provedor que não está configurado
-  if (ELEVEN_KEY) return "elevenlabs";
-  if (OPENAI_KEY) return "openai";
-  if (GEMINI_KEY) return "gemini";
-  if (LOVABLE_KEY) return "lovable"; // a chave que o resto do produto já usa
-  return null;
+const TEM_CHAVE: Record<Provedor, boolean> = {
+  elevenlabs: !!ELEVEN_KEY,
+  openai: !!OPENAI_KEY,
+  gemini: !!GEMINI_KEY,
+  lovable: !!LOVABLE_KEY,
+};
+
+/** Provedores a tentar, na ordem. Vazio = nenhum configurado. */
+function fila(): Provedor[] {
+  const escolhido = (Deno.env.get("TTS_PROVIDER") ?? "").trim().toLowerCase() as Provedor;
+  const padrao: Provedor[] = ["elevenlabs", "openai", "gemini", "lovable"];
+  const ordem = TEM_CHAVE[escolhido] ? [escolhido, ...padrao.filter((p) => p !== escolhido)] : padrao;
+  return ordem.filter((p) => TEM_CHAVE[p]);
 }
 
 /** WAV de 24 kHz mono a partir do PCM16 cru que o Gemini devolve. */
@@ -184,8 +191,8 @@ Deno.serve(async (req) => {
   if (pre) return pre;
 
   try {
-    const qual = provedor();
-    if (!qual) return json(req, { error: "tts_nao_configurado" }, 501);
+    const ordem = fila();
+    if (!ordem.length) return json(req, { error: "tts_nao_configurado" }, 501);
 
     const ctx = await getCaller(req);
     const { text, gender } = await req.json();
@@ -193,20 +200,38 @@ Deno.serve(async (req) => {
     if (!texto) throw new HttpError(400, "Texto vazio");
     const genero: "f" | "m" = gender === "male" ? "m" : "f";
 
-    let corpo: BodyInit;
-    let tipo: string;
-    if (qual === "gemini") {
-      corpo = await falaGemini(texto, genero);
-      tipo = "audio/wav";
-    } else {
-      const r = qual === "elevenlabs"
-        ? await falaElevenLabs(texto, genero)
-        : qual === "openai"
-        ? await falaOpenAI(texto, genero)
-        : await falaLovable(texto, genero);
-      corpo = await r.arrayBuffer();
-      tipo = "audio/mpeg";
+    let corpo: BodyInit | null = null;
+    let tipo = "audio/mpeg";
+    let qual: Provedor | null = null;
+    const tropecos: string[] = [];
+
+    for (const candidato of ordem) {
+      try {
+        if (candidato === "gemini") {
+          corpo = await falaGemini(texto, genero);
+          tipo = "audio/wav";
+        } else {
+          const r = candidato === "elevenlabs"
+            ? await falaElevenLabs(texto, genero)
+            : candidato === "openai"
+            ? await falaOpenAI(texto, genero)
+            : await falaLovable(texto, genero);
+          corpo = await r.arrayBuffer();
+          tipo = "audio/mpeg";
+        }
+        qual = candidato;
+        break;
+      } catch (e) {
+        // Cota estourada, voz fora do plano, provedor fora do ar: anota e tenta o próximo.
+        tropecos.push(`${candidato}: ${e instanceof Error ? e.message : e}`.slice(0, 200));
+      }
     }
+
+    if (!corpo || !qual) {
+      console.error("speak-text: nenhum provedor respondeu —", tropecos.join(" | "));
+      return json(req, { error: "tts_indisponivel", detalhes: tropecos }, 502);
+    }
+    if (tropecos.length) console.warn("speak-text: caiu para", qual, "—", tropecos.join(" | "));
 
     // Custo de TTS é por caractere; registrar deixa isso visível no consumo.
     logUsage(ctx.admin, {
