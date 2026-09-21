@@ -320,6 +320,10 @@ const Roleplay = () => {
         setPhase("idle");
       }
     } catch (e: any) {
+      // Se o turno morreu no meio do streaming, a bolha vazia do lead sai junto.
+      filaFalaRef.current?.cancelar();
+      filaFalaRef.current = null;
+      setMessages((prev) => (prev.length && prev[prev.length - 1].role === "lead" && !prev[prev.length - 1].content ? prev.slice(0, -1) : prev));
       toast({ title: "Erro no treino", description: e.message, variant: "destructive" });
       if (mode === "chamada") setPhase("idle");
     } finally {
