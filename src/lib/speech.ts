@@ -474,6 +474,20 @@ export function criaFilaDeFala(opts: FalaOptions = {}): FilaDeFala {
   let aviso: (() => void) | null = null;
   const vivo = () => meu === falaAtiva;
 
+  /**
+   * Tira da fila tudo o que já chegou, em um pedaço só. A primeira frase sai
+   * sozinha (é a única disponível) e começa a tocar rápido; o resto vai junto
+   * numa chamada só, o que economiza requisições de voz — importante em
+   * provedor com cota por minuto.
+   */
+  const juntaPendentes = (limite = 600) => {
+    let texto = pendentes.shift() ?? "";
+    while (pendentes.length && (texto + " " + pendentes[0]).length <= limite) {
+      texto += " " + pendentes.shift();
+    }
+    return texto;
+  };
+
   const esperaTrecho = () =>
     new Promise<void>((resolve) => {
       aviso = () => { aviso = null; resolve(); };
@@ -513,14 +527,14 @@ export function criaFilaDeFala(opts: FalaOptions = {}): FilaDeFala {
         await esperaTrecho();
         continue;
       }
-      const texto = proximoTexto ?? pendentes.shift()!;
+      const texto = proximoTexto ?? juntaPendentes();
       const preparado = proximo ?? audioNeural(texto, opts);
       proximo = null;
       proximoTexto = null;
 
       // Já engatilha o trecho seguinte, se ele existir.
       if (pendentes.length) {
-        proximoTexto = pendentes.shift()!;
+        proximoTexto = juntaPendentes();
         proximo = audioNeural(proximoTexto, opts);
       }
 

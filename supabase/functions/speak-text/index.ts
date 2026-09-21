@@ -110,7 +110,8 @@ async function falaGemini(texto: string, genero: "f" | "m"): Promise<Uint8Array>
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: `Fale em português do Brasil, em tom de conversa de telefone: ${texto}` }] }],
+      // O prefixo antes dos dois-pontos é instrução de estilo: o modelo fala só o que vem depois.
+      contents: [{ parts: [{ text: `Em português do Brasil, em tom de conversa de telefone comercial: ${texto}` }] }],
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOZES.gemini[genero] } } },
