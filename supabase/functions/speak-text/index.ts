@@ -6,8 +6,10 @@
 // áudio pronto para tocar. Sem chave configurada a função responde 501 e o
 // navegador cai de volta na voz do sistema — nada quebra.
 //
-// Provedor: TTS_PROVIDER = elevenlabs | openai | gemini. Sem ele, usa a
-// primeira chave que existir, nessa ordem.
+// Provedor: TTS_PROVIDER = lovable | elevenlabs | openai | gemini. Sem ele,
+// usa a primeira chave dedicada que existir e, por último, o gateway da
+// Lovable — que já tem voz neural e já é pago pela conta do projeto, então
+// funciona sem configurar nada.
 
 import { corsHeaders, json, preflight } from "../_shared/cors.ts";
 import { getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
@@ -15,6 +17,7 @@ import { getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
 const ELEVEN_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY");
+const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 const MAX_CHARS = 700;
 
@@ -33,17 +36,34 @@ const VOZES = {
     f: Deno.env.get("GEMINI_VOICE_F") ?? "Aoede",
     m: Deno.env.get("GEMINI_VOICE_M") ?? "Charon",
   },
+  lovable: {
+    f: Deno.env.get("LOVABLE_VOICE_F") ?? "nova",
+    m: Deno.env.get("LOVABLE_VOICE_M") ?? "onyx",
+  },
 };
 
-function provedor(): "elevenlabs" | "openai" | "gemini" | null {
+// Modelos de voz do gateway, na ordem de preferência. O primeiro que
+// responder áudio fica guardado para as próximas chamadas.
+const MODELOS_LOVABLE = [
+  Deno.env.get("LOVABLE_TTS_MODEL") ?? "openai/gpt-4o-mini-tts",
+  "google/gemini-2.5-flash-preview-tts",
+  "gpt-4o-mini-tts",
+];
+let modeloLovableOk: string | null = null;
+
+type Provedor = "elevenlabs" | "openai" | "gemini" | "lovable";
+
+function provedor(): Provedor | null {
   const escolhido = (Deno.env.get("TTS_PROVIDER") ?? "").trim().toLowerCase();
   if (escolhido === "elevenlabs" && ELEVEN_KEY) return "elevenlabs";
   if (escolhido === "openai" && OPENAI_KEY) return "openai";
   if (escolhido === "gemini" && GEMINI_KEY) return "gemini";
+  if (escolhido === "lovable" && LOVABLE_KEY) return "lovable";
   if (escolhido) return null; // pediram um provedor que não está configurado
   if (ELEVEN_KEY) return "elevenlabs";
   if (OPENAI_KEY) return "openai";
   if (GEMINI_KEY) return "gemini";
+  if (LOVABLE_KEY) return "lovable"; // a chave que o resto do produto já usa
   return null;
 }
 
@@ -128,6 +148,37 @@ async function falaGemini(texto: string, genero: "f" | "m"): Promise<Uint8Array>
   return pcmParaWav(pcm);
 }
 
+/**
+ * Voz pelo gateway que o produto já usa para os modelos de texto: mesma
+ * chave, mesma conta, nenhuma configuração nova. O gateway é compatível com
+ * a API da OpenAI; se o modelo preferido não existir lá, tenta os seguintes.
+ */
+async function falaLovable(texto: string, genero: "f" | "m"): Promise<Response> {
+  const tentativas = modeloLovableOk ? [modeloLovableOk] : MODELOS_LOVABLE;
+  let ultimoErro = "";
+  for (const modelo of tentativas) {
+    const r = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LOVABLE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelo,
+        voice: VOZES.lovable[genero],
+        input: texto,
+        response_format: "mp3",
+        instructions: "Fale em português do Brasil, em tom de conversa de telefone comercial: natural, sem locução, sem pressa.",
+      }),
+    });
+    if (r.ok) {
+      modeloLovableOk = modelo;
+      return r;
+    }
+    ultimoErro = `${modelo}: ${r.status} ${(await r.text()).slice(0, 160)}`;
+    // 402/429 são conta sem crédito ou limite: trocar de modelo não resolve.
+    if (r.status === 402 || r.status === 429) break;
+  }
+  throw new HttpError(502, `Gateway de voz: ${ultimoErro}`);
+}
+
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -148,7 +199,11 @@ Deno.serve(async (req) => {
       corpo = await falaGemini(texto, genero);
       tipo = "audio/wav";
     } else {
-      const r = qual === "elevenlabs" ? await falaElevenLabs(texto, genero) : await falaOpenAI(texto, genero);
+      const r = qual === "elevenlabs"
+        ? await falaElevenLabs(texto, genero)
+        : qual === "openai"
+        ? await falaOpenAI(texto, genero)
+        : await falaLovable(texto, genero);
       corpo = await r.arrayBuffer();
       tipo = "audio/mpeg";
     }
@@ -158,8 +213,8 @@ Deno.serve(async (req) => {
       orgId: ctx.orgId,
       userId: ctx.userId,
       operation: "tts",
-      provider: qual,
-      model: qual,
+      provider: qual === "lovable" ? "lovable-gateway" : qual,
+      model: qual === "lovable" ? (modeloLovableOk ?? "lovable-tts") : qual,
       quantity: texto.length,
       unit: "caracteres",
     }).catch(() => { /* o log não pode atrasar a fala */ });

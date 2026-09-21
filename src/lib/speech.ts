@@ -439,7 +439,10 @@ async function audioNeural(texto: string, opts: FalaOptions): Promise<HTMLAudioE
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.token}` },
       body: JSON.stringify({ text: texto, gender: opts.gender === "m" ? "male" : "female" }),
     });
-    if (r.status === 501) { neuralDisponivel = false; return null; } // sem provedor configurado
+    // 501: sem provedor configurado. 5xx: provedor recusou (sem crédito, rota
+    // ausente). Nos dois casos não adianta tentar frase a frase: desliga a voz
+    // neural nesta sessão e fala com a voz do sistema.
+    if (r.status === 501 || r.status >= 500) { neuralDisponivel = false; return null; }
     if (!r.ok) return null;
     const blob = await r.blob();
     if (blob.size < 200) return null;
