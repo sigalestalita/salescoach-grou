@@ -54,6 +54,8 @@ interface Session {
   id: string;
   /** "texto" ou "chamada"; ausente nas sessões criadas antes de 22/09/2026. */
   mode?: string | null;
+  /** Fase da relação simulada; ausente nas sessões anteriores aos cenários. */
+  scenario?: string | null;
   persona: Persona;
   difficulty: string;
   meeting_type: string | null;
@@ -87,6 +89,20 @@ type Mode = "texto" | "chamada";
 type CallPhase = "idle" | "gravando" | "transcrevendo" | "pensando" | "falando";
 
 const DIFFICULTY_LABEL: Record<string, string> = { facil: "Fácil", media: "Média", dificil: "Difícil" };
+/**
+ * Fases da relação que o treino simula. O mesmo catálogo existe na edge
+ * function, que é quem monta a persona e avalia; aqui é só para escolher.
+ */
+const CENARIOS = [
+  { key: "primeira_agenda", label: "Primeira agenda", resumo: "Lead novo, primeira conversa com o executivo", contraparte: "lead" },
+  { key: "pos_proposta", label: "Follow-up de proposta", resumo: "Já teve reunião e recebeu proposta; está avaliando", contraparte: "lead" },
+  { key: "cliente_cs", label: "Acompanhamento de cliente", resumo: "Cliente ativo: uso, resultado e renovação", contraparte: "cliente" },
+  { key: "expansao", label: "Expansão na carteira", resumo: "Cliente ativo: cross-sell e upsell", contraparte: "cliente" },
+  { key: "reativacao", label: "Reativação", resumo: "Sumiu, cancelou ou nunca voltou depois da proposta", contraparte: "cliente" },
+] as const;
+
+const achaCenario = (key: string | null | undefined) => CENARIOS.find((c) => c.key === key) ?? CENARIOS[0];
+
 const DIFFICULTY_TONE: Record<string, string> = { facil: "bg-success/10 text-success", media: "bg-warning/10 text-warning", dificil: "bg-destructive/10 text-destructive" };
 
 const BASE_URL: string = import.meta.env.VITE_SUPABASE_URL ?? "";
@@ -131,6 +147,7 @@ const Roleplay = () => {
   const [pains, setPains] = useState<PainOption[]>([]);
   const [meetingType, setMeetingType] = useState<string>("");
   const [difficulty, setDifficulty] = useState<string>("media");
+  const [scenario, setScenario] = useState<string>("primeira_agenda");
   const [focusPain, setFocusPain] = useState<string>("aleatoria");
   const [mode, setMode] = useState<Mode>("texto");
   // Voz do lead. "auto" deixa o servidor escolher a voz neural que combina com
@@ -239,6 +256,7 @@ const Roleplay = () => {
           start: {
             meetingType: meetingType || undefined,
             difficulty,
+            scenario,
             focusPain: focusPain !== "aleatoria" ? focusPain : undefined,
             // Guardado na sessão: é o que a revisão usa para dizer se o
             // treino foi por texto ou por chamada.
@@ -543,7 +561,7 @@ const Roleplay = () => {
         | Array<{ role: string; content: string; audio_path?: string | null }>
         | null;
       const { data: sessao } = await supabase
-        .from("roleplay_sessions").select("id, persona, difficulty, meeting_type, turn_count, feedback, mode").eq("id", id).maybeSingle();
+        .from("roleplay_sessions").select("id, persona, difficulty, meeting_type, turn_count, feedback, mode, scenario").eq("id", id).maybeSingle();
       if (!sessao) throw new Error("Treino não encontrado");
 
       const caminhos = (falas ?? []).map((f: { audio_path?: string | null }) => f.audio_path).filter(Boolean) as string[];
@@ -670,6 +688,25 @@ const Roleplay = () => {
             </div>
 
             <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Momento da relação</label>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {CENARIOS.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setScenario(c.key)}
+                    className={`rounded-xl border p-3 text-left transition ${
+                      scenario === c.key ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="text-sm font-medium">{c.label}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{c.resumo}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Como você quer treinar</label>
               <div className="grid gap-2 sm:grid-cols-2">
                 <button
@@ -698,7 +735,7 @@ const Roleplay = () => {
 
             {mode === "chamada" && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Voz do lead</label>
+                <label className="text-xs font-medium text-muted-foreground">Voz {achaCenario(scenario).contraparte === "cliente" ? "do cliente" : "do lead"}</label>
                 <div className="flex gap-2">
                   <Select
                     value={voiceUri}
@@ -706,7 +743,7 @@ const Roleplay = () => {
                   >
                     <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="auto">Automática — Nayara para lead mulher, Talis para lead homem</SelectItem>
+                      <SelectItem value="auto">Automática — Nayara se for mulher, Talis se for homem</SelectItem>
                       <SelectGroup>
                         <SelectLabel>Vozes brasileiras</SelectLabel>
                         {VOZES_NEURAIS.map((v) => (
@@ -760,6 +797,7 @@ const Roleplay = () => {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {revisando && <Badge variant="secondary" className="rounded-full">Revisão</Badge>}
+              <Badge variant="outline" className="rounded-full">{achaCenario(session.scenario ?? scenario).label}</Badge>
               {mode === "chamada" && !revisando && <Badge variant="outline" className="rounded-full gap-1"><Phone className="h-3 w-3" />Chamada</Badge>}
               <Badge className={`rounded-full ${DIFFICULTY_TONE[session.difficulty] ?? ""}`}>{DIFFICULTY_LABEL[session.difficulty] ?? session.difficulty}</Badge>
             </div>
@@ -771,8 +809,8 @@ const Roleplay = () => {
                 {revisando
                   ? "Não foi possível carregar as falas deste treino."
                   : mode === "chamada"
-                  ? "Toque no microfone e abra a reunião como faria de verdade."
-                  : `Comece a conversa como se estivesse abrindo a reunião de verdade — ${session.persona.name} está esperando.`}
+                  ? "Toque no microfone e abra a conversa como faria de verdade."
+                  : `Comece como você abriria essa conversa de verdade — ${session.persona.name} está esperando.`}
               </p>
             )}
             {messages.map((m, i) => (

@@ -14,6 +14,7 @@ import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 import { corsHeaders, json, preflight } from "../_shared/cors.ts";
 import { assertQuota, getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
 import { loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
+import { achaCenario, CENARIO_PADRAO, type Scenario } from "../_shared/roleplay-scenarios.ts";
 
 const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flash-lite";
 const MODELO_RESERVA = "google/gemini-2.5-flash";
@@ -47,6 +48,15 @@ interface Persona {
   name: string;
   /** Define a voz do lead no modo chamada. */
   gender: "f" | "m";
+  /** Fase da relação simulada: primeira agenda, cliente ativo, expansão… */
+  scenario: string;
+  /** Só nos cenários de cliente: o que ele já contratou e como está a relação. */
+  relationship?: {
+    tempoDeCasa: string;
+    contratado: string[];
+    uso: string;
+    humor: string;
+  };
   role: string;
   company: string;
   temperament: string;
@@ -58,13 +68,29 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/** Há quanto tempo o cliente simulado está na casa, e com que humor. */
+const TEMPO_DE_CASA = ["3 meses", "7 meses", "pouco mais de um ano", "dois anos"];
+const HUMOR_CLIENTE = [
+  "satisfeito, mas sem saber dizer o resultado em número",
+  "morno: usa pouco e não reclamou até hoje",
+  "incomodado com um problema recente que ficou sem resposta",
+  "contente com o resultado e aberto a conversar sobre mais",
+];
+const USO_CLIENTE = [
+  "só uma parte do time usa, o resto ficou pelo caminho",
+  "usa todo dia, mas só o básico",
+  "usava bem no começo e foi caindo depois que trocou o gestor",
+  "usa junto com uma planilha paralela, porque não confia nos números",
+];
+
 async function buildPersona(
   admin: SupabaseClient,
   orgId: string,
   difficulty: string,
   focusPainInput: string | null,
+  cenario: Scenario,
 ): Promise<Persona> {
-  const [painsRes, objectionsRes] = await Promise.all([
+  const [painsRes, objectionsRes, produtosRes] = await Promise.all([
     admin.from("pain_items").select("label").eq("org_id", orgId).limit(30),
     admin
       .from("highlights")
@@ -73,20 +99,41 @@ async function buildPersona(
       .eq("highlight_type", "objecao")
       .order("created_at", { ascending: false })
       .limit(30),
+    // Nos cenários de cliente, o que ele já contratou sai do portfólio real
+    // da empresa — senão a simulação inventa produto que não existe.
+    cenario.temContrato
+      ? admin.from("knowledge_items").select("name").eq("org_id", orgId).eq("is_active", true).limit(20)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const pains: string[] = (painsRes.data ?? []).map((p: { label: string }) => p.label);
   const focusPain = focusPainInput || (pains.length ? pick(pains) : null);
 
   const allObjections: string[] = (objectionsRes.data ?? []).map((h: { text: string }) => h.text);
-  // Até 3 objeções reais, distintas, para dar tempero sem virar roteiro decorado.
-  const knownObjections = Array.from(new Set(allObjections)).sort(() => Math.random() - 0.5).slice(0, 3);
+  // Até 2 objeções reais da empresa, mais uma típica da fase: o treino soa
+  // como o negócio real sem perder o que é próprio daquele momento da relação.
+  const knownObjections = [
+    ...Array.from(new Set(allObjections)).sort(() => Math.random() - 0.5).slice(0, 2),
+    pick(cenario.objecoesTipicas),
+  ].filter(Boolean);
+
+  const produtos: string[] = ((produtosRes.data ?? []) as Array<{ name: string }>).map((p) => p.name);
+  const relationship = cenario.temContrato
+    ? {
+        tempoDeCasa: pick(TEMPO_DE_CASA),
+        contratado: produtos.length ? produtos.sort(() => Math.random() - 0.5).slice(0, 2) : ["o pacote principal"],
+        uso: pick(USO_CLIENTE),
+        humor: pick(HUMOR_CLIENTE),
+      }
+    : undefined;
 
   const primeiro = pick(LEAD_FIRST_NAMES);
 
   return {
     name: `${primeiro.nome} ${pick(LEAD_LAST_NAMES)}`,
     gender: primeiro.genero,
+    scenario: cenario.key,
+    relationship,
     role: pick(LEAD_ROLES),
     company: `${pick(["Aliança", "Horizonte", "Vale Verde", "Central", "Bom Sucesso", "Nova Era", "Porto", "Planalto"])} ${pick(COMPANY_SUFFIX)}`,
     temperament: TEMPERAMENT[difficulty] ?? TEMPERAMENT.media,
@@ -95,8 +142,23 @@ async function buildPersona(
   };
 }
 
-function systemPrompt(persona: Persona, orgName: string, meetingTypeLabel: string | null, meetingTypeContext: string): string {
-  return `Você está simulando um LEAD em uma ligação de vendas de treino, para um vendedor da empresa "${orgName}" praticar. Você NÃO é o vendedor — você é o cliente em potencial do outro lado da linha.
+function systemPrompt(persona: Persona, orgName: string, meetingTypeLabel: string | null, meetingTypeContext: string, cenario: Scenario): string {
+  const relacao = persona.relationship
+    ? `\nSUA RELAÇÃO COM A EMPRESA "${orgName}":
+- Você é cliente há ${persona.relationship.tempoDeCasa}.
+- Contratou: ${persona.relationship.contratado.join(", ")}.
+- Uso hoje: ${persona.relationship.uso}.
+- Como você se sente sobre o resultado: ${persona.relationship.humor}.
+- Você espera ser tratado como quem já é cliente. Se o vendedor conduzir como se fosse a primeira conversa, estranhe e diga isso do seu jeito.`
+    : "";
+
+  return `Você está simulando ${cenario.contraparte === "cliente" ? "um CLIENTE" : "um LEAD"} numa conversa de treino, para um vendedor da empresa "${orgName}" praticar. Você NÃO é o vendedor — você é a pessoa do outro lado da linha.
+
+MOMENTO DA RELAÇÃO — ${cenario.label}:
+${cenario.papel}
+O vendedor está tentando: ${cenario.objetivo}
+Sua postura: ${cenario.postura}
+${relacao}
 
 SEU PERSONAGEM:
 - Nome: ${persona.name}
@@ -124,7 +186,7 @@ Deno.serve(async (req) => {
     const { sessionId, message, start, sellerAudioPath, messageId, audioPath } = body as {
       sessionId?: string;
       message?: string;
-      start?: { meetingType?: string; focusPain?: string; difficulty?: string; mode?: string };
+      start?: { meetingType?: string; focusPain?: string; difficulty?: string; mode?: string; scenario?: string };
       sellerAudioPath?: string;
       messageId?: string;
       audioPath?: string;
@@ -153,7 +215,8 @@ Deno.serve(async (req) => {
       await assertQuota(ctx.admin, ctx.orgId, "roleplay", 1);
 
       const difficulty = ["facil", "media", "dificil"].includes(start?.difficulty ?? "") ? start!.difficulty! : "media";
-      const persona = await buildPersona(ctx.admin, ctx.orgId, difficulty, start?.focusPain ?? null);
+      const cenario = achaCenario(start?.scenario ?? CENARIO_PADRAO);
+      const persona = await buildPersona(ctx.admin, ctx.orgId, difficulty, start?.focusPain ?? null, cenario);
 
       const { data: session, error } = await ctx.admin
         .from("roleplay_sessions")
@@ -162,11 +225,12 @@ Deno.serve(async (req) => {
           user_id: ctx.userId,
           meeting_type: start?.meetingType ?? null,
           mode: start?.mode === "chamada" ? "chamada" : "texto",
+          scenario: cenario.key,
           focus_pain: persona.focusPain,
           difficulty,
           persona,
         })
-        .select("id, meeting_type, focus_pain, difficulty, persona, status, turn_count, created_at, mode")
+        .select("id, meeting_type, focus_pain, difficulty, persona, status, turn_count, created_at, mode, scenario")
         .single();
 
       if (error || !session) throw new HttpError(500, "Não foi possível iniciar o treino");
@@ -181,7 +245,7 @@ Deno.serve(async (req) => {
 
     const { data: session } = await ctx.admin
       .from("roleplay_sessions")
-      .select("id, org_id, user_id, meeting_type, status, turn_count, persona")
+      .select("id, org_id, user_id, meeting_type, status, turn_count, persona, scenario")
       .eq("id", sessionId)
       .eq("org_id", ctx.orgId)
       .maybeSingle();
@@ -213,7 +277,7 @@ Deno.serve(async (req) => {
       .single();
 
     const chatMessages = [
-      { role: "system", content: systemPrompt(persona, orgRes.data?.name ?? "a empresa", meetingTypeLabel, meetingTypeContext) },
+      { role: "system", content: systemPrompt(persona, orgRes.data?.name ?? "a empresa", meetingTypeLabel, meetingTypeContext, achaCenario(session.scenario ?? persona.scenario)) },
       ...(history ?? []).map((m: { role: string; content: string }) => ({ role: m.role === "seller" ? "user" : "assistant", content: m.content })),
       { role: "user", content: message.trim() },
     ];

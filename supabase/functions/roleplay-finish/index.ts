@@ -6,6 +6,7 @@
 import { json, preflight } from "../_shared/cors.ts";
 import { getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
 import { buildAnalysisPrompt, fetchKnowledgeContext, loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
+import { achaCenario } from "../_shared/roleplay-scenarios.ts";
 
 const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flash";
 
@@ -20,7 +21,7 @@ Deno.serve(async (req) => {
 
     const { data: session } = await ctx.admin
       .from("roleplay_sessions")
-      .select("id, org_id, user_id, meeting_type, status, persona")
+      .select("id, org_id, user_id, meeting_type, status, persona, scenario")
       .eq("id", sessionId)
       .eq("org_id", ctx.orgId)
       .maybeSingle();
@@ -37,7 +38,19 @@ Deno.serve(async (req) => {
     const sellerTurns = (messages ?? []).filter((m: { role: string }) => m.role === "seller").length;
     if (sellerTurns < 2) throw new HttpError(400, "Converse um pouco mais antes de encerrar — faltam poucas falas para dar uma avaliação justa.");
 
-    const persona = session.persona as { name: string; company: string };
+    const persona = session.persona as { name: string; company: string; relationship?: { tempoDeCasa: string; contratado: string[] } };
+    const cenario = achaCenario(session.scenario);
+    // O avaliador precisa saber que fase é essa: a mesma pergunta que é boa
+    // numa descoberta pode ser o erro numa conversa com cliente antigo.
+    const contextoDoCenario = [
+      `MOMENTO DA RELAÇÃO: ${cenario.label} — ${cenario.resumo}.`,
+      `O vendedor estava tentando: ${cenario.objetivo}`,
+      persona.relationship
+        ? `A pessoa do outro lado JÁ É CLIENTE há ${persona.relationship.tempoDeCasa} e contratou: ${persona.relationship.contratado.join(", ")}.`
+        : `A pessoa do outro lado ainda não é cliente.`,
+      `COMO AVALIAR ESTA CONVERSA: ${cenario.avaliacao}`,
+      `Ajuste os critérios da metodologia a esta fase: critério que não se aplica aqui não deve puxar a nota para baixo, e o que a fase exige deve pesar mais.`,
+    ].join("\n");
     const transcript = (messages ?? [])
       .map((m: { role: string; content: string }) => `${m.role === "seller" ? "Vendedor" : persona.name}: ${m.content}`)
       .join("\n");
@@ -60,6 +73,7 @@ Deno.serve(async (req) => {
       leadName: persona.name,
       leadCompany: persona.company,
       knowledgeContext,
+      scenarioContext: contextoDoCenario,
     });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -71,7 +85,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: ROLEPLAY_MODEL,
         messages: [
-          { role: "system", content: "Você avalia uma simulação de treino de vendas. Trate a conversa como se fosse uma reunião real para fins de nota e feedback." },
+          { role: "system", content: `Você avalia uma simulação de treino de vendas, na fase "${cenario.label}". Trate a conversa como se fosse uma reunião real para fins de nota e feedback, cobrando o que essa fase exige.` },
           { role: "user", content: prompt },
         ],
         temperature: 0.4,

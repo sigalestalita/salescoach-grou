@@ -128,6 +128,13 @@ export interface PromptInput {
   leadName: string | null;
   leadCompany: string | null;
   knowledgeContext: string;
+  /**
+   * Só no modo de treino: em que fase da relação a conversa aconteceu e o
+   * que conta como boa condução ali. Sem isso, uma conversa de pós-venda é
+   * avaliada com a régua de prospecção e perde ponto por não ter perguntado
+   * orçamento a quem já é cliente.
+   */
+  scenarioContext?: string | null;
 }
 
 export function buildAnalysisPrompt(input: PromptInput): string {
@@ -172,7 +179,9 @@ CONTEXTO:
 - Vendedor está conversando com o lead: ${input.leadName || "desconhecido"} da empresa ${input.leadCompany || "desconhecida"}
 - Título da reunião: ${input.meetingTitle}
 - Tipo de reunião: ${input.meetingTypeLabel || "não especificado"}
-${input.meetingTypeContext}${knowledgeSection}
+${input.meetingTypeContext}${input.scenarioContext ? `
+${input.scenarioContext}
+` : ""}${knowledgeSection}
 
 CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (metodologia ${t.methodology_label}):
 
