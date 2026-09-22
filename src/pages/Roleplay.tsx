@@ -11,12 +11,12 @@ import { StatCard } from "@/components/StatCard";
 import {
   isMicSupported, startRecording, blobToBase64, speak, cancelSpeaking, listVoices, guessGender,
   getSavedVoice, saveVoice, previewVoice, startLiveTranscription, criaFilaDeFala, trechosProntos,
-  preverVozNeural, VOZES_NEURAIS,
+  preverVozNeural, VOZES_NEURAIS, tocaSequencia,
   type Recorder, type VoiceOption, type LiveTranscription, type FilaDeFala,
 } from "@/lib/speech";
 import {
   Dumbbell, Loader2, Send, Sparkles, ThumbsUp, ThumbsDown, ListChecks, Target, Thermometer,
-  RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone,
+  RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone, Play, Square,
 } from "lucide-react";
 
 /**
@@ -34,6 +34,8 @@ import {
  */
 
 interface Message {
+  /** Áudio da fala, para ouvir de novo: a gravação do microfone ou a voz do lead. */
+  audios?: Blob[];
   role: "seller" | "lead";
   content: string;
 }
@@ -95,6 +97,20 @@ async function tokenAtual(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/** Play de uma fala: verde enquanto toca, para dar onde parar. */
+const BotaoOuvir = ({ tocando, onOuvir, onParar, temAudio }: { tocando: boolean; onOuvir: () => void; onParar: () => void; temAudio: boolean }) => (
+  <button
+    type="button"
+    onClick={tocando ? onParar : onOuvir}
+    title={tocando ? "Parar" : temAudio ? "Ouvir esta fala" : "Ouvir (sintetizado: esta fala não foi gravada)"}
+    aria-label={tocando ? "Parar de ouvir" : "Ouvir esta fala"}
+    className="mb-1 rounded-full p-1.5 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[tocando=true]:opacity-100 data-[tocando=true]:text-primary"
+    data-tocando={tocando}
+  >
+    {tocando ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+  </button>
+);
+
 /** Gênero da voz do lead: o da persona e, para sessões antigas, o palpite pelo nome. */
 const vozDoLead = (p: Persona) => p.gender ?? guessGender(p.name);
 
@@ -135,6 +151,9 @@ const Roleplay = () => {
   const escutaRef = useRef<LiveTranscription | null>(null);
   const filaFalaRef = useRef<FilaDeFala | null>(null);
   const [parcial, setParcial] = useState("");
+  // Player de replay: qual fala está tocando e como interromper.
+  const [tocando, setTocando] = useState<number | null>(null);
+  const pararPlayerRef = useRef<(() => void) | null>(null);
   // As etapas do modo chamada se encadeiam dentro do mesmo render
   // (gravar → transcrever → enviar). Ler callPhase direto nas guardas pegaria
   // o valor congelado na closure, e a fala transcrita era descartada em
@@ -156,6 +175,7 @@ const Roleplay = () => {
     loadHistory();
     return () => {
       cancelSpeaking();
+      pararPlayerRef.current?.();
       filaFalaRef.current?.cancelar();
       recorderRef.current?.cancel();
       escutaRef.current?.cancel();
@@ -232,13 +252,13 @@ const Roleplay = () => {
   };
 
   // Único caminho de envio, para os dois modos: texto digitado ou fala transcrita.
-  const sendMessage = async (text?: string) => {
+  const sendMessage = async (text?: string, audioDaFala?: Blob | null) => {
     const content = (text ?? draft).trim();
     if (!content || !session) return;
     if (mode === "chamada" ? !["idle", "transcrevendo"].includes(callPhaseRef.current) : sending) return;
 
     if (!text) setDraft("");
-    setMessages((prev) => [...prev, { role: "seller", content }]);
+    setMessages((prev) => [...prev, { role: "seller", content, audios: audioDaFala ? [audioDaFala] : undefined }]);
     if (mode === "chamada") setPhase("pensando");
     else setSending(true);
 
@@ -271,12 +291,15 @@ const Roleplay = () => {
       }
 
       // A fala começa na primeira frase fechada, enquanto o resto ainda chega.
+      // Os trechos de voz do lead vão sendo guardados para o replay.
+      const audiosDoLead: Blob[] = [];
       const fala = emVoz
         ? criaFilaDeFala({
             url: URL_FALAR,
             token,
             gender: vozDoLead(session.persona),
             ...escolhaDeVoz(voiceUri),
+            onTrecho: (b) => audiosDoLead.push(b),
           })
         : null;
       filaFalaRef.current = fala;
@@ -332,6 +355,15 @@ const Roleplay = () => {
         await fala.encerrar();
         filaFalaRef.current = null;
         setPhase("idle");
+        if (audiosDoLead.length) {
+          setMessages((prev) => {
+            const copia = [...prev];
+            for (let i = copia.length - 1; i >= 0; i--) {
+              if (copia[i].role === "lead") { copia[i] = { ...copia[i], audios: audiosDoLead }; break; }
+            }
+            return copia;
+          });
+        }
       }
     } catch (e: any) {
       // Se o turno morreu no meio do streaming, a bolha vazia do lead sai junto.
@@ -352,14 +384,14 @@ const Roleplay = () => {
     escutaRef.current = null;
     setPhase("transcrevendo");
     try {
-      const texto = (await escuta.stop()).trim();
+      const { texto, audio } = await escuta.stop();
       setParcial("");
-      if (!texto) {
+      if (!texto.trim()) {
         setMicError("Não consegui entender o áudio. Tente falar um pouco mais alto.");
         setPhase("idle");
         return;
       }
-      await sendMessage(texto);
+      await sendMessage(texto.trim(), audio);
     } catch (e: any) {
       setParcial("");
       setMicError(e.message || "Falha ao transcrever o áudio.");
@@ -440,8 +472,39 @@ const Roleplay = () => {
     }
   };
 
+  /** Toca uma fala (ou a conversa inteira, a partir do índice dado). */
+  const ouvir = async (deIndice: number, ateOFim = false) => {
+    pararPlayerRef.current?.();
+    cancelSpeaking();
+    filaFalaRef.current?.cancelar();
+
+    const alvo = ateOFim ? messages.slice(deIndice) : [messages[deIndice]];
+    const comAudio = alvo.map((m, i) => ({ indice: deIndice + i, m })).filter((x) => x.m.audios?.length);
+    if (!comAudio.length) {
+      // Sessão antiga ou fala sem gravação: a voz sintetiza o texto de novo.
+      const m = messages[deIndice];
+      if (m?.role === "lead") await speak(m.content, { gender: session ? vozDoLead(session.persona) : null });
+      return;
+    }
+
+    const trilha: Blob[] = [];
+    const donoDoTrecho: number[] = [];
+    for (const { indice, m } of comAudio) {
+      for (const b of m.audios!) { trilha.push(b); donoDoTrecho.push(indice); }
+    }
+    const player = tocaSequencia(trilha, (i) => setTocando(i < 0 ? null : donoDoTrecho[i]));
+    pararPlayerRef.current = player.parar;
+    await player.pronto;
+    pararPlayerRef.current = null;
+  };
+
+  const pararDeOuvir = () => { pararPlayerRef.current?.(); pararPlayerRef.current = null; setTocando(null); };
+
+  const temAudioGravado = messages.some((m) => m.audios?.length);
+
   const finishSession = async () => {
     if (!session) return;
+    pararDeOuvir();
     cancelSpeaking();
     filaFalaRef.current?.cancelar();
     recorderRef.current?.cancel();
@@ -462,6 +525,7 @@ const Roleplay = () => {
   };
 
   const reset = () => {
+    pararDeOuvir();
     cancelSpeaking();
     filaFalaRef.current?.cancelar();
     recorderRef.current?.cancel();
@@ -643,10 +707,17 @@ const Roleplay = () => {
               </p>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === "seller" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "seller" ? "bg-brand-gradient text-white" : "bg-muted text-foreground"}`}>
+              <div key={i} className={`group flex items-end gap-1.5 ${m.role === "seller" ? "justify-end" : "justify-start"}`}>
+                {/* O play fica do lado de fora da bolha, para não brigar com o texto. */}
+                {m.role === "seller" && !!m.audios?.length && (
+                  <BotaoOuvir tocando={tocando === i} onOuvir={() => ouvir(i)} onParar={pararDeOuvir} temAudio={!!m.audios?.length} />
+                )}
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "seller" ? "bg-brand-gradient text-white" : "bg-muted text-foreground"} ${tocando === i ? "ring-2 ring-primary/50" : ""}`}>
                   {m.content}
                 </div>
+                {m.role === "lead" && (m.audios?.length || mode === "chamada") && (
+                  <BotaoOuvir tocando={tocando === i} onOuvir={() => ouvir(i)} onParar={pararDeOuvir} temAudio={!!m.audios?.length} />
+                )}
               </div>
             ))}
             {mode === "chamada" && (callPhase === "gravando" || callPhase === "transcrevendo") && (
@@ -716,10 +787,18 @@ const Roleplay = () => {
                   </button>
                   <div className="text-sm text-muted-foreground">{CALL_PHASE_LABEL[callPhase]}</div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-3">
                   <button type="button" onClick={() => setShowTyping(true)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                     <Keyboard className="h-3.5 w-3.5" />digitar em vez de falar
                   </button>
+                  {/* Rever a conversa inteira: o mesmo que dar play na primeira fala e deixar correr. */}
+                  {temAudioGravado && (
+                    <Button variant="ghost" size="sm" className="text-xs"
+                      onClick={() => (tocando !== null ? pararDeOuvir() : ouvir(0, true))}
+                      disabled={callPhase !== "idle"}>
+                      {tocando !== null ? <><Square className="mr-1 h-3.5 w-3.5" />parar</> : <><Play className="mr-1 h-3.5 w-3.5" />ouvir a chamada inteira</>}
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={finishSession} disabled={finishing || messages.length < 4}>
                     {finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Encerrar e avaliar"}
                   </Button>

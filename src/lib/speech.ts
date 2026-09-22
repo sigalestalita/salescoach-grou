@@ -298,10 +298,47 @@ export async function preverVozNeural(opts: FalaOptions): Promise<void> {
   const audio = await audioNeural("Oi, tudo bem? Pode falar, estou te ouvindo.", opts);
   if (!audio) { await previewVoice(opts.voiceURI, opts.gender ?? null); return; }
   await new Promise<void>((resolve) => {
-    audio.onended = () => resolve();
-    audio.onerror = () => resolve();
-    audio.play().catch(() => resolve());
+    audio.el.onended = () => resolve();
+    audio.el.onerror = () => resolve();
+    audio.el.play().catch(() => resolve());
   });
+}
+
+/**
+ * Toca uma sequência de áudios na ordem — uma fala, ou a chamada inteira.
+ * Devolve uma função que interrompe no meio.
+ */
+export function tocaSequencia(
+  audios: Blob[],
+  aoTrocar?: (indice: number) => void,
+): { pronto: Promise<void>; parar: () => void } {
+  let atual: HTMLAudioElement | null = null;
+  let parado = false;
+  const pronto = (async () => {
+    for (let i = 0; i < audios.length; i++) {
+      if (parado) return;
+      aoTrocar?.(i);
+      const url = URL.createObjectURL(audios[i]);
+      const el = new Audio(url);
+      atual = el;
+      await new Promise<void>((resolve) => {
+        el.onended = () => resolve();
+        el.onerror = () => resolve();
+        el.play().catch(() => resolve());
+      });
+      URL.revokeObjectURL(url);
+      atual = null;
+    }
+    aoTrocar?.(-1);
+  })();
+  return {
+    pronto,
+    parar() {
+      parado = true;
+      if (atual) { try { atual.pause(); } catch { /* ignore */ } atual = null; }
+      aoTrocar?.(-1);
+    },
+  };
 }
 
 /** Uma frase curta na voz escolhida, para a pessoa comparar as opções. */
@@ -325,8 +362,8 @@ export function cancelSpeaking(): void {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface LiveTranscription {
-  /** Encerra a fala e devolve o texto reconhecido. */
-  stop: () => Promise<string>;
+  /** Encerra a fala e devolve o texto reconhecido e o áudio gravado. */
+  stop: () => Promise<{ texto: string; audio: Blob | null }>;
   /** Interrompe e libera o microfone, sem devolver texto. */
   cancel: () => void;
 }
@@ -388,6 +425,19 @@ export async function startLiveTranscription(opts: LiveOptions): Promise<LiveTra
     throw new Error("Não foi possível abrir a transcrição ao vivo.");
   }
 
+  // Em paralelo com o streaming, uma gravação comum: é ela que a pessoa ouve
+  // depois, no play de cada fala e na chamada inteira. O streaming manda PCM
+  // cru, que não dá para tocar no navegador sem remontar um arquivo.
+  let gravador: MediaRecorder | null = null;
+  const pedacos: Blob[] = [];
+  try {
+    gravador = new MediaRecorder(stream);
+    gravador.ondataavailable = (e) => { if (e.data.size > 0) pedacos.push(e.data); };
+    gravador.start();
+  } catch {
+    gravador = null; // navegador sem MediaRecorder: só perde o replay
+  }
+
   const ctx = new AudioContext({ sampleRate: 16000 });
   const fonte = ctx.createMediaStreamSource(stream);
   const processador = ctx.createScriptProcessor(4096, 1, 1);
@@ -398,6 +448,14 @@ export async function startLiveTranscription(opts: LiveOptions): Promise<LiveTra
     try { ws.send(paraPcm16(e.inputBuffer.getChannelData(0))); } catch { /* ignore */ }
   };
 
+  /** Fecha o gravador e devolve o arquivo; null quando não havia gravação. */
+  const fechaGravacao = () =>
+    new Promise<Blob | null>((resolve) => {
+      if (!gravador || gravador.state === "inactive") return resolve(null);
+      gravador.onstop = () => resolve(pedacos.length ? new Blob(pedacos, { type: pedacos[0].type || "audio/webm" }) : null);
+      try { gravador.stop(); } catch { resolve(null); }
+    });
+
   const desliga = () => {
     try { processador.disconnect(); fonte.disconnect(); } catch { /* ignore */ }
     ctx.close().catch(() => { /* ignore */ });
@@ -406,6 +464,7 @@ export async function startLiveTranscription(opts: LiveOptions): Promise<LiveTra
 
   return {
     async stop() {
+      const gravado = await fechaGravacao();
       desliga();
       if (erro) { try { ws.close(); } catch { /* ignore */ } throw new Error(erro); }
       const final = new Promise<string>((resolve) => {
@@ -416,9 +475,10 @@ export async function startLiveTranscription(opts: LiveOptions): Promise<LiveTra
       try { ws.send(JSON.stringify({ action: "stop" })); } catch { /* ignore */ }
       const texto = await final;
       try { ws.close(); } catch { /* ignore */ }
-      return texto;
+      return { texto, audio: gravado };
     },
     cancel() {
+      try { gravador?.stop(); } catch { /* ignore */ }
       desliga();
       try { ws.close(); } catch { /* ignore */ }
     },
@@ -450,6 +510,8 @@ export interface FalaOptions {
   gender?: VoiceGender;
   /** Voz neural fixa; sem ela, o servidor escolhe pelo gênero do lead. */
   voiceId?: string;
+  /** Recebe o áudio de cada trecho falado, na ordem, para poder ouvir de novo. */
+  onTrecho?: (audio: Blob) => void;
   /** voiceURI escolhida para o caminho de fallback (voz do sistema). */
   voiceURI?: string;
 }
@@ -458,7 +520,7 @@ export interface FalaOptions {
 let neuralDisponivel: boolean | null = null;
 export function neuralStatus(): boolean | null { return neuralDisponivel; }
 
-async function audioNeural(texto: string, opts: FalaOptions): Promise<HTMLAudioElement | null> {
+async function audioNeural(texto: string, opts: FalaOptions): Promise<{ el: HTMLAudioElement; blob: Blob } | null> {
   if (!opts.url || !opts.token || neuralDisponivel === false) return null;
   try {
     const r = await fetch(opts.url, {
@@ -474,9 +536,9 @@ async function audioNeural(texto: string, opts: FalaOptions): Promise<HTMLAudioE
     const blob = await r.blob();
     if (blob.size < 200) return null;
     neuralDisponivel = true;
-    const audio = new Audio(URL.createObjectURL(blob));
-    audio.preload = "auto";
-    return audio;
+    const el = new Audio(URL.createObjectURL(blob));
+    el.preload = "auto";
+    return { el, blob };
   } catch {
     return null;
   }
@@ -549,7 +611,7 @@ export function criaFilaDeFala(opts: FalaOptions = {}): FilaDeFala {
 
   const laco = (async () => {
     // Prepara o próximo áudio enquanto o atual toca.
-    let proximo: Promise<HTMLAudioElement | null> | null = null;
+    let proximo: Promise<{ el: HTMLAudioElement; blob: Blob } | null> | null = null;
     let proximoTexto: string | null = null;
     while (vivo()) {
       if (!pendentes.length && !proximoTexto) {
@@ -570,7 +632,7 @@ export function criaFilaDeFala(opts: FalaOptions = {}): FilaDeFala {
 
       const audio = await preparado;
       if (!vivo()) return;
-      if (audio) await tocaNeural(audio);
+      if (audio) { opts.onTrecho?.(audio.blob); await tocaNeural(audio.el); }
       else await tocaSistema(texto);
     }
   })();
