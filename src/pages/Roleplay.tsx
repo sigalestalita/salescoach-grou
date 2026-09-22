@@ -52,6 +52,8 @@ interface Persona {
 
 interface Session {
   id: string;
+  /** "texto" ou "chamada"; ausente nas sessões criadas antes de 22/09/2026. */
+  mode?: string | null;
   persona: Persona;
   difficulty: string;
   meeting_type: string | null;
@@ -238,6 +240,9 @@ const Roleplay = () => {
             meetingType: meetingType || undefined,
             difficulty,
             focusPain: focusPain !== "aleatoria" ? focusPain : undefined,
+            // Guardado na sessão: é o que a revisão usa para dizer se o
+            // treino foi por texto ou por chamada.
+            mode,
           },
         },
       });
@@ -527,17 +532,25 @@ const Roleplay = () => {
     pararDeOuvir();
     setCarregandoRevisao(id);
     try {
-      const [{ data: sessao }, { data: falas }] = await Promise.all([
-        supabase.from("roleplay_sessions").select("id, persona, difficulty, meeting_type, turn_count, feedback").eq("id", id).maybeSingle(),
-        supabase.from("roleplay_messages").select("role, content, audio_path").eq("session_id", id).order("created_at"),
-      ]);
+      // Enquanto a migration do áudio não roda, audio_path não existe e o
+      // select inteiro falha. A conversa é o que importa: sem a coluna, ela
+      // abre do mesmo jeito, só sem os players.
+      const comAudio = await supabase.from("roleplay_messages").select("role, content, audio_path").eq("session_id", id).order("created_at");
+      const semAudio = comAudio.error
+        ? await supabase.from("roleplay_messages").select("role, content").eq("session_id", id).order("created_at")
+        : null;
+      const falas = (comAudio.error ? semAudio?.data : comAudio.data) as
+        | Array<{ role: string; content: string; audio_path?: string | null }>
+        | null;
+      const { data: sessao } = await supabase
+        .from("roleplay_sessions").select("id, persona, difficulty, meeting_type, turn_count, feedback, mode").eq("id", id).maybeSingle();
       if (!sessao) throw new Error("Treino não encontrado");
 
-      const caminhos = (falas ?? []).map((f: { audio_path: string | null }) => f.audio_path).filter(Boolean) as string[];
+      const caminhos = (falas ?? []).map((f: { audio_path?: string | null }) => f.audio_path).filter(Boolean) as string[];
       const audios = caminhos.length ? await baixaAudios(caminhos) : new Map<string, Blob>();
 
       setSession(sessao as unknown as Session);
-      setMessages((falas ?? []).map((f: { role: string; content: string; audio_path: string | null }) => ({
+      setMessages((falas ?? []).map((f: { role: string; content: string; audio_path?: string | null }) => ({
         role: f.role as "seller" | "lead",
         content: f.content,
         audios: f.audio_path && audios.get(f.audio_path) ? [audios.get(f.audio_path)!] : undefined,
@@ -755,7 +768,11 @@ const Roleplay = () => {
           <div ref={scrollRef} className="flex max-h-[420px] min-h-[280px] flex-col gap-3 overflow-y-auto p-5">
             {messages.length === 0 && callPhase !== "gravando" && (
               <p className="m-auto max-w-sm text-center text-sm text-muted-foreground">
-                {mode === "chamada" ? "Toque no microfone e abra a reunião como faria de verdade." : `Comece a conversa como se estivesse abrindo a reunião de verdade — ${session.persona.name} está esperando.`}
+                {revisando
+                  ? "Não foi possível carregar as falas deste treino."
+                  : mode === "chamada"
+                  ? "Toque no microfone e abra a reunião como faria de verdade."
+                  : `Comece a conversa como se estivesse abrindo a reunião de verdade — ${session.persona.name} está esperando.`}
               </p>
             )}
             {messages.map((m, i) => (
@@ -808,7 +825,13 @@ const Roleplay = () => {
                       {tocando !== null ? <><Square className="mr-1 h-3.5 w-3.5" />parar</> : <><Play className="mr-1 h-3.5 w-3.5" />ouvir a chamada inteira</>}
                     </Button>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Treino por texto: sem áudio para ouvir.</span>
+                    <span className="text-xs text-muted-foreground">
+                      {session.mode === "chamada"
+                        ? "Este treino foi por chamada, mas não há áudio guardado."
+                        : session.mode === "texto"
+                        ? "Treino por texto: sem áudio para ouvir."
+                        : "Sem áudio guardado neste treino."}
+                    </span>
                   )}
                 </div>
                 <Button variant="ghost" size="sm" onClick={reset}>

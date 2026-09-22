@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
     const { sessionId, message, start, sellerAudioPath, messageId, audioPath } = body as {
       sessionId?: string;
       message?: string;
-      start?: { meetingType?: string; focusPain?: string; difficulty?: string };
+      start?: { meetingType?: string; focusPain?: string; difficulty?: string; mode?: string };
       sellerAudioPath?: string;
       messageId?: string;
       audioPath?: string;
@@ -161,11 +161,12 @@ Deno.serve(async (req) => {
           org_id: ctx.orgId,
           user_id: ctx.userId,
           meeting_type: start?.meetingType ?? null,
+          mode: start?.mode === "chamada" ? "chamada" : "texto",
           focus_pain: persona.focusPain,
           difficulty,
           persona,
         })
-        .select("id, meeting_type, focus_pain, difficulty, persona, status, turn_count, created_at")
+        .select("id, meeting_type, focus_pain, difficulty, persona, status, turn_count, created_at, mode")
         .single();
 
       if (error || !session) throw new HttpError(500, "Não foi possível iniciar o treino");

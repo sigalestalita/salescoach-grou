@@ -1148,6 +1148,7 @@ export type Database = {
       }
       roleplay_sessions: {
         Row: {
+          mode: string | null
           created_at: string
           difficulty: string
           ended_at: string | null

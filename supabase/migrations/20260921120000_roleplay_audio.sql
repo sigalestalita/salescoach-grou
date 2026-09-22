@@ -7,6 +7,12 @@
 ALTER TABLE public.roleplay_messages
   ADD COLUMN IF NOT EXISTS audio_path TEXT;
 
+
+-- Texto ou chamada: sem isso a revisão precisava adivinhar pela existência de
+-- áudio, e dizia "treino por texto" para uma chamada cujo áudio faltou.
+ALTER TABLE public.roleplay_sessions
+  ADD COLUMN IF NOT EXISTS mode TEXT CHECK (mode IN ('texto', 'chamada'));
+
 -- Bucket privado: nada de URL pública. A escuta usa link assinado, gerado
 -- na hora para quem tem acesso à sessão.
 INSERT INTO storage.buckets (id, name, public)
