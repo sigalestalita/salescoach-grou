@@ -92,20 +92,14 @@ export async function getCaller(req: Request): Promise<CallerContext> {
     throw new HttpError(403, "Usuário sem organização. Solicite um convite ao administrador.");
   }
 
-  const { data: roleRow } = await admin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("org_id", profile.org_id)
-    .maybeSingle();
-
-  // Organização suspensa ou cancelada não executa trabalho novo. A leitura
-  // continua pela RLS; aqui só passam as funções que gastam ou escrevem.
-  const { data: org } = await admin
-    .from("organizations")
-    .select("status")
-    .eq("id", profile.org_id)
-    .maybeSingle();
+  // Cargo e status da organização não dependem um do outro: em série eram duas
+  // idas ao banco na frente de toda chamada, e isso aparecia na fala do treino.
+  const [{ data: roleRow }, { data: org }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", user.id).eq("org_id", profile.org_id).maybeSingle(),
+    // Organização suspensa ou cancelada não executa trabalho novo. A leitura
+    // continua pela RLS; aqui só passam as funções que gastam ou escrevem.
+    admin.from("organizations").select("status").eq("id", profile.org_id).maybeSingle(),
+  ]);
 
   if (!org || !["trial", "active", "past_due"].includes(org.status)) {
     throw new HttpError(402, "Conta suspensa. Fale com o administrador da plataforma.", "ORG_INACTIVE");

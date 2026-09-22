@@ -14,8 +14,9 @@
 // dedicadas que existirem; por último o gateway da Lovable, que já é pago pela
 // conta do projeto e por isso nunca fica sem cota.
 
+import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { corsHeaders, json, preflight } from "../_shared/cors.ts";
-import { getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
+import { adminClient, ANON_KEY, HttpError, logUsage, SUPABASE_URL } from "../_shared/tenant.ts";
 
 const ELEVEN_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -193,7 +194,16 @@ Deno.serve(async (req) => {
     const ordem = fila();
     if (!ordem.length) return json(req, { error: "tts_nao_configurado" }, 501);
 
-    const ctx = await getCaller(req);
+    // Aqui basta saber que é alguém logado: a fala não escreve nada e não tem
+    // cota por organização. O getCaller completo custa três consultas ao banco
+    // antes de a voz começar — tempo que a pessoa sente no meio da conversa.
+    const autorizacao = req.headers.get("Authorization");
+    if (!autorizacao?.startsWith("Bearer ")) throw new HttpError(401, "Não autorizado");
+    const { data: { user } } = await createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: autorizacao } },
+    }).auth.getUser();
+    if (!user) throw new HttpError(401, "Sessão inválida");
+
     const { text, gender } = await req.json();
     const texto = String(text ?? "").trim().slice(0, MAX_CHARS);
     if (!texto) throw new HttpError(400, "Texto vazio");
@@ -233,14 +243,19 @@ Deno.serve(async (req) => {
     if (tropecos.length) console.warn("speak-text: caiu para", qual, "—", tropecos.join(" | "));
 
     // Custo de TTS é por caractere; registrar deixa isso visível no consumo.
-    logUsage(ctx.admin, {
-      orgId: ctx.orgId,
-      userId: ctx.userId,
+    // Fora do caminho da resposta: a organização é buscada depois de a voz sair.
+    const admin = adminClient();
+    admin.from("profiles").select("org_id").eq("user_id", user.id).maybeSingle().then(({ data: perfil }) => {
+      if (!perfil?.org_id) return;
+      return logUsage(admin, {
+      orgId: perfil.org_id,
+      userId: user.id,
       operation: "tts",
       provider: qual === "lovable" ? "lovable-gateway" : qual,
       model: qual === "lovable" ? (modeloLovableOk ?? "lovable-tts") : qual,
       quantity: texto.length,
       unit: "caracteres",
+      });
     }).catch(() => { /* o log não pode atrasar a fala */ });
 
     return new Response(corpo, {

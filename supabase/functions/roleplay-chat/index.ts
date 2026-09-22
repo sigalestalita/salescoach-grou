@@ -197,11 +197,15 @@ Deno.serve(async (req) => {
         }),
       });
 
+    let modeloUsado = ROLEPLAY_MODEL;
     let aiResponse = await chamaGateway(ROLEPLAY_MODEL, true);
     // Se o gateway não conhecer o modelo rápido ou o parâmetro, repete no
-    // formato antigo em vez de deixar o treino sem resposta.
+    // formato antigo em vez de deixar o treino sem resposta. Quando isso
+    // acontece a resposta demora bem mais, então o cabeçalho X-Modelo conta
+    // qual dos dois atendeu — sem isso a lentidão vira adivinhação.
     if (aiResponse.status === 400) {
-      console.warn("roleplay-chat: gateway recusou o pedido rápido, repetindo no formato antigo");
+      console.warn("roleplay-chat: gateway recusou o pedido rápido, repetindo no formato antigo:", (await aiResponse.clone().text()).slice(0, 300));
+      modeloUsado = MODELO_RESERVA;
       aiResponse = await chamaGateway(MODELO_RESERVA, false);
     }
 
@@ -287,7 +291,7 @@ Deno.serve(async (req) => {
     });
 
     return new Response(stream, {
-      headers: { ...corsHeaders(req), "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+      headers: { ...corsHeaders(req), "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Modelo": modeloUsado },
     });
   } catch (e) {
     if (e instanceof HttpError) return json(req, { error: e.message, code: e.code }, e.status);
