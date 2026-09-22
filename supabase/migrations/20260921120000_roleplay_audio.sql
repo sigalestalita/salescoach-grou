@@ -10,8 +10,12 @@ ALTER TABLE public.roleplay_messages
 
 -- Texto ou chamada: sem isso a revisão precisava adivinhar pela existência de
 -- áudio, e dizia "treino por texto" para uma chamada cujo áudio faltou.
+--
+-- O nome não é "mode" de propósito: o PostgREST resolve "mode" como a função
+-- de agregação mode() do Postgres e recusa o select com
+-- "WITHIN GROUP is required for ordered-set aggregate mode".
 ALTER TABLE public.roleplay_sessions
-  ADD COLUMN IF NOT EXISTS mode TEXT CHECK (mode IN ('texto', 'chamada'));
+  ADD COLUMN IF NOT EXISTS training_mode TEXT CHECK (training_mode IN ('texto', 'chamada'));
 
 -- Bucket privado: nada de URL pública. A escuta usa link assinado, gerado
 -- na hora para quem tem acesso à sessão.

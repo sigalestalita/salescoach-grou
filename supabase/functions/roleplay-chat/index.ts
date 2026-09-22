@@ -218,22 +218,33 @@ Deno.serve(async (req) => {
       const cenario = achaCenario(start?.scenario ?? CENARIO_PADRAO);
       const persona = await buildPersona(ctx.admin, ctx.orgId, difficulty, start?.focusPain ?? null, cenario);
 
-      const { data: session, error } = await ctx.admin
-        .from("roleplay_sessions")
-        .insert({
-          org_id: ctx.orgId,
-          user_id: ctx.userId,
-          meeting_type: start?.meetingType ?? null,
-          mode: start?.mode === "chamada" ? "chamada" : "texto",
-          scenario: cenario.key,
-          focus_pain: persona.focusPain,
-          difficulty,
-          persona,
-        })
-        .select("id, meeting_type, focus_pain, difficulty, persona, status, turn_count, created_at, mode, scenario")
-        .single();
+      const base = {
+        org_id: ctx.orgId,
+        user_id: ctx.userId,
+        meeting_type: start?.meetingType ?? null,
+        focus_pain: persona.focusPain,
+        difficulty,
+        persona,
+      };
+      const colunasNovas = {
+        training_mode: start?.mode === "chamada" ? "chamada" : "texto",
+        scenario: cenario.key,
+      };
+
+      // Se as migrations ainda não rodaram, o insert com as colunas novas
+      // falha e ninguém consegue começar um treino. O treino é mais
+      // importante que o registro do modo: cai para o insert antigo e segue.
+      let { data: session, error } = await ctx.admin
+        .from("roleplay_sessions").insert({ ...base, ...colunasNovas }).select("*").single();
+      if (error && /column .* does not exist|schema cache/i.test(error.message ?? "")) {
+        console.warn("roleplay-chat: colunas de modo/cenário ausentes, criando sessão sem elas —", error.message);
+        ({ data: session, error } = await ctx.admin
+          .from("roleplay_sessions").insert(base).select("*").single());
+      }
 
       if (error || !session) throw new HttpError(500, "Não foi possível iniciar o treino");
+      // A persona já carrega o cenário; a tela usa isso quando a coluna falta.
+      (session as Record<string, unknown>).scenario ??= cenario.key;
 
       await logUsage(ctx.admin, { orgId: ctx.orgId, userId: ctx.userId, operation: "roleplay", quantity: 1, unit: "sessoes" });
 
@@ -245,7 +256,7 @@ Deno.serve(async (req) => {
 
     const { data: session } = await ctx.admin
       .from("roleplay_sessions")
-      .select("id, org_id, user_id, meeting_type, status, turn_count, persona, scenario")
+      .select("*")
       .eq("id", sessionId)
       .eq("org_id", ctx.orgId)
       .maybeSingle();

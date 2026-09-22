@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
 
     const { data: session } = await ctx.admin
       .from("roleplay_sessions")
-      .select("id, org_id, user_id, meeting_type, status, persona, scenario")
+      .select("*")
       .eq("id", sessionId)
       .eq("org_id", ctx.orgId)
       .maybeSingle();

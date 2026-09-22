@@ -43,6 +43,8 @@ interface Message {
 
 interface Persona {
   name: string;
+  /** O cenário também mora na persona, para sobreviver à falta da coluna. */
+  scenario?: string | null;
   /** Vem do back-end desde 21/09/2026; sessões antigas não têm. */
   gender?: "f" | "m" | null;
   role: string;
@@ -53,7 +55,7 @@ interface Persona {
 interface Session {
   id: string;
   /** "texto" ou "chamada"; ausente nas sessões criadas antes de 22/09/2026. */
-  mode?: string | null;
+  training_mode?: string | null;
   /** Fase da relação simulada; ausente nas sessões anteriores aos cenários. */
   scenario?: string | null;
   persona: Persona;
@@ -129,6 +131,10 @@ const BotaoOuvir = ({ tocando, onOuvir, onParar, temAudio }: { tocando: boolean;
     {tocando ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
   </button>
 );
+
+/** Cenário da sessão: a coluna do banco e, quando ela não existe, o que a persona guardou. */
+const cenarioDaSessao = (s: Session | null, padrao: string) =>
+  s?.scenario ?? (s?.persona as { scenario?: string } | undefined)?.scenario ?? padrao;
 
 /** Gênero da voz do lead: o da persona e, para sessões antigas, o palpite pelo nome. */
 const vozDoLead = (p: Persona) => p.gender ?? guessGender(p.name);
@@ -550,18 +556,13 @@ const Roleplay = () => {
     pararDeOuvir();
     setCarregandoRevisao(id);
     try {
-      // Enquanto a migration do áudio não roda, audio_path não existe e o
-      // select inteiro falha. A conversa é o que importa: sem a coluna, ela
-      // abre do mesmo jeito, só sem os players.
-      const comAudio = await supabase.from("roleplay_messages").select("role, content, audio_path").eq("session_id", id).order("created_at");
-      const semAudio = comAudio.error
-        ? await supabase.from("roleplay_messages").select("role, content").eq("session_id", id).order("created_at")
-        : null;
-      const falas = (comAudio.error ? semAudio?.data : comAudio.data) as
-        | Array<{ role: string; content: string; audio_path?: string | null }>
-        | null;
-      const { data: sessao } = await supabase
-        .from("roleplay_sessions").select("id, persona, difficulty, meeting_type, turn_count, feedback, mode, scenario").eq("id", id).maybeSingle();
+      // Pedir colunas pelo nome quebra a revisão inteira quando uma delas
+      // ainda não existe no banco — foi o que aconteceu com audio_path e com
+      // scenario. Com "*" vem o que existir, e o que faltar chega undefined.
+      const [{ data: falas }, { data: sessao }] = await Promise.all([
+        supabase.from("roleplay_messages").select("*").eq("session_id", id).order("created_at"),
+        supabase.from("roleplay_sessions").select("*").eq("id", id).maybeSingle(),
+      ]);
       if (!sessao) throw new Error("Treino não encontrado");
 
       const caminhos = (falas ?? []).map((f: { audio_path?: string | null }) => f.audio_path).filter(Boolean) as string[];
@@ -819,7 +820,7 @@ const Roleplay = () => {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {revisando && <Badge variant="secondary" className="rounded-full">Revisão</Badge>}
-              <Badge variant="outline" className="rounded-full">{achaCenario(session.scenario ?? scenario).label}</Badge>
+              <Badge variant="outline" className="rounded-full">{achaCenario(cenarioDaSessao(session, scenario)).label}</Badge>
               {mode === "chamada" && !revisando && <Badge variant="outline" className="rounded-full gap-1"><Phone className="h-3 w-3" />Chamada</Badge>}
               <Badge className={`rounded-full ${DIFFICULTY_TONE[session.difficulty] ?? ""}`}>{DIFFICULTY_LABEL[session.difficulty] ?? session.difficulty}</Badge>
             </div>
@@ -886,9 +887,9 @@ const Roleplay = () => {
                     </Button>
                   ) : (
                     <span className="text-xs text-muted-foreground">
-                      {session.mode === "chamada"
+                      {session.training_mode === "chamada"
                         ? "Este treino foi por chamada, mas não há áudio guardado."
-                        : session.mode === "texto"
+                        : session.training_mode === "texto"
                         ? "Treino por texto: sem áudio para ouvir."
                         : "Sem áudio guardado neste treino."}
                     </span>
