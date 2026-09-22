@@ -25,6 +25,18 @@ const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 const MAX_CHARS = 700;
 
+// Vozes brasileiras testadas nesta conta. A pessoa pode escolher uma delas no
+// treino; qualquer id fora desta lista é ignorado, para uma chamada torta não
+// virar gasto com voz que ninguém aprovou.
+const VOZES_BR: Record<string, string> = {
+  "5p4THmLc2S6kXKO1pOM5": "Nayara",
+  "PZMcMFpToj1IIYF0QDwX": "Marianne",
+  "VNaz9wbhLsh3lLuHzAVP": "Ana Lu",
+  "E9a8LlXPNWtyvvSoZzrb": "Talis",
+  "v1u2UK6zpvMBljXNrByA": "Vinicius",
+  "NfX2pe1EoEnKaP3Fqwrx": "Diego",
+};
+
 /** Vozes padrão por gênero, por provedor. Podem ser trocadas por env. */
 const VOZES = {
   elevenlabs: {
@@ -98,8 +110,8 @@ function pcmParaWav(pcm: Uint8Array, sampleRate = 24000): Uint8Array {
   return out;
 }
 
-async function falaElevenLabs(texto: string, genero: "f" | "m"): Promise<Response> {
-  const voz = VOZES.elevenlabs[genero];
+async function falaElevenLabs(texto: string, genero: "f" | "m", escolhida?: string): Promise<Response> {
+  const voz = escolhida && VOZES_BR[escolhida] ? escolhida : VOZES.elevenlabs[genero];
   const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voz}?output_format=mp3_22050_32`, {
     method: "POST",
     headers: { "xi-api-key": ELEVEN_KEY!, "Content-Type": "application/json" },
@@ -204,7 +216,7 @@ Deno.serve(async (req) => {
     }).auth.getUser();
     if (!user) throw new HttpError(401, "Sessão inválida");
 
-    const { text, gender } = await req.json();
+    const { text, gender, voiceId } = await req.json();
     const texto = String(text ?? "").trim().slice(0, MAX_CHARS);
     if (!texto) throw new HttpError(400, "Texto vazio");
     const genero: "f" | "m" = gender === "male" ? "m" : "f";
@@ -221,7 +233,7 @@ Deno.serve(async (req) => {
           tipo = "audio/wav";
         } else {
           const r = candidato === "elevenlabs"
-            ? await falaElevenLabs(texto, genero)
+            ? await falaElevenLabs(texto, genero, typeof voiceId === "string" ? voiceId : undefined)
             : candidato === "openai"
             ? await falaOpenAI(texto, genero)
             : await falaLovable(texto, genero);

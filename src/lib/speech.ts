@@ -293,6 +293,17 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
   }
 }
 
+/** Ouve uma frase curta na voz neural escolhida. Cai na voz do sistema se falhar. */
+export async function preverVozNeural(opts: FalaOptions): Promise<void> {
+  const audio = await audioNeural("Oi, tudo bem? Pode falar, estou te ouvindo.", opts);
+  if (!audio) { await previewVoice(opts.voiceURI, opts.gender ?? null); return; }
+  await new Promise<void>((resolve) => {
+    audio.onended = () => resolve();
+    audio.onerror = () => resolve();
+    audio.play().catch(() => resolve());
+  });
+}
+
 /** Uma frase curta na voz escolhida, para a pessoa comparar as opções. */
 export function previewVoice(voiceURI?: string, gender: VoiceGender = null): Promise<void> {
   return speak("Oi, tudo bem? Pode falar, estou te ouvindo.", { voiceURI, gender });
@@ -418,11 +429,27 @@ export async function startLiveTranscription(opts: LiveOptions): Promise<LiveTra
 // Fala do lead: voz neural quando o servidor tem provedor, voz do sistema quando não
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Vozes neurais do treino, as mesmas que o servidor aceita. Ficam aqui para a
+ * pessoa poder escolher uma no seletor; sem escolha, o servidor usa a voz que
+ * combina com o gênero do lead.
+ */
+export const VOZES_NEURAIS: Array<{ id: string; nome: string; genero: "f" | "m" }> = [
+  { id: "5p4THmLc2S6kXKO1pOM5", nome: "Nayara", genero: "f" },
+  { id: "PZMcMFpToj1IIYF0QDwX", nome: "Marianne", genero: "f" },
+  { id: "VNaz9wbhLsh3lLuHzAVP", nome: "Ana Lu", genero: "f" },
+  { id: "E9a8LlXPNWtyvvSoZzrb", nome: "Talis", genero: "m" },
+  { id: "v1u2UK6zpvMBljXNrByA", nome: "Vinicius", genero: "m" },
+  { id: "NfX2pe1EoEnKaP3Fqwrx", nome: "Diego", genero: "m" },
+];
+
 export interface FalaOptions {
   /** https://<projeto>.functions.supabase.co/speak-text */
   url?: string;
   token?: string;
   gender?: VoiceGender;
+  /** Voz neural fixa; sem ela, o servidor escolhe pelo gênero do lead. */
+  voiceId?: string;
   /** voiceURI escolhida para o caminho de fallback (voz do sistema). */
   voiceURI?: string;
 }
@@ -437,7 +464,7 @@ async function audioNeural(texto: string, opts: FalaOptions): Promise<HTMLAudioE
     const r = await fetch(opts.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.token}` },
-      body: JSON.stringify({ text: texto, gender: opts.gender === "m" ? "male" : "female" }),
+      body: JSON.stringify({ text: texto, gender: opts.gender === "m" ? "male" : "female", voiceId: opts.voiceId }),
     });
     // 501: sem provedor configurado. 5xx: provedor recusou (sem crédito, rota
     // ausente). Nos dois casos não adianta tentar frase a frase: desliga a voz

@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatCard } from "@/components/StatCard";
 import {
   isMicSupported, startRecording, blobToBase64, speak, cancelSpeaking, listVoices, guessGender,
   getSavedVoice, saveVoice, previewVoice, startLiveTranscription, criaFilaDeFala, trechosProntos,
+  preverVozNeural, VOZES_NEURAIS,
   type Recorder, type VoiceOption, type LiveTranscription, type FilaDeFala,
 } from "@/lib/speech";
 import {
@@ -97,6 +98,12 @@ async function tokenAtual(): Promise<string | null> {
 /** Gênero da voz do lead: o da persona e, para sessões antigas, o palpite pelo nome. */
 const vozDoLead = (p: Persona) => p.gender ?? guessGender(p.name);
 
+/** Traduz a escolha do seletor no que a camada de fala espera. */
+const escolhaDeVoz = (valor: string) =>
+  valor.startsWith("el:")
+    ? { voiceId: valor.slice(3), voiceURI: undefined }
+    : { voiceId: undefined, voiceURI: valor === "auto" ? undefined : valor };
+
 const Roleplay = () => {
   const { config } = useOrgConfig();
   const { toast } = useToast();
@@ -107,7 +114,9 @@ const Roleplay = () => {
   const [difficulty, setDifficulty] = useState<string>("media");
   const [focusPain, setFocusPain] = useState<string>("aleatoria");
   const [mode, setMode] = useState<Mode>("texto");
-  // Voz do lead: "auto" escolhe a melhor voz do sistema; a escolha manual fica salva no navegador.
+  // Voz do lead. "auto" deixa o servidor escolher a voz neural que combina com
+  // o gênero do lead; "el:<id>" fixa uma voz neural; qualquer outro valor é uma
+  // voz do próprio computador, que só entra se a neural não estiver disponível.
   const [voices, setVoices] = useState<VoiceOption[]>([]);
   const [voiceUri, setVoiceUri] = useState<string>(() => getSavedVoice() ?? "auto");
   const [starting, setStarting] = useState(false);
@@ -245,7 +254,7 @@ const Roleplay = () => {
         setSuggestFinish(!!data.suggestFinish);
         if (emVoz) {
           setPhase("falando");
-          await speak(data.reply, { voiceURI: voiceUri === "auto" ? undefined : voiceUri, gender: vozDoLead(session.persona) });
+          await speak(data.reply, { voiceURI: escolhaDeVoz(voiceUri).voiceURI, gender: vozDoLead(session.persona) });
           setPhase("idle");
         }
         return;
@@ -267,7 +276,7 @@ const Roleplay = () => {
             url: URL_FALAR,
             token,
             gender: vozDoLead(session.persona),
-            voiceURI: voiceUri === "auto" ? undefined : voiceUri,
+            ...escolhaDeVoz(voiceUri),
           })
         : null;
       filaFalaRef.current = fala;
@@ -569,21 +578,39 @@ const Roleplay = () => {
                   >
                     <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="auto">Automática — a melhor voz disponível neste computador</SelectItem>
-                      {voices.map((v) => (
-                        <SelectItem key={v.uri} value={v.uri}>{v.name}{v.neural ? " · natural" : ""}</SelectItem>
-                      ))}
+                      <SelectItem value="auto">Automática — Nayara para lead mulher, Talis para lead homem</SelectItem>
+                      <SelectGroup>
+                        <SelectLabel>Vozes brasileiras</SelectLabel>
+                        {VOZES_NEURAIS.map((v) => (
+                          <SelectItem key={v.id} value={`el:${v.id}`}>
+                            {v.nome} · {v.genero === "f" ? "feminina" : "masculina"}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectLabel>Vozes deste computador (reserva)</SelectLabel>
+                        {voices.map((v) => (
+                          <SelectItem key={v.uri} value={v.uri}>{v.name}{v.neural ? " · natural" : ""}</SelectItem>
+                        ))}
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                   <Button type="button" variant="outline" size="icon" title="Ouvir esta voz" aria-label="Ouvir esta voz"
-                    onClick={() => previewVoice(voiceUri === "auto" ? undefined : voiceUri)}>
+                    onClick={async () => {
+                      const token = await tokenAtual();
+                      await preverVozNeural({
+                        url: URL_FALAR,
+                        token: token ?? undefined,
+                        gender: session ? vozDoLead(session.persona) : "f",
+                        ...escolhaDeVoz(voiceUri),
+                      });
+                    }}>
                     <Volume2 className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  {voices.some((v) => v.neural)
-                    ? "As vozes marcadas como natural são as mais humanas. A automática já prefere uma delas e combina com o nome do lead."
-                    : "Para uma voz mais humana sem custo: no Microsoft Edge as vozes Natural já vêm prontas; no Mac, baixe a Luciana (Aprimorada) em Ajustes › Acessibilidade › Conteúdo Falado."}
+                  As vozes brasileiras são geradas no servidor e valem para qualquer navegador. As
+                  do computador ficam de reserva: entram se a voz do servidor estiver indisponível.
                 </p>
               </div>
             )}
