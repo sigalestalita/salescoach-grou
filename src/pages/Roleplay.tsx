@@ -17,7 +17,7 @@ import {
 import { anexaAudio, baixaAudios, guardaAudio, juntaTrechos } from "@/lib/audioTreino";
 import {
   Dumbbell, Loader2, Send, Sparkles, ThumbsUp, ThumbsDown, ListChecks, Target, Thermometer,
-  RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone, Play, Square,
+  RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone, Play, Square, ArrowLeft,
 } from "lucide-react";
 
 /**
@@ -605,6 +605,13 @@ const Roleplay = () => {
     }
   };
 
+  /** Volta para a configuração. Só pergunta quando há conversa em andamento. */
+  const voltarParaInicio = () => {
+    const emAndamento = !!session && !feedback && !revisando && messages.length > 0;
+    if (emAndamento && !window.confirm("Sair deste treino? A conversa fica salva no histórico, mas o áudio ainda não enviado se perde.")) return;
+    reset();
+  };
+
   const reset = () => {
     pararDeOuvir();
     setRevisando(false);
@@ -634,12 +641,27 @@ const Roleplay = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
+        {/* Dentro de um treino, o título deixa de ser o começo da página: o
+            caminho de volta precisa estar aqui em cima, não no fim da rolagem. */}
+        {(session || feedback) && (
+          <Button variant="ghost" size="icon" onClick={voltarParaInicio} aria-label="Voltar para a configuração do treino" title="Voltar">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        )}
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-gradient text-white">
           <Dumbbell className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Modo de treino</h1>
-          <p className="text-sm text-muted-foreground">Pratique objeções reais da sua empresa contra um lead simulado, por texto ou por voz, antes da reunião de verdade.</p>
+          <h1 className="text-2xl font-bold">
+            {revisando ? "Treino anterior" : feedback ? "Avaliação do treino" : session ? "Treino em andamento" : "Modo de treino"}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {revisando
+              ? "Conversa, áudio e avaliação de um treino já encerrado."
+              : feedback
+              ? "O que foi bem, o que faltou e o que treinar na próxima."
+              : "Pratique objeções reais da sua empresa contra um lead simulado, por texto ou por voz, antes da conversa de verdade."}
+          </p>
         </div>
       </div>
 
