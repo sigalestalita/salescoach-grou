@@ -121,11 +121,32 @@ Deno.serve(async (req) => {
   try {
     const ctx = await getCaller(req);
     const body = await req.json().catch(() => ({}));
-    const { sessionId, message, start } = body as {
+    const { sessionId, message, start, sellerAudioPath, messageId, audioPath } = body as {
       sessionId?: string;
       message?: string;
       start?: { meetingType?: string; focusPain?: string; difficulty?: string };
+      sellerAudioPath?: string;
+      messageId?: string;
+      audioPath?: string;
     };
+
+    // ── Anexar áudio a uma fala já gravada ──
+    // O áudio do lead só existe depois que o navegador o gera e sobe para o
+    // Storage, então ele volta aqui para ser amarrado à mensagem.
+    if (body.action === "anexar-audio") {
+      if (!messageId || !audioPath) throw new HttpError(400, "messageId e audioPath são obrigatórios");
+      const { data: msg } = await ctx.admin
+        .from("roleplay_messages")
+        .select("id, session_id, roleplay_sessions!inner(user_id, org_id)")
+        .eq("id", messageId)
+        .maybeSingle();
+      const dono = (msg as { roleplay_sessions?: { user_id: string; org_id: string } } | null)?.roleplay_sessions;
+      if (!msg || dono?.user_id !== ctx.userId || dono?.org_id !== ctx.orgId) {
+        throw new HttpError(404, "Fala não encontrada");
+      }
+      await ctx.admin.from("roleplay_messages").update({ audio_path: audioPath }).eq("id", messageId);
+      return json(req, { ok: true });
+    }
 
     // ── Criar sessão ──
     if (!sessionId) {
@@ -182,10 +203,13 @@ Deno.serve(async (req) => {
     const meetingTypeLabel = (tipoRes as { data: { label?: string } | null }).data?.label ?? null;
 
     // A fala do vendedor é gravada em paralelo: ela não precisa estar no banco
-    // para o lead começar a responder.
+    // para o lead começar a responder. O id volta para o navegador, que usa
+    // ele se precisar anexar o áudio depois.
     const gravaFalaDoVendedor = ctx.admin
       .from("roleplay_messages")
-      .insert({ session_id: sessionId, org_id: ctx.orgId, role: "seller", content: message.trim() });
+      .insert({ session_id: sessionId, org_id: ctx.orgId, role: "seller", content: message.trim(), audio_path: sellerAudioPath ?? null })
+      .select("id")
+      .single();
 
     const chatMessages = [
       { role: "system", content: systemPrompt(persona, orgRes.data?.name ?? "a empresa", meetingTypeLabel, meetingTypeContext) },
@@ -235,10 +259,19 @@ Deno.serve(async (req) => {
 
     const turnCount = (session.turn_count ?? 0) + 1;
 
+    let idFalaVendedor: string | null = null;
+    let idFalaLead: string | null = null;
+
     /** Fecha o turno no banco depois que a fala do lead ficou pronta. */
     const fechaTurno = async (leadReply: string, uso?: { prompt_tokens?: number; completion_tokens?: number }) => {
-      await gravaFalaDoVendedor;
-      await ctx.admin.from("roleplay_messages").insert({ session_id: sessionId, org_id: ctx.orgId, role: "lead", content: leadReply });
+      const { data: falaVendedor } = await gravaFalaDoVendedor;
+      idFalaVendedor = falaVendedor?.id ?? null;
+      const { data: falaLead } = await ctx.admin
+        .from("roleplay_messages")
+        .insert({ session_id: sessionId, org_id: ctx.orgId, role: "lead", content: leadReply })
+        .select("id")
+        .single();
+      idFalaLead = falaLead?.id ?? null;
       await ctx.admin.from("roleplay_sessions").update({ turn_count: turnCount, updated_at: new Date().toISOString() }).eq("id", sessionId);
       await logUsage(ctx.admin, {
         orgId: ctx.orgId,
@@ -257,7 +290,7 @@ Deno.serve(async (req) => {
       const aiData = await aiResponse.json();
       const leadReply: string = aiData.choices?.[0]?.message?.content?.trim() || "Desculpa, pode repetir?";
       await fechaTurno(leadReply, aiData.usage);
-      return json(req, { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT });
+      return json(req, { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT, sellerMessageId: idFalaVendedor, leadMessageId: idFalaLead });
     }
 
     // ── Streaming ──
@@ -303,7 +336,7 @@ Deno.serve(async (req) => {
 
         const leadReply = completo.trim() || "Desculpa, pode repetir?";
         try { await fechaTurno(leadReply, uso); } catch (e) { console.error("roleplay-chat: falha ao fechar o turno", e); }
-        manda("fim", { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT });
+        manda("fim", { reply: leadReply, turnCount, suggestFinish: turnCount >= MAX_TURNS_HINT, sellerMessageId: idFalaVendedor, leadMessageId: idFalaLead });
         controller.close();
       },
     });

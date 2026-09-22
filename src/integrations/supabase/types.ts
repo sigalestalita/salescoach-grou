@@ -1103,6 +1103,7 @@ export type Database = {
       }
       roleplay_messages: {
         Row: {
+          audio_path: string | null
           content: string
           created_at: string
           id: string
@@ -1111,6 +1112,7 @@ export type Database = {
           session_id: string
         }
         Insert: {
+          audio_path?: string | null
           content: string
           created_at?: string
           id?: string
@@ -1119,6 +1121,7 @@ export type Database = {
           session_id: string
         }
         Update: {
+          audio_path?: string | null
           content?: string
           created_at?: string
           id?: string

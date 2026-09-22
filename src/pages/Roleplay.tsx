@@ -14,6 +14,7 @@ import {
   preverVozNeural, VOZES_NEURAIS, tocaSequencia,
   type Recorder, type VoiceOption, type LiveTranscription, type FilaDeFala,
 } from "@/lib/speech";
+import { anexaAudio, baixaAudios, guardaAudio, juntaTrechos } from "@/lib/audioTreino";
 import {
   Dumbbell, Loader2, Send, Sparkles, ThumbsUp, ThumbsDown, ListChecks, Target, Thermometer,
   RotateCcw, Mic, MicOff, Volume2, Keyboard, MessageSquare, Phone, Play, Square,
@@ -168,6 +169,9 @@ const Roleplay = () => {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
 
   const [history, setHistory] = useState<PastSession[]>([]);
+  // Treino aberto do histórico: só leitura, sem microfone nem campo de texto.
+  const [revisando, setRevisando] = useState(false);
+  const [carregandoRevisao, setCarregandoRevisao] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -280,10 +284,17 @@ const Roleplay = () => {
         return;
       }
 
+      // A gravação da fala sobe antes do turno, para o caminho já entrar na
+      // mensagem do vendedor em vez de precisar de um segundo pedido.
+      const { data: quem } = await supabase.auth.getUser();
+      const caminhoDaFala = audioDaFala && quem.user
+        ? await guardaAudio(quem.user.id, session.id, `${Date.now()}-vendedor.webm`, audioDaFala)
+        : null;
+
       const resposta = await fetch(URL_TURNO, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sessionId: session.id, message: content, stream: true }),
+        body: JSON.stringify({ sessionId: session.id, message: content, stream: true, sellerAudioPath: caminhoDaFala }),
       });
       if (!resposta.ok || !resposta.body) {
         const erro = await resposta.json().catch(() => ({}));
@@ -316,6 +327,7 @@ const Roleplay = () => {
           return copia;
         });
 
+      let idDaFalaDoLead: string | null = null;
       const leitor = resposta.body.getReader();
       const decoder = new TextDecoder();
       let bruto = "";
@@ -346,6 +358,7 @@ const Roleplay = () => {
             completo = dado.reply ?? completo;
             atualizaBolha(completo);
             setSuggestFinish(!!dado.suggestFinish);
+            idDaFalaDoLead = dado.leadMessageId ?? null;
           }
         }
       }
@@ -363,6 +376,13 @@ const Roleplay = () => {
             }
             return copia;
           });
+          // Guardar a voz do lead não pode atrasar o próximo turno.
+          if (quem.user && idDaFalaDoLead) {
+            const inteiro = juntaTrechos(audiosDoLead);
+            guardaAudio(quem.user.id, session.id, `${Date.now()}-lead.mp3`, inteiro).then((caminho) => {
+              if (caminho && idDaFalaDoLead) anexaAudio(idDaFalaDoLead, caminho);
+            });
+          }
         }
       }
     } catch (e: any) {
@@ -502,6 +522,36 @@ const Roleplay = () => {
 
   const temAudioGravado = messages.some((m) => m.audios?.length);
 
+  /** Abre um treino já encerrado: conversa, áudio e avaliação, sem editar nada. */
+  const abrirTreino = async (id: string) => {
+    pararDeOuvir();
+    setCarregandoRevisao(id);
+    try {
+      const [{ data: sessao }, { data: falas }] = await Promise.all([
+        supabase.from("roleplay_sessions").select("id, persona, difficulty, meeting_type, turn_count, feedback").eq("id", id).maybeSingle(),
+        supabase.from("roleplay_messages").select("role, content, audio_path").eq("session_id", id).order("created_at"),
+      ]);
+      if (!sessao) throw new Error("Treino não encontrado");
+
+      const caminhos = (falas ?? []).map((f: { audio_path: string | null }) => f.audio_path).filter(Boolean) as string[];
+      const audios = caminhos.length ? await baixaAudios(caminhos) : new Map<string, Blob>();
+
+      setSession(sessao as unknown as Session);
+      setMessages((falas ?? []).map((f: { role: string; content: string; audio_path: string | null }) => ({
+        role: f.role as "seller" | "lead",
+        content: f.content,
+        audios: f.audio_path && audios.get(f.audio_path) ? [audios.get(f.audio_path)!] : undefined,
+      })));
+      setFeedback(((sessao as { feedback?: Feedback }).feedback as Feedback) ?? null);
+      setRevisando(true);
+      setSuggestFinish(false);
+    } catch (e: any) {
+      toast({ title: "Não foi possível abrir o treino", description: e.message, variant: "destructive" });
+    } finally {
+      setCarregandoRevisao(null);
+    }
+  };
+
   const finishSession = async () => {
     if (!session) return;
     pararDeOuvir();
@@ -526,6 +576,7 @@ const Roleplay = () => {
 
   const reset = () => {
     pararDeOuvir();
+    setRevisando(false);
     cancelSpeaking();
     filaFalaRef.current?.cancelar();
     recorderRef.current?.cancel();
@@ -687,7 +738,7 @@ const Roleplay = () => {
         </Card>
       )}
 
-      {session && !feedback && (
+      {session && (!feedback || revisando) && (
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-muted/30 px-5 py-3">
             <div className="min-w-0">
@@ -695,7 +746,8 @@ const Roleplay = () => {
               <div className="truncate text-xs text-muted-foreground">{session.persona.company}{session.persona.focusPain ? ` — dor provável: ${session.persona.focusPain}` : ""}</div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {mode === "chamada" && <Badge variant="outline" className="rounded-full gap-1"><Phone className="h-3 w-3" />Chamada</Badge>}
+              {revisando && <Badge variant="secondary" className="rounded-full">Revisão</Badge>}
+              {mode === "chamada" && !revisando && <Badge variant="outline" className="rounded-full gap-1"><Phone className="h-3 w-3" />Chamada</Badge>}
               <Badge className={`rounded-full ${DIFFICULTY_TONE[session.difficulty] ?? ""}`}>{DIFFICULTY_LABEL[session.difficulty] ?? session.difficulty}</Badge>
             </div>
           </div>
@@ -747,7 +799,23 @@ const Roleplay = () => {
               <p className="mb-2 text-xs text-muted-foreground">A conversa já rendeu bastante — quando quiser, encerre para ver a avaliação.</p>
             )}
 
-            {mode === "texto" || showTyping ? (
+            {revisando ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  {temAudioGravado ? (
+                    <Button variant="outline" size="sm"
+                      onClick={() => (tocando !== null ? pararDeOuvir() : ouvir(0, true))}>
+                      {tocando !== null ? <><Square className="mr-1 h-3.5 w-3.5" />parar</> : <><Play className="mr-1 h-3.5 w-3.5" />ouvir a chamada inteira</>}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Treino por texto: sem áudio para ouvir.</span>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm" onClick={reset}>
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" />voltar
+                </Button>
+              </div>
+            ) : mode === "texto" || showTyping ? (
               <div className="flex items-end gap-2">
                 <Textarea
                   value={draft}
@@ -880,16 +948,28 @@ const Roleplay = () => {
 
       {!!history.length && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Treinos recentes</CardTitle></CardHeader>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">Treinos recentes</CardTitle>
+            <CardDescription className="text-xs">Abra um treino para rever a conversa, ouvir a chamada e ver a avaliação.</CardDescription>
+          </CardHeader>
           <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {history.map((h) => (
-              <div key={h.id} className="flex items-center gap-3 rounded-xl border border-border/70 p-3">
+              <button
+                key={h.id}
+                type="button"
+                onClick={() => abrirTreino(h.id)}
+                disabled={!!carregandoRevisao}
+                className="flex w-full items-center gap-3 rounded-xl border border-border/70 p-3 text-left transition hover:border-primary/40 hover:bg-muted/50 disabled:opacity-60"
+              >
                 <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted text-sm font-bold tabular-nums">{h.overall_score ?? "--"}</div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{h.persona?.name} · {h.persona?.company}</div>
                   <div className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleDateString("pt-BR")}</div>
                 </div>
-              </div>
+                {carregandoRevisao === h.id
+                  ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                  : <Play className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+              </button>
             ))}
           </CardContent>
         </Card>
