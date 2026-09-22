@@ -39,6 +39,8 @@ interface Message {
 
 interface Persona {
   name: string;
+  /** Vem do back-end desde 21/09/2026; sessões antigas não têm. */
+  gender?: "f" | "m" | null;
   role: string;
   company: string;
   focusPain: string | null;
@@ -91,6 +93,9 @@ async function tokenAtual(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
+
+/** Gênero da voz do lead: o da persona e, para sessões antigas, o palpite pelo nome. */
+const vozDoLead = (p: Persona) => p.gender ?? guessGender(p.name);
 
 const Roleplay = () => {
   const { config } = useOrgConfig();
@@ -240,7 +245,7 @@ const Roleplay = () => {
         setSuggestFinish(!!data.suggestFinish);
         if (emVoz) {
           setPhase("falando");
-          await speak(data.reply, { voiceURI: voiceUri === "auto" ? undefined : voiceUri, gender: guessGender(session.persona.name) });
+          await speak(data.reply, { voiceURI: voiceUri === "auto" ? undefined : voiceUri, gender: vozDoLead(session.persona) });
           setPhase("idle");
         }
         return;
@@ -261,7 +266,7 @@ const Roleplay = () => {
         ? criaFilaDeFala({
             url: URL_FALAR,
             token,
-            gender: guessGender(session.persona.name),
+            gender: vozDoLead(session.persona),
             voiceURI: voiceUri === "auto" ? undefined : voiceUri,
           })
         : null;

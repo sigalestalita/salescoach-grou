@@ -19,7 +19,20 @@ const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flas
 const MODELO_RESERVA = "google/gemini-2.5-flash";
 const MAX_TURNS_HINT = 14; // ~7 idas e vindas — a partir daqui sugerimos encerrar, sem bloquear.
 
-const LEAD_FIRST_NAMES = ["Ricardo", "Patrícia", "João", "Fernanda", "Marcos", "Luciana", "André", "Simone", "Eduardo", "Beatriz", "Cláudio", "Renata", "Gustavo", "Vanessa", "Paulo", "Aline", "Rodrigo", "Juliana", "Sérgio", "Carla"];
+// O gênero vem junto do nome: a voz do treino é escolhida por ele, e
+// adivinhar pelo nome depois já colocou voz de mulher em lead homem.
+const LEAD_FIRST_NAMES: Array<{ nome: string; genero: "f" | "m" }> = [
+  { nome: "Ricardo", genero: "m" }, { nome: "Patrícia", genero: "f" },
+  { nome: "João", genero: "m" }, { nome: "Fernanda", genero: "f" },
+  { nome: "Marcos", genero: "m" }, { nome: "Luciana", genero: "f" },
+  { nome: "André", genero: "m" }, { nome: "Simone", genero: "f" },
+  { nome: "Eduardo", genero: "m" }, { nome: "Beatriz", genero: "f" },
+  { nome: "Cláudio", genero: "m" }, { nome: "Renata", genero: "f" },
+  { nome: "Gustavo", genero: "m" }, { nome: "Vanessa", genero: "f" },
+  { nome: "Paulo", genero: "m" }, { nome: "Aline", genero: "f" },
+  { nome: "Rodrigo", genero: "m" }, { nome: "Juliana", genero: "f" },
+  { nome: "Sérgio", genero: "m" }, { nome: "Carla", genero: "f" },
+];
 const LEAD_LAST_NAMES = ["Almeida", "Gomes", "Henrique", "Castro", "Vinícius", "Prado", "Teixeira", "Rocha", "Lima", "Moraes", "Santos", "Fonseca", "Pires", "Carvalho", "Martins", "Neves", "Batista", "Mendes"];
 const LEAD_ROLES = ["gerente comercial", "diretor(a) de operações", "sócio(a)-fundador(a)", "coordenador(a) de compras", "gerente de projetos", "head de operações"];
 const COMPANY_SUFFIX = ["Comércio e Serviços", "Distribuidora", "Grupo Empresarial", "Indústria", "Soluções Corporativas", "Consultoria", "Rede de Lojas"];
@@ -32,6 +45,8 @@ const TEMPERAMENT: Record<string, string> = {
 
 interface Persona {
   name: string;
+  /** Define a voz do lead no modo chamada. */
+  gender: "f" | "m";
   role: string;
   company: string;
   temperament: string;
@@ -67,8 +82,11 @@ async function buildPersona(
   // Até 3 objeções reais, distintas, para dar tempero sem virar roteiro decorado.
   const knownObjections = Array.from(new Set(allObjections)).sort(() => Math.random() - 0.5).slice(0, 3);
 
+  const primeiro = pick(LEAD_FIRST_NAMES);
+
   return {
-    name: `${pick(LEAD_FIRST_NAMES)} ${pick(LEAD_LAST_NAMES)}`,
+    name: `${primeiro.nome} ${pick(LEAD_LAST_NAMES)}`,
+    gender: primeiro.genero,
     role: pick(LEAD_ROLES),
     company: `${pick(["Aliança", "Horizonte", "Vale Verde", "Central", "Bom Sucesso", "Nova Era", "Porto", "Planalto"])} ${pick(COMPANY_SUFFIX)}`,
     temperament: TEMPERAMENT[difficulty] ?? TEMPERAMENT.media,

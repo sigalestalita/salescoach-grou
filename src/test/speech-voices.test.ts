@@ -51,3 +51,19 @@ describe("trechosProntos", () => {
     expect(resto).toBe("a gente ainda está falando");
   });
 });
+
+// A voz do lead é escolhida pelo gênero. Se um nome novo entrar na lista do
+// gerador de persona sem gênero definido, o palpite pelo nome é a última
+// defesa — e ele não pode errar em nenhum dos nomes que o treino sorteia.
+describe("gênero dos nomes que o treino sorteia", () => {
+  const homens = ["Ricardo", "João", "Marcos", "André", "Eduardo", "Cláudio", "Gustavo", "Paulo", "Rodrigo", "Sérgio"];
+  const mulheres = ["Patrícia", "Fernanda", "Luciana", "Simone", "Beatriz", "Renata", "Vanessa", "Aline", "Juliana", "Carla"];
+
+  it("nenhum nome masculino é lido como feminino", () => {
+    for (const nome of homens) expect(guessGender(`${nome} Almeida`)).not.toBe("f");
+  });
+
+  it("nenhum nome feminino é lido como masculino", () => {
+    for (const nome of mulheres) expect(guessGender(`${nome} Almeida`)).not.toBe("m");
+  });
+});
