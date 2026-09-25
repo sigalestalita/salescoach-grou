@@ -3,6 +3,10 @@
 
 (() => {
   if (document.getElementById('salescoach-overlay')) {
+    // Já existe overlay nesta aba. Pedir gravação de novo não pode abrir uma
+    // segunda: duas gravações ao mesmo tempo misturavam os pedaços das duas
+    // num arquivo só, que nascia sem cabeçalho e o serviço de transcrição
+    // recusava. Se já estiver gravando, não faz nada.
     window.__salescoachStartRecording?.();
     return;
   }
@@ -13,7 +17,7 @@
   const SUPABASE_REALTIME_WS = 'wss://xgpfuunmmjkgwjefofcd.supabase.co/realtime/v1/websocket';
 
   let mediaRecorder = null;
-  let recordedChunks = [];
+  let recordedChunks = [];  // pedaços da gravação em curso
   let screenStream = null;
   let micStream = null;
   let audioContext = null;
@@ -149,6 +153,13 @@
 
   // ── Recording ──
   async function startRecording() {
+    // Duas gravações ao mesmo tempo produzem um arquivo ilegível. Se já há uma
+    // em curso, mantém a que está rodando.
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      console.warn('Sales Coach: já existe uma gravação em curso; o pedido foi ignorado.');
+      return;
+    }
+
     let hasScreen = false, hasSystemAudio = false;
     initEl.style.display = '';
     recordingEl.style.display = 'none';
@@ -193,18 +204,41 @@
     const mimeType = isVideo ? 'video/webm;codecs=vp8,opus' : 'audio/webm;codecs=opus';
     const mode = isVideo ? 'screen_audio' : 'audio_only';
 
-    recordedChunks = [];
+    // Os pedaços ficam presos a ESTA gravação. Antes eram empurrados para uma
+    // variável do módulo: se uma gravação anterior ainda estivesse viva, os
+    // pedaços dela caíam aqui também e o arquivo virava a cauda de um stream
+    // colada na frente de outro — sem cabeçalho, ilegível.
+    const chunks = [];
+    recordedChunks = chunks;
     mediaRecorder = new MediaRecorder(combinedStream, {
       mimeType, ...(isVideo ? { videoBitsPerSecond: 1_000_000 } : {}),
     });
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    const meuRecorder = mediaRecorder;
+    mediaRecorder.ondataavailable = (e) => {
+      // Só aceita pedaço do gravador atual: um gravador antigo que ainda não
+      // parou não contamina o arquivo novo.
+      if (e.data.size > 0 && mediaRecorder === meuRecorder) chunks.push(e.data);
+    };
     mediaRecorder.onstop = async () => {
       showStatus('sending', 'Enviando gravação...');
       notifyBackground('uploadStarted');
       stopLive();
-      if (recordedChunks.length === 0) { showStatus('error', '❌ Nada gravado.'); cleanup(); autoRemove(6000); return; }
-      const blob = new Blob(recordedChunks, { type: recordedChunks[0]?.type || mimeType });
+      if (chunks.length === 0) { showStatus('error', '❌ Nada gravado.'); cleanup(); autoRemove(6000); return; }
+      const blob = new Blob(chunks, { type: chunks[0]?.type || mimeType });
       if (blob.size < 100) { showStatus('error', '❌ Gravação vazia.'); cleanup(); autoRemove(6000); return; }
+
+      // Um webm começa com a assinatura EBML (1A 45 DF A3). Se o arquivo não
+      // começar assim, ele perdeu o cabeçalho e nenhum serviço vai conseguir
+      // ler: melhor avisar aqui do que subir 10 MB que voltam como erro.
+      if (isVideo || mimeType.includes('webm')) {
+        const inicio = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+        const ebml = inicio[0] === 0x1a && inicio[1] === 0x45 && inicio[2] === 0xdf && inicio[3] === 0xa3;
+        if (!ebml) {
+          console.error('Sales Coach: gravação sem cabeçalho EBML, não será enviada.');
+          showStatus('error', '❌ A gravação saiu corrompida e não foi enviada. Grave de novo, com uma gravação por vez.');
+          cleanup(); autoRemove(9000); return;
+        }
+      }
       await uploadRecording(blob);
       cleanup();
     };

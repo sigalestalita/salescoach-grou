@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sales Coach — Gravador e Coach ao Vivo",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Grave reuniões no Meet e no Teams e receba orientação ao vivo, na tela, pela metodologia da sua empresa.",
   "permissions": [
     "storage",
