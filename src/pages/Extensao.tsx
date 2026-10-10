@@ -29,7 +29,7 @@ export default function Extensao() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Extensão Chrome</h1>
+        <h1 className="text-[26px] font-medium tracking-[-0.025em] text-foreground">Extensão Chrome</h1>
         <p className="text-muted-foreground mt-1">
           Grave suas reuniões com tela e áudio diretamente do navegador
         </p>

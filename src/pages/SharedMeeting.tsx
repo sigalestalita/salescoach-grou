@@ -58,7 +58,7 @@ const SharedMeeting = () => {
         </header>
         <main className="container max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold break-words">{meeting.title}</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold break-words">{meeting.title}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm text-muted-foreground mt-1">
               {seller?.full_name && <span>Vendedor: {seller.full_name}</span>}
               {meeting.lead_name && <span>• {meeting.lead_name}</span>}

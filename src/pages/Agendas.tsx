@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
+import { useOrgConfig } from "@/hooks/useOrgConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { TemperatureBadge, StatusBadge } from "@/components/TemperatureBadge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -33,8 +33,6 @@ import {
   Calendar,
   Search,
   Thermometer,
-  Clock,
-  Target,
   Link,
   Pencil,
   Trash2,
@@ -79,21 +77,12 @@ const statusLabels: Record<string, string> = {
   erro: "Erro",
 };
 
-const statusColors: Record<string, string> = {
-  enviado: "bg-muted text-muted-foreground",
-  baixando: "bg-info/10 text-info",
-  transcrevendo: "bg-info/10 text-info",
-  analisando: "bg-warning/10 text-warning",
-  completo: "bg-success/10 text-success",
-  erro: "bg-destructive/10 text-destructive",
-};
 
 
 const Agendas = () => {
   const { config } = useOrgConfig();
   const meetingTypes = config.meetingTypes;
   const defaultMeetingType = meetingTypes[0]?.key ?? "";
-  const tempLabels = temperatureLabels(config.temperatureLevels);
   const typeLabel = (key: string | null) =>
     meetingTypes.find((t) => t.key === key)?.label ?? key ?? "—";
 
@@ -365,8 +354,8 @@ const Agendas = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Agendas</h1>
-          <p className="text-muted-foreground">{isVendedor ? "Visualize suas reuniões e análises" : "Gerencie e analise suas reuniões comerciais"}</p>
+          <h1 className="text-[26px] font-medium tracking-[-0.025em]">Agendas</h1>
+          <p className="mt-1 text-muted-foreground">{isVendedor ? "Visualize suas reuniões e análises" : "Gerencie e analise suas reuniões comerciais"}</p>
         </div>
         {!isVendedor && (
           <div className="flex gap-2">
@@ -632,83 +621,77 @@ const Agendas = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 animate-stagger">
+        <Card className="overflow-hidden">
+          <div className="hidden grid-cols-[56px_minmax(0,1fr)_auto] gap-4 border-b border-border px-5 py-2.5 md:grid">
+            <span className="eyebrow">Nota</span>
+            <span className="eyebrow">Reunião</span>
+            <span className="eyebrow pr-10 text-right">Temperatura · situação</span>
+          </div>
+          <div className="divide-y divide-border">
           {filtered.map((meeting) => (
-            <Card
+            <div
               key={meeting.id}
-              className="cursor-pointer card-hover-glow"
+              role="link"
+              tabIndex={0}
+              className="cursor-pointer px-5 py-3.5 transition-colors hover:bg-secondary/50 focus-visible:bg-secondary/60 focus-visible:outline-none"
               onClick={() => navigate(`/agendas/${meeting.id}`)}
+              onKeyDown={(e) => { if (e.key === "Enter") navigate(`/agendas/${meeting.id}`); }}
             >
-              <CardContent className="p-4 md:p-5">
                 {(() => {
                   const isStalled = isMeetingProcessingStalled(meeting);
                   const statusLabel = isStalled ? "Travado" : (statusLabels[meeting.status] || meeting.status);
-                  const statusClassName = isStalled
-                    ? "bg-destructive/10 text-destructive"
-                    : (statusColors[meeting.status] || "bg-muted text-muted-foreground");
                   const score = meeting.overall_score;
-                  const scoreTone = score === null
-                    ? "bg-muted text-muted-foreground"
-                    : score >= 75 ? "bg-success/10 text-success"
-                    : score >= 55 ? "bg-warning/10 text-warning"
-                    : "bg-destructive/10 text-destructive";
-                  const tempTone: Record<string, string> = {
-                    congelado: "bg-muted text-muted-foreground",
-                    frio: "bg-info/10 text-info",
-                    morno: "bg-warning/10 text-warning",
-                    quente: "bg-destructive/10 text-destructive",
-                    muito_quente: "bg-destructive/15 text-destructive",
-                  };
+                  const scoreBar = score === null
+                    ? "hsl(var(--border))"
+                    : score >= 75 ? "hsl(var(--success))"
+                    : score >= 55 ? "hsl(var(--warning))"
+                    : "hsl(var(--destructive))";
+                  const statusTone = isStalled || meeting.status === "erro" ? "bad"
+                    : meeting.status === "completo" ? "ok"
+                    : meeting.status === "analisando" ? "warn"
+                    : meeting.status === "enviado" ? "muted" : "info";
 
                   return (
                 <div className="flex items-center gap-4">
-                  <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-xl font-bold tabular-nums ${scoreTone}`}>
-                    {score !== null ? score : <Target className="h-5 w-5 opacity-60" />}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate font-semibold">{meeting.title}</h3>
-                      <Badge variant="outline" className="rounded-full border-border/80 px-2.5 text-[11px] font-medium">
-                        {typeLabel(meeting.meeting_type)}
-                      </Badge>
+                  <div className="w-10 shrink-0">
+                    <div className="font-mono text-[17px] font-medium tabular-nums leading-none text-foreground">
+                      {score !== null ? score : <span className="text-muted-foreground/60">—</span>}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
+                    <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-secondary">
+                      <div className="h-full rounded-full" style={{ width: `${score ?? 0}%`, background: scoreBar }} />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-[14px] font-medium text-foreground">{meeting.title}</h3>
+                      <span className="text-[12px] text-muted-foreground">{typeLabel(meeting.meeting_type)}</span>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted-foreground">
                       {meeting.lead_name && <span>{meeting.lead_name}</span>}
-                      {meeting.lead_company && <span>• {meeting.lead_company}</span>}
+                      {meeting.lead_company && <><span className="opacity-40">/</span><span>{meeting.lead_company}</span></>}
                       {meeting.meeting_date && (
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {new Date(meeting.meeting_date).toLocaleDateString("pt-BR")}
-                        </span>
+                        <><span className="opacity-40">/</span><span className="font-mono text-[11.5px]">{new Date(meeting.meeting_date).toLocaleDateString("pt-BR")}</span></>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {meeting.temperature && (
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tempTone[meeting.temperature] ?? "bg-muted text-muted-foreground"}`}>
-                        {tempLabels[meeting.temperature]}
-                      </span>
-                    )}
+                    <TemperatureBadge value={meeting.temperature} className="hidden sm:inline-flex" />
                     {meeting.status === "erro" && meeting.error_message ? (
                       <Tooltip>
                         <TooltipTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Badge className={`${statusClassName} cursor-help rounded-full px-2.5`}>
-                            {statusLabel}
-                          </Badge>
+                          <span className="cursor-help"><StatusBadge label={statusLabel} tone={statusTone} /></span>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-xs text-xs">
                           <p>{meeting.error_message}</p>
                         </TooltipContent>
                       </Tooltip>
                     ) : (
-                      <Badge className={`${statusClassName} rounded-full px-2.5`}>
-                        {statusLabel}
-                      </Badge>
+                      <StatusBadge label={statusLabel} tone={statusTone} />
                     )}
                     {!isVendedor && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -738,10 +721,10 @@ const Agendas = () => {
                 </div>
                   );
                 })()}
-              </CardContent>
-            </Card>
+            </div>
           ))}
-        </div>
+          </div>
+        </Card>
       )}
 
       {/* Edit Dialog */}

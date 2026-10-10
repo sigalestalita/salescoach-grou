@@ -3,36 +3,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Play, Target, Thermometer, Clock, MessageSquare, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, ChevronUp, HelpCircle, Info, Share2 } from "lucide-react";
+import { ArrowLeft, Play, Mic, Link, ChevronDown, Download, BrainCircuit, CheckCircle2, AlertTriangle, Video, ExternalLink } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { ShareControls } from "@/components/ShareControls";
-import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
+import { useOrgConfig } from "@/hooks/useOrgConfig";
+import { AnalysisReport } from "@/components/AnalysisReport";
 
-const MetricTooltip = ({ text }: { text: string }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Info className="h-3.5 w-3.5 cursor-help shrink-0 opacity-60" />
-    </TooltipTrigger>
-    <TooltipContent side="top" className="max-w-xs text-xs">
-      <p>{text}</p>
-    </TooltipContent>
-  </Tooltip>
-);
 
-// Helper to extract score and reason from both old (number) and new ({score, reason}) formats
-const getMetricValue = (val: any): { score: number; reason?: string } => {
-  if (val === null || val === undefined) return { score: 0 };
-  if (typeof val === "number") return { score: val };
-  if (typeof val === "object" && "score" in val) return { score: val.score, reason: val.reason };
-  return { score: Number(val) || 0 };
-};
 
 type Meeting = Tables<"meetings">;
 type AnalysisResult = Tables<"analysis_results">;
@@ -160,41 +142,23 @@ const MeetingDetail = () => {
   if (loading) return <div className="text-center py-12 text-muted-foreground">Carregando...</div>;
   if (!meeting) return <div className="text-center py-12">Agenda não encontrada</div>;
 
-  const bant = analysis?.bant_score as any;
-  const meddic = analysis?.meddic_score as any;
-  const spin = analysis?.spin_score as any;
-  const insights = analysis?.insights as any;
-  const salesCoach = analysis?.sales_coach as any;
-  const talkRatio = analysis?.talk_ratio as any;
-  const metrics = analysis?.conversation_metrics as any;
-  const ragResults = analysis?.rag_results as any;
-  const rawAnalysis = analysis?.raw_analysis as any;
 
-  const tempLabels = temperatureLabels(config.temperatureLevels);
-
-  // Cartão de temperatura em cor cheia, do frio ao quente.
-  const tempColors: Record<string, string> = {
-    congelado: "tone-slate",
-    frio: "tone-sky",
-    morno: "tone-amber",
-    quente: "tone-coral",
-    muito_quente: "tone-coral",
-  };
+  const typeLabel = config.meetingTypes.find((t) => t.key === meeting.meeting_type)?.label;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/agendas")}>
+      <div className="flex items-start gap-3">
+        <Button variant="ghost" size="icon" className="mt-0.5 h-8 w-8" onClick={() => navigate("/agendas")} aria-label="Voltar para agendas">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold">{meeting.title}</h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="min-w-0 flex-1">
+          <div className="eyebrow">
+            {[typeLabel, meeting.meeting_date && new Date(meeting.meeting_date).toLocaleDateString("pt-BR")].filter(Boolean).join(" · ")}
+          </div>
+          <h1 className="mt-1.5 text-[24px] font-medium leading-tight tracking-[-0.025em]">{meeting.title}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
             {meeting.lead_name && <span>{meeting.lead_name}</span>}
-            {meeting.lead_company && <span>• {meeting.lead_company}</span>}
-            {meeting.meeting_date && (
-              <span>• {new Date(meeting.meeting_date).toLocaleDateString("pt-BR")}</span>
-            )}
+            {meeting.lead_company && <><span className="opacity-40">/</span><span>{meeting.lead_company}</span></>}
           </div>
         </div>
         {meeting.share_token && (
@@ -217,7 +181,7 @@ const MeetingDetail = () => {
             <Card>
               <CollapsibleTrigger className="w-full">
                 <CardHeader className="flex flex-row items-center justify-between py-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     {isVideo ? <Video className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                     Gravação da Reunião
                   </CardTitle>
@@ -263,7 +227,7 @@ const MeetingDetail = () => {
               <Card>
                 <CollapsibleTrigger className="w-full">
                   <CardHeader className="flex flex-row items-center justify-between py-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2">
                       {isVideo ? <Video className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                       Gravação da Reunião
                     </CardTitle>
@@ -293,7 +257,7 @@ const MeetingDetail = () => {
             <Card>
               <CollapsibleTrigger className="w-full">
                 <CardHeader className="flex flex-row items-center justify-between py-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <Video className="h-4 w-4" />
                     Gravação da Reunião
                   </CardTitle>
@@ -336,7 +300,7 @@ const MeetingDetail = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="flex flex-row items-center justify-between py-3">
-                <CardTitle className="text-sm">📝 Já tem a transcrição? Cole aqui (opcional)</CardTitle>
+                <CardTitle>Já tem a transcrição? Cole aqui (opcional)</CardTitle>
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
             </CollapsibleTrigger>
@@ -364,8 +328,8 @@ const MeetingDetail = () => {
           <CardContent className="py-8">
             {meeting.status === "enviado" && (
               <div className="text-center">
-                <Mic className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-medium">Aguardando análise</h3>
+                <Mic className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" strokeWidth={1.5} />
+                <h3 className="text-[16px] font-medium">Aguardando análise</h3>
                 <p className="text-sm text-muted-foreground">Clique em "Analisar" para iniciar o processamento com IA</p>
               </div>
             )}
@@ -373,9 +337,9 @@ const MeetingDetail = () => {
               if (isStaleProcessing) {
                 return (
                   <div className="space-y-4 text-center">
-                    <div className="text-destructive text-4xl">⚠️</div>
+                    <AlertTriangle className="mx-auto h-8 w-8 text-destructive" strokeWidth={1.5} />
                     <div className="space-y-2">
-                      <h3 className="text-lg font-medium text-destructive">Processamento travado</h3>
+                      <h3 className="text-[16px] font-medium text-foreground">Processamento travado</h3>
                       <p className="text-sm text-muted-foreground">
                         Essa reunião ficou parada em <span className="font-medium text-foreground">{meeting.status}</span> por mais de 30 minutos.
                       </p>
@@ -432,8 +396,8 @@ const MeetingDetail = () => {
             })()}
             {meeting.status === "erro" && (
               <div className="text-center space-y-2">
-                <div className="text-destructive text-4xl mb-4">⚠️</div>
-                <h3 className="text-lg font-medium text-destructive">Erro no processamento</h3>
+                <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" strokeWidth={1.5} />
+                <h3 className="text-[16px] font-medium text-foreground">Erro no processamento</h3>
                 {meeting.error_message ? (
                   <p className="text-sm text-foreground/90 max-w-xl mx-auto">
                     {meeting.error_message}
@@ -451,446 +415,9 @@ const MeetingDetail = () => {
         </Card>
       )}
 
-      {/* Analysis results */}
+      {/* Resultado da análise */}
       {analysis && (
-        <>
-          {/* Resumo Descritivo da Reunião */}
-          {rawAnalysis?.meeting_summary && (() => {
-            const summary = rawAnalysis.meeting_summary;
-            return (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    Resumo da Reunião
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 text-sm">
-                    {summary.company_name && (
-                      <li className="flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[140px]">Empresa:</span>
-                        <span>{summary.company_name}</span>
-                      </li>
-                    )}
-                    {summary.company_size && (
-                      <li className="flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[140px]">Porte / Colaboradores:</span>
-                        <span>{summary.company_size}</span>
-                      </li>
-                    )}
-                    {summary.participants?.length > 0 && (
-                      <li className="flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[140px]">Participantes:</span>
-                        <span>{summary.participants.map((p: any) => `${p.name}${p.role ? ` (${p.role})` : ""}`).join(", ")}</span>
-                      </li>
-                    )}
-                    {summary.identified_pains?.length > 0 && (
-                      <li className="flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[140px]">Dores identificadas:</span>
-                        <ul className="list-disc list-inside space-y-0.5">
-                          {summary.identified_pains.map((pain: string, i: number) => (
-                            <li key={i}>{pain}</li>
-                          ))}
-                        </ul>
-                      </li>
-                    )}
-                    {summary.products_presented?.length > 0 && (
-                      <li className="flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[140px]">Produtos/Serviços:</span>
-                        <span>{summary.products_presented.join(", ")}</span>
-                      </li>
-                    )}
-                    {summary.proposal_value && (
-                      <li className="flex items-start gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[140px]">Proposta/Valor:</span>
-                        <span>{summary.proposal_value}</span>
-                      </li>
-                    )}
-                    {summary.solution_pain_match?.length > 0 && (
-                      <li className="flex flex-col gap-1">
-                        <span className="font-medium text-muted-foreground">Match Solução x Dor:</span>
-                        <div className="ml-2 space-y-1">
-                          {summary.solution_pain_match.map((match: any, i: number) => (
-                            <div key={i} className="flex items-start gap-2 text-xs bg-muted/50 rounded-md p-2">
-                              <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
-                              <div>
-                                <span className="font-medium">{match.pain}</span>
-                                <span className="text-muted-foreground"> → </span>
-                                <span className="text-primary font-medium">{match.solution}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </li>
-                    )}
-                  </ul>
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* Score Geral + Temperatura */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card className="md:col-span-1 border-0 bg-brand-gradient text-white">
-              <CardHeader className="pb-2">
-               <CardTitle className="text-sm flex items-center gap-2 text-white/85">
-                  <Target className="h-4 w-4" />
-                  Score Geral
-                  <MetricTooltip text="Avaliação geral da qualidade da reunião comercial, de 0 a 100. Considera técnica de vendas, qualificação do lead, rapport, identificação de dores e condução do processo comercial." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-5xl font-bold text-white text-center tracking-tight">
-                  {analysis.overall_score ?? "--"}
-                </div>
-                <p className="text-xs text-center text-white/70 mt-1">de 100</p>
-                {rawAnalysis?.overall_score_reason && (
-                  <p className="text-xs text-white/75 mt-2 text-center italic">{rawAnalysis.overall_score_reason}</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className={meeting.temperature ? `border-0 text-white ${tempColors[meeting.temperature]}` : ""}>
-              <CardHeader className="pb-2">
-                <CardTitle className={`text-sm flex items-center gap-2 ${meeting.temperature ? "text-white/85" : ""}`}>
-                  <Thermometer className="h-4 w-4" />
-                  Temperatura
-                  <MetricTooltip text="Classificação NATO/BANT: Congelado = sem perfil para o negócio; Frio = sem demanda clara; Morno = necessidade sem urgência; Quente = prontos para venda em até 90 dias; Muito Quente = venda imediata." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-center capitalize">
-                  {meeting.temperature
-                    ? tempLabels[meeting.temperature] || meeting.temperature
-                    : "--"}
-                </div>
-                {rawAnalysis?.temperature_reason && (
-                  <p className={`text-xs mt-2 text-center italic ${meeting.temperature ? "text-white/75" : "text-muted-foreground"}`}>{rawAnalysis.temperature_reason}</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-0 text-white tone-teal">
-              <CardHeader className="pb-2">
-               <CardTitle className="text-sm flex items-center gap-2 text-white/85">
-                  <MessageSquare className="h-4 w-4" />
-                  Talk Ratio
-                  <MetricTooltip text="Proporção de tempo de fala entre vendedor e lead. O ideal é que o vendedor fale entre 30-50% do tempo, dando espaço para o lead expor suas necessidades. Vendedores que falam demais perdem oportunidades de entender o cliente." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {talkRatio ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Vendedor: {talkRatio.seller}%</span>
-                      <span>Lead: {talkRatio.lead}%</span>
-                    </div>
-                    <Progress value={talkRatio.seller} className="bg-white/25 [&>div]:bg-white" />
-                    {talkRatio.reason && (
-                      <p className="text-xs text-white/75 italic">{talkRatio.reason}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center text-white/75">--</div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Framework Scores */}
-          <div className="grid gap-4 md:grid-cols-3">
-            {/* BAN */}
-            <Card>
-              <CardHeader>
-               <CardTitle className="text-sm flex items-center gap-2">
-                  {config.methodologyLabel} Score
-                  <MetricTooltip
-                    text={`Critérios de qualificação desta operação: ${config.criteria
-                      .map((c) => `${c.label}${c.description ? ` (${c.description})` : ""}`)
-                      .join(", ")}. Configuráveis em Configurações › Metodologia de análise.`}
-                  />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {bant ? (
-                  config.criteria.map((criterion) => {
-                    const { score, reason } = getMetricValue(bant[criterion.key]);
-                    const max = criterion.max_score ?? config.maxCriterionScore;
-                    return (
-                      <div key={criterion.key} className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span>{criterion.label}</span>
-                          <span>{score}/{max}</span>
-                        </div>
-                        <Progress value={max > 0 ? (score / max) * 100 : 0} />
-                        {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem dados</p>
-                )}
-              </CardContent>
-            </Card>
-
-
-            {/* MEDDIC */}
-            <Card>
-              <CardHeader>
-               <CardTitle className="text-sm flex items-center gap-2">
-                  MEDDIC Score
-                  <MetricTooltip text="Framework avançado de vendas complexas: Metrics (métricas de sucesso), Economic Buyer (decisor econômico), Decision Criteria (critérios de decisão), Decision Process (processo decisório), Identify Pain (dores identificadas) e Champion (aliado interno). Cada item vale até 17 pontos." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {meddic ? (
-                  Object.entries(meddic as Record<string, any>).map(([key, val]) => {
-                    const { score, reason } = getMetricValue(val);
-                    return (
-                      <div key={key} className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="capitalize">{key.replace(/_/g, " ")}</span>
-                          <span>{score}/17</span>
-                        </div>
-                        <Progress value={(score / 17) * 100} />
-                        {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem dados</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* SPIN */}
-            <Card>
-              <CardHeader>
-               <CardTitle className="text-sm flex items-center gap-2">
-                  SPIN Score
-                  <MetricTooltip text="Metodologia SPIN Selling: Situação (perguntas sobre contexto atual), Problema (identificação de dores), Implicação (consequências dos problemas) e Necessidade de Solução (como seu produto resolve). Cada dimensão vale até 25 pontos." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {spin ? (
-                  ["situacao", "problema", "implicacao", "necessidade"].map((key) => {
-                    const { score, reason } = getMetricValue(spin[key]);
-                    return (
-                      <div key={key} className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="capitalize">{key === "situacao" ? "Situação" : key === "implicacao" ? "Implicação" : key}</span>
-                          <span>{score}/25</span>
-                        </div>
-                        <Progress value={(score / 25) * 100} />
-                        {reason && <p className="text-xs text-muted-foreground italic">{reason}</p>}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem dados</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Insights & Sales Coach */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  💡 Insights
-                  <MetricTooltip text="Análise qualitativa da reunião: o que o vendedor fez bem (técnicas eficazes, rapport, perguntas certas) e o que pode melhorar (oportunidades perdidas, técnicas não utilizadas, pontos fracos da abordagem)." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {insights ? (
-                  <>
-                    {insights.positives && (
-                      <div>
-                        <h4 className="text-xs font-semibold text-success mb-1">✅ O que foi bem</h4>
-                        <ul className="text-sm space-y-1">
-                          {(insights.positives as string[]).map((p: string, i: number) => (
-                            <li key={i}>• {p}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {insights.improvements && (
-                      <div>
-                        <h4 className="text-xs font-semibold text-warning mb-1">⚠️ O que faltou</h4>
-                        <ul className="text-sm space-y-1">
-                          {(insights.improvements as string[]).map((p: string, i: number) => (
-                            <li key={i}>• {p}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem insights ainda</p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  🤖 Sales Coach
-                  <MetricTooltip text="Recomendações personalizadas de um coach de vendas IA: próximos passos ideais para avançar a negociação, sugestões de abordagem e scripts prontos para usar em follow-ups." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {salesCoach ? (
-                  <>
-                    {salesCoach.next_steps && (
-                      <div>
-                        <h4 className="text-xs font-semibold mb-1">Próximos Passos</h4>
-                        <ul className="text-sm space-y-1">
-                          {(salesCoach.next_steps as string[]).map((s: string, i: number) => (
-                            <li key={i}>• {s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {salesCoach.suggestions && (
-                      <div>
-                        <h4 className="text-xs font-semibold mb-1">Sugestões</h4>
-                        <ul className="text-sm space-y-1">
-                          {(salesCoach.suggestions as string[]).map((s: string, i: number) => (
-                            <li key={i}>• {s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem recomendações ainda</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* RAG Results - Base de Conhecimento */}
-          {ragResults && (
-            <Card className="border-primary/20">
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-primary" />
-                  📚 Aderência à Base de Conhecimento
-                  <MetricTooltip text="Avalia quanto o vendedor utilizou os materiais da base de conhecimento na conversa. Mostra produtos mencionados, oportunidades perdidas de cross-sell/upsell e o alinhamento do discurso com os argumentos cadastrados." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Score de Aderência */}
-                {ragResults.knowledge_adherence_score != null && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">Score de Aderência</span>
-                      <span className="font-bold text-primary">{ragResults.knowledge_adherence_score}/100</span>
-                    </div>
-                    <Progress value={ragResults.knowledge_adherence_score} className="h-2" />
-                  </div>
-                )}
-
-                {/* Alinhamento do discurso */}
-                {ragResults.discourse_alignment && (
-                  <div>
-                    <h4 className="text-xs font-semibold mb-1 flex items-center gap-1">
-                      <Target className="h-3 w-3" /> Alinhamento do Discurso
-                    </h4>
-                    <p className="text-sm text-muted-foreground">{ragResults.discourse_alignment}</p>
-                  </div>
-                )}
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  {/* Produtos mencionados */}
-                  {ragResults.products_mentioned && ragResults.products_mentioned.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
-                        <ShoppingCart className="h-3 w-3 text-primary" /> Produtos Mencionados
-                      </h4>
-                      <div className="flex flex-wrap gap-1">
-                        {(ragResults.products_mentioned as any[]).map((p: any, i: number) => (
-                          <Badge key={i} variant="secondary" className="text-xs">{typeof p === "string" ? p : p?.name || p?.product || JSON.stringify(p)}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Oportunidades perdidas */}
-                  {ragResults.missed_opportunities && ragResults.missed_opportunities.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3 text-warning" /> Oportunidades Perdidas
-                      </h4>
-                      <ul className="text-sm space-y-1">
-                        {(ragResults.missed_opportunities as any[]).map((o: any, i: number) => (
-                          <li key={i} className="text-muted-foreground">• {typeof o === "string" ? o : o?.reason || o?.description || JSON.stringify(o)}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Sugestões de Cross-sell */}
-                  {ragResults.cross_sell_suggestions && ragResults.cross_sell_suggestions.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold mb-2 flex items-center gap-1">
-                        <TrendingUp className="h-3 w-3 text-success" /> Sugestões Cross-sell / Upsell
-                      </h4>
-                      <ul className="text-sm space-y-1">
-                        {(ragResults.cross_sell_suggestions as any[]).map((s: any, i: number) => (
-                          <li key={i} className="text-muted-foreground">• {typeof s === "string" ? s : s?.reason || s?.product || s?.suggestion || JSON.stringify(s)}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Highlights */}
-          {highlights.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  🎯 Highlights
-                  <MetricTooltip text="Momentos-chave identificados na reunião: objeções levantadas pelo lead, sinais de compra, dores e necessidades expressas, e momentos decisivos da conversa." />
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {highlights.map((h) => (
-                  <div key={h.id} className="flex items-start gap-2 text-sm border-l-2 border-primary/30 pl-3 py-1">
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {h.highlight_type === "objecao" ? "Objeção" :
-                       h.highlight_type === "sinal_compra" ? "Sinal de Compra" :
-                       h.highlight_type === "momento_chave" ? "Momento-Chave" :
-                       h.highlight_type === "dor" ? "Dor" :
-                       h.highlight_type === "necessidade" ? "Necessidade" : h.highlight_type}
-                    </Badge>
-                    <span>{h.text}</span>
-                    {h.speaker && <span className="text-muted-foreground text-xs">({h.speaker})</span>}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Transcription */}
-          {transcription && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">📝 Transcrição</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                  {transcription.full_text}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </>
+        <AnalysisReport meeting={meeting} analysis={analysis} transcription={transcription} highlights={highlights} />
       )}
     </div>
   );

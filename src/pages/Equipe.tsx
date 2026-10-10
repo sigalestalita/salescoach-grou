@@ -205,8 +205,8 @@ const Equipe = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Equipe</h1>
-          <p className="text-muted-foreground">Membros do time e seus papéis</p>
+          <h1 className="text-[26px] font-medium tracking-[-0.025em]">Equipe</h1>
+          <p className="mt-1 text-muted-foreground">Membros do time e seus papéis</p>
         </div>
         {isAdmin && (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>

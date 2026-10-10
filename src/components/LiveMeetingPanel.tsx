@@ -68,7 +68,7 @@ export function LiveMeetingPanel({ meetingId }: { meetingId: string }) {
     <div className="grid gap-4 md:grid-cols-2">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
             <Radio className="h-4 w-4 text-primary animate-pulse" />
             Dicas ao vivo
             <Badge variant="outline" className="ml-auto">{tips.length}</Badge>
@@ -86,7 +86,7 @@ export function LiveMeetingPanel({ meetingId }: { meetingId: string }) {
               </div>
               {t.acao && (
                 <p className="text-sm font-semibold leading-snug text-foreground">
-                  <span className="mb-0.5 block text-[10px] font-bold uppercase tracking-wider text-primary">Fale agora</span>
+                  <span className="mb-0.5 block text-[10px] font-semibold uppercase tracking-wider text-primary">Fale agora</span>
                   {t.acao}
                 </p>
               )}
@@ -98,7 +98,7 @@ export function LiveMeetingPanel({ meetingId }: { meetingId: string }) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Transcrição ao vivo</CardTitle>
+          <CardTitle>Transcrição ao vivo</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 max-h-[480px] overflow-y-auto text-sm">
           {segments.length === 0 && (

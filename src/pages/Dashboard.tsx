@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/StatCard";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgConfig } from "@/hooks/useOrgConfig";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare } from "lucide-react";
 
 interface DashboardData {
@@ -34,11 +33,11 @@ interface SellerOption {
 // Da faixa mais quente para a mais fria. Funciona com qualquer quantidade de
 // faixas configuradas pela organização.
 const TEMP_PALETTE: string[] = [
-  "hsl(0 68% 38%)",
-  "hsl(var(--destructive))",
-  "hsl(var(--warning))",
-  "hsl(var(--info))",
-  "hsl(215 16% 62%)",
+  "hsl(4 66% 42%)",
+  "hsl(var(--temp-hot))",
+  "hsl(var(--temp-warm))",
+  "hsl(var(--temp-cold))",
+  "hsl(220 8% 70%)",
 ];
 
 // Séries por executivo: matizes distintos em luminosidade parecida, ancorados
@@ -57,10 +56,14 @@ const SERIES_PALETTE: string[] = [
 const CHART_TOOLTIP_STYLE = {
   backgroundColor: "hsl(var(--card))",
   border: "1px solid hsl(var(--border))",
-  borderRadius: "6px",
+  borderRadius: "8px",
+  boxShadow: "0 8px 24px -12px hsl(var(--shadow-color) / 0.25)",
   color: "hsl(var(--foreground))",
   fontSize: "12px",
+  padding: "8px 10px",
 };
+
+const AXIS_PROPS = { axisLine: false, tickLine: false, tick: { fontSize: 11, fill: "hsl(var(--muted-foreground))" } } as const;
 
 const Dashboard = () => {
   // Metodologia e faixas de temperatura vêm da configuração da organização.
@@ -295,8 +298,8 @@ const Dashboard = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-[26px] font-medium tracking-[-0.025em]">Visão geral</h1>
+          <p className="mt-1 text-muted-foreground">
             {isFiltered
               ? `Métricas individuais de ${selectedSellerName}`
               : "Visão geral do desempenho das reuniões comerciais"}
@@ -344,22 +347,22 @@ const Dashboard = () => {
             {data.scoreEvolution.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.scoreEvolution}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" className="text-xs" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 100]} className="text-xs" tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
+                  <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" {...AXIS_PROPS} dy={6} />
+                  <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} {...AXIS_PROPS} width={30} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} labelStyle={{ color: "hsl(var(--muted-foreground))" }} cursor={{ stroke: "hsl(var(--border))" }} />
                   {data.scoreEvolutionSellers.length > 0 ? (
                     <>
-                      <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+                      <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: "12px", paddingTop: "10px", color: "hsl(var(--muted-foreground))" }} />
                       {data.scoreEvolutionSellers.map((sid, idx) => {
                         const sellerName = sellers.find(s => s.id === sid)?.name || sid.slice(0, 8);
                         return (
-                          <Line key={sid} type="monotone" dataKey={sid} stroke={SERIES_PALETTE[idx % SERIES_PALETTE.length]} strokeWidth={2} dot={{ r: 3 }} name={sellerName} connectNulls />
+                          <Line key={sid} type="monotone" dataKey={sid} stroke={SERIES_PALETTE[idx % SERIES_PALETTE.length]} strokeWidth={1.75} dot={false} activeDot={{ r: 3.5, strokeWidth: 0 }} name={sellerName} connectNulls />
                         );
                       })}
                     </>
                   ) : (
-                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={1.75} dot={false} activeDot={{ r: 3.5, strokeWidth: 0 }} name="Score Médio" />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -387,16 +390,27 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent className="h-64">
             {data.tempDistribution.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={data.tempDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${value}`}>
-                    {data.tempDistribution.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex h-full flex-col justify-center gap-6">
+                {/* Barra única com a proporção de cada faixa, da mais quente à mais fria */}
+                <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full">
+                  {data.tempDistribution.map((t) => (
+                    <div key={t.name} style={{ flexGrow: t.value, background: t.color }} title={`${t.name}: ${t.value}`} />
+                  ))}
+                </div>
+                <ul className="space-y-2.5">
+                  {data.tempDistribution.map((t) => {
+                    const pct = Math.round((t.value / Math.max(1, data.tempDistribution.reduce((acc, t) => acc + t.value, 0))) * 100);
+                    return (
+                      <li key={t.name} className="flex items-center gap-3 text-[13px]">
+                        <span className="status-dot h-2 w-2" style={{ background: t.color }} />
+                        <span className="flex-1 text-foreground">{t.name}</span>
+                        <span className="font-mono text-[12px] text-muted-foreground">{t.value}</span>
+                        <span className="w-10 text-right font-mono text-[12px] tabular-nums text-foreground">{pct}%</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-muted-foreground">
                 <div className="text-center">
@@ -435,18 +449,22 @@ const Dashboard = () => {
             {data.avgTalkRatio ? (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Vendedor: {data.avgTalkRatio.seller}%</span>
-                    <span>Lead: {data.avgTalkRatio.lead}%</span>
+                  <div className="flex items-end justify-between">
+                    <div><div className="eyebrow">Vendedor</div><div className="metric mt-1 text-[26px] leading-none">{data.avgTalkRatio.seller}%</div></div>
+                    <div className="text-right"><div className="eyebrow">Lead</div><div className="metric mt-1 text-[26px] leading-none text-muted-foreground">{data.avgTalkRatio.lead}%</div></div>
                   </div>
                   <Progress value={data.avgTalkRatio.seller} />
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+                  <span
+                    className="status-dot"
+                    style={{ background: data.avgTalkRatio.seller > 60 ? "hsl(var(--warning))" : "hsl(var(--success))" }}
+                  />
                   {data.avgTalkRatio.seller > 60
-                    ? "⚠️ Vendedor está falando mais que o recomendado. O ideal é ouvir mais o lead."
+                    ? "Vendedor falando mais que o recomendado. O ideal é ouvir mais o lead."
                     : data.avgTalkRatio.seller < 40
-                    ? "✅ Boa escuta ativa! Dando espaço para o lead."
-                    : "👍 Proporção equilibrada de fala."}
+                    ? "Boa escuta ativa: o lead tem espaço para falar."
+                    : "Proporção equilibrada de fala."}
                 </p>
               </div>
             ) : (
@@ -469,13 +487,13 @@ const Dashboard = () => {
               <div className="space-y-3">
                 {data.sellerRanking.map((seller, idx) => (
                   <div key={idx} className="flex items-center gap-3">
-                    {!isFiltered && <span className="text-lg font-bold text-muted-foreground w-6">{idx + 1}°</span>}
+                    {!isFiltered && <span className="w-6 font-mono text-[12px] text-muted-foreground">{String(idx + 1).padStart(2, "0")}</span>}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-sm font-medium truncate">{seller.name}</span>
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">{seller.meetings} agendas</Badge>
-                          <span className="text-sm font-bold text-primary">{seller.avgScore}</span>
+                          <span className="text-[12px] text-muted-foreground">{seller.meetings} agendas</span>
+                          <span className="w-8 text-right font-mono text-[13px] font-medium tabular-nums text-foreground">{seller.avgScore}</span>
                         </div>
                       </div>
                       <Progress value={seller.avgScore} className="h-1.5" />
@@ -500,16 +518,16 @@ function FrameworkCard({ title, items, maxValue }: { title: string; items: { key
   return (
     <Card className="glass-card card-hover-glow">
       <CardHeader>
-        <CardTitle className="text-sm">{title}</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>Média das reuniões</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {items.length > 0 ? (
           items.map((item) => (
             <div key={item.key} className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span>{item.label}</span>
-                <span>{item.avg}/{maxValue}</span>
+              <div className="flex justify-between text-[13px]">
+                <span className="text-foreground">{item.label}</span>
+                <span className="font-mono text-[12px] tabular-nums text-muted-foreground">{item.avg}<span className="opacity-50">/{maxValue}</span></span>
               </div>
               <Progress value={(item.avg / maxValue) * 100} className="h-1.5" />
             </div>

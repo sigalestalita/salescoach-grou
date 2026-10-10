@@ -649,11 +649,11 @@ const Roleplay = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-gradient text-white">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-border bg-card text-primary">
           <Dumbbell className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-[26px] font-medium tracking-[-0.025em]">
             {revisando ? "Treino anterior" : feedback ? "Avaliação do treino" : session ? "Treino em andamento" : "Modo de treino"}
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -735,7 +735,7 @@ const Roleplay = () => {
                 <button
                   type="button"
                   onClick={() => setMode("texto")}
-                  className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors ${mode === "texto" ? "border-primary bg-primary/5" : "border-border/70 hover:bg-accent"}`}
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${mode === "texto" ? "border-primary bg-primary/5" : "border-border/70 hover:bg-accent"}`}
                 >
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted"><MessageSquare className="h-4 w-4" /></div>
                   <div><div className="text-sm font-medium">Texto</div><div className="text-xs text-muted-foreground">Digite, como num chat</div></div>
@@ -745,7 +745,7 @@ const Roleplay = () => {
                   onClick={() => speechOk && setMode("chamada")}
                   disabled={!speechOk}
                   title={speechOk ? undefined : "Este navegador não permite gravar áudio"}
-                  className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${mode === "chamada" ? "border-primary bg-primary/5" : "border-border/70 hover:bg-accent"}`}
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${mode === "chamada" ? "border-primary bg-primary/5" : "border-border/70 hover:bg-accent"}`}
                 >
                   <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted"><Phone className="h-4 w-4" /></div>
                   <div>
@@ -842,7 +842,7 @@ const Roleplay = () => {
                 {m.role === "seller" && !!m.audios?.length && (
                   <BotaoOuvir tocando={tocando === i} onOuvir={() => ouvir(i)} onParar={pararDeOuvir} temAudio={!!m.audios?.length} />
                 )}
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "seller" ? "bg-brand-gradient text-white" : "bg-muted text-foreground"} ${tocando === i ? "ring-2 ring-primary/50" : ""}`}>
+                <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "seller" ? "bg-primary text-white" : "bg-muted text-foreground"} ${tocando === i ? "ring-2 ring-primary/50" : ""}`}>
                   {m.content}
                 </div>
                 {m.role === "lead" && (m.audios?.length || mode === "chamada") && (
@@ -852,7 +852,7 @@ const Roleplay = () => {
             ))}
             {mode === "chamada" && (callPhase === "gravando" || callPhase === "transcrevendo") && (
               <div className="flex justify-end">
-                <div className="flex max-w-[80%] items-center gap-2 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm italic text-muted-foreground">
+                <div className="flex max-w-[80%] items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-2.5 text-sm italic text-muted-foreground">
                   {callPhase === "gravando" ? (
                     <>
                       <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-destructive" />
@@ -867,7 +867,7 @@ const Roleplay = () => {
             )}
             {(sending || callPhase === "pensando") && (
               <div className="flex justify-start">
-                <div className="rounded-2xl bg-muted px-4 py-2.5 text-sm text-muted-foreground">{session.persona.name.split(" ")[0]} está digitando…</div>
+                <div className="rounded-xl bg-muted px-4 py-2.5 text-sm text-muted-foreground">{session.persona.name.split(" ")[0]} está digitando…</div>
               </div>
             )}
           </div>
@@ -980,7 +980,7 @@ const Roleplay = () => {
 
           {feedback.bant_score && (
             <Card>
-              <CardHeader><CardTitle className="text-sm">Critérios da metodologia</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Critérios da metodologia</CardTitle></CardHeader>
               <CardContent className="grid gap-3 sm:grid-cols-2">
                 {Object.entries(feedback.bant_score).map(([key, val]) => (
                   <div key={key} className="rounded-xl border border-border/70 p-3">
@@ -1017,7 +1017,7 @@ const Roleplay = () => {
 
           {!!feedback.sales_coach?.next_steps?.length && (
             <Card>
-              <CardHeader><CardTitle className="text-sm">Para a próxima vez</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Para a próxima vez</CardTitle></CardHeader>
               <CardContent>
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   {feedback.sales_coach.next_steps.map((s, i) => <li key={i}>• {s}</li>)}
@@ -1033,7 +1033,7 @@ const Roleplay = () => {
       {!!history.length && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Treinos recentes</CardTitle>
+            <CardTitle>Treinos recentes</CardTitle>
             <CardDescription className="text-xs">Abra um treino para rever a conversa, ouvir a chamada e ver a avaliação.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -1045,7 +1045,7 @@ const Roleplay = () => {
                 disabled={!!carregandoRevisao}
                 className="flex w-full items-center gap-3 rounded-xl border border-border/70 p-3 text-left transition hover:border-primary/40 hover:bg-muted/50 disabled:opacity-60"
               >
-                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted text-sm font-bold tabular-nums">{h.overall_score ?? "--"}</div>
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted text-sm font-semibold tabular-nums">{h.overall_score ?? "--"}</div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{h.persona?.name} · {h.persona?.company}</div>
                   <div className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleDateString("pt-BR")}</div>

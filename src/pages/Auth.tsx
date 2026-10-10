@@ -251,24 +251,21 @@ const Auth = () => {
       {/* Painel de acesso */}
       <div
         ref={stageRef}
-        className="aurora-bg relative flex flex-1 items-center justify-center overflow-hidden px-5 py-10"
+        className="relative flex flex-1 items-center justify-center overflow-hidden border-l border-border bg-background px-5 py-10"
       >
-        <div className="dot-grid" aria-hidden="true" />
-        <div className="orb -right-24 -top-24 h-[420px] w-[420px] bg-[hsl(214_80%_60%/0.35)]" aria-hidden="true" />
-        <div className="orb orb-2 -bottom-32 -left-20 h-[380px] w-[380px] bg-[hsl(200_90%_70%/0.22)]" aria-hidden="true" />
-        <div className="orb orb-3 left-1/2 top-1/3 h-[260px] w-[260px] bg-[hsl(230_70%_65%/0.18)]" aria-hidden="true" />
-        <div className="scan-line" aria-hidden="true" />
+        {/* Fundo quase liso: um brilho muito suave da cor da marca, sem animação de ambiente */}
+        <div className="pointer-events-none absolute -right-40 -top-40 h-[520px] w-[520px] rounded-full bg-[radial-gradient(closest-side,hsl(var(--primary)/0.08),transparent)]" aria-hidden="true" />
 
         <div className="relative w-full max-w-[400px]">
           {/* Marca compacta: só em telas sem o painel esquerdo */}
           <div className="mb-6 flex items-center justify-center gap-2.5 lg:hidden">
-            <img src={branding.logo_url ?? markWhite} alt="" className="h-8 w-8 object-contain" />
-            <span className="text-lg font-semibold text-white">{branding.product_name}</span>
+            <img src={branding.logo_url ?? mark} alt="" className="h-8 w-8 object-contain" />
+            <span className="font-brand text-lg font-semibold text-foreground">{branding.product_name}</span>
           </div>
 
-          <div className="auth-card-in rounded-lg border border-white/10 bg-card p-7 shadow-[0_24px_60px_-20px_rgba(7,26,52,0.55)] sm:p-8">
+          <div className="auth-card-in rounded-xl border border-border bg-card p-7 shadow-float sm:p-8">
             <div className="mb-6">
-              <h2 className="text-xl font-semibold tracking-tight text-foreground">Entrar</h2>
+              <h2 className="text-[22px] font-medium tracking-[-0.02em] text-foreground">Entrar</h2>
               <p className="mt-1 text-sm text-muted-foreground">Acesse sua conta para analisar reuniões.</p>
             </div>
 

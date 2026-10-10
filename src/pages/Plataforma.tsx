@@ -247,7 +247,7 @@ const Plataforma = () => {
           <div className="flex items-center gap-3">
             <Building2 className="h-5 w-5 text-primary" />
             <div>
-              <h1 className="text-lg font-bold leading-tight">Painel da plataforma</h1>
+              <h1 className="text-lg font-semibold leading-tight">Painel da plataforma</h1>
               <p className="text-xs text-muted-foreground">{branding.product_name} · empresas clientes, planos e consumo</p>
             </div>
           </div>

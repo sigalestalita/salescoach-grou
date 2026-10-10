@@ -233,9 +233,8 @@ export default function ArgumentGenerator() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Zap className="h-6 w-6 text-primary" />
-          Gerador de Argumentos Comerciais
+        <h1 className="text-[26px] font-medium tracking-[-0.025em] text-foreground">
+          Gerador de argumentos
         </h1>
         <p className="text-muted-foreground mt-1">
           Gere argumentos personalizados, ROI-driven, com base nas dores do cliente
@@ -442,7 +441,7 @@ export default function ArgumentGenerator() {
                       <div className="flex gap-4 text-xs text-muted-foreground pt-1 border-t border-border/30">
                         <span><strong className="text-primary">Solução:</strong> {arg.solution}</span>
                       </div>
-                      <p className="text-xs text-primary/80 font-medium">💰 {arg.financialImpact}</p>
+                      <p className="text-xs text-primary/80 font-medium">{arg.financialImpact}</p>
                     </CardContent>
                   </Card>
                 )) || <p className="text-muted-foreground text-sm">Nenhum argumento gerado.</p>}

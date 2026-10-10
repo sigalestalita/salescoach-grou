@@ -172,8 +172,8 @@ const Configuracoes = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Configurações</h1>
-        <p className="text-muted-foreground">Configurações do sistema e preferências</p>
+        <h1 className="text-[26px] font-medium tracking-[-0.025em]">Configurações</h1>
+        <p className="mt-1 text-muted-foreground">Configurações do sistema e preferências</p>
       </div>
 
       {/* Admin User Management */}

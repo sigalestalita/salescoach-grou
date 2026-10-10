@@ -235,7 +235,7 @@ const Conhecimento = () => {
       }
 
       if (pendingDocs.length === 0) {
-        toast({ title: "IA já treinada! ✅", description: `Todos os ${docs.length} documentos e ${items.length} itens já estão processados e prontos para uso nas análises.` });
+        toast({ title: "A IA já está atualizada", description: `Todos os ${docs.length} documentos e ${items.length} itens já estão processados e prontos para uso nas análises.` });
         setTraining(false);
         return;
       }
@@ -264,7 +264,7 @@ const Conhecimento = () => {
       await fetchData();
 
       if (errorCount === 0) {
-        toast({ title: "IA treinada com sucesso! 🎉", description: `${successCount} documento(s) processado(s). A IA usará esse conhecimento nas próximas análises.` });
+        toast({ title: "Base de conhecimento processada", description: `${successCount} documento(s) processado(s). A IA usará esse conhecimento nas próximas análises.` });
       } else {
         toast({ title: "Treinamento parcial", description: `${successCount} extraído(s), ${errorCount} com erro.`, variant: "destructive" });
       }
@@ -282,8 +282,8 @@ const Conhecimento = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Base de Conhecimento</h1>
-          <p className="text-muted-foreground">Documentos, produtos, serviços e cases da empresa</p>
+          <h1 className="text-[26px] font-medium tracking-[-0.025em]">Base de Conhecimento</h1>
+          <p className="mt-1 text-muted-foreground">Documentos, produtos, serviços e cases da empresa</p>
         </div>
         {isAdmin && (
           <div className="flex items-center gap-3">

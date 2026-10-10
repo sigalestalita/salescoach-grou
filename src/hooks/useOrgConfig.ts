@@ -113,8 +113,21 @@ export function useOrgConfig() {
 
 /** Mapa key → rótulo com ícone, para listas e badges de temperatura. */
 export function temperatureLabels(levels: TemperatureLevel[]): Record<string, string> {
-  return levels.reduce<Record<string, string>>((acc, level, index) => {
-    acc[level.key] = `${temperatureIcon(index, levels.length)} ${level.label}`;
+  return levels.reduce<Record<string, string>>((acc, level) => {
+    acc[level.key] = level.label;
     return acc;
   }, {});
+}
+
+/**
+ * Cor da faixa de temperatura, da mais fria (cinza, azul) à mais quente
+ * (âmbar, vermelho). Funciona com qualquer quantidade de faixas configuradas.
+ */
+export function temperatureColor(key: string | null | undefined, levels: TemperatureLevel[]): string {
+  const scale = ["220 8% 62%", "var(--temp-cold)", "var(--temp-warm)", "var(--temp-hot)", "4 66% 42%"];
+  const index = levels.findIndex((l) => l.key === key);
+  if (index < 0) return "hsl(var(--muted-foreground))";
+  const position = levels.length <= 1 ? scale.length - 2 : Math.round((index / (levels.length - 1)) * (scale.length - 1));
+  const value = scale[position];
+  return `hsl(${value})`;
 }

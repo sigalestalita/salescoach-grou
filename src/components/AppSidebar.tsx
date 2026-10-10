@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import mark from "@/assets/salescoach-mark.png";
 import markWhite from "@/assets/salescoach-mark-white.png";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranding } from "@/contexts/BrandingContext";
@@ -39,7 +40,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 /**
  * Menu lateral.
  *
- * Painel flutuante navy com cantos grandes. Um seletor no topo alterna entre
+ * Coluna clara, do mesmo tom do fundo, separada por uma linha fina. Quando a
+ * organização define um fundo escuro para o menu, as cores do texto se
+ * invertem sozinhas (BrandingContext). Um seletor no topo alterna entre
  * as duas frentes do produto — Vendas (o dia a dia das reuniões) e Gestão
  * (time, configurações, plataforma) — e a aba acompanha a rota ativa. O logo
  * e o nome vêm da organização quando ela os definiu; caso contrário, a marca
@@ -121,15 +124,14 @@ const ROLE_LABELS: Record<string, string> = {
 const PROCESSING_STATUSES = ["enviado", "baixando", "transcrevendo", "analisando"];
 
 const MENU_BUTTON_CLASS =
-  "h-10 px-3 text-[13.5px] font-medium text-sidebar-foreground/75 " +
-  "hover:bg-white/[.06] hover:text-sidebar-foreground " +
-  "data-[active=true]:bg-white/[.12] data-[active=true]:text-sidebar-foreground data-[active=true]:font-semibold " +
-  "data-[active=true]:shadow-[inset_0_1px_0_rgba(255,255,255,.08)] " +
-  "group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!w-10 group-data-[collapsible=icon]:justify-center " +
-  "[&>svg]:size-[19px] [&>svg]:opacity-75 data-[active=true]:[&>svg]:opacity-100";
+  "h-8 rounded-md px-2.5 text-[13.5px] font-normal text-sidebar-foreground/70 " +
+  "hover:bg-sidebar-foreground/[.05] hover:text-sidebar-foreground " +
+  "data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:font-medium " +
+  "data-[active=true]:shadow-[0_1px_2px_hsl(var(--shadow-color)/0.06),0_0_0_1px_hsl(var(--sidebar-border))] " +
+  "group-data-[collapsible=icon]:!h-8 group-data-[collapsible=icon]:!w-8 group-data-[collapsible=icon]:justify-center " +
+  "[&>svg]:size-4 [&>svg]:opacity-60 data-[active=true]:[&>svg]:opacity-100";
 
-const GROUP_LABEL_CLASS =
-  "px-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/45";
+const GROUP_LABEL_CLASS = "h-7 px-2.5 text-[11.5px] font-normal text-sidebar-foreground/45";
 
 /** Reuniões ainda em processamento na organização — aparece como contador em "Agendas". */
 function useProcessingCount(enabled: boolean) {
@@ -153,7 +155,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const { profile, role, signOut, session } = useAuth();
-  const { branding } = useBranding();
+  const { branding, sidebarDark } = useBranding();
   const { isPlatformAdmin } = usePlatformAdmin();
   const processing = useProcessingCount(!!session);
 
@@ -203,10 +205,10 @@ export function AppSidebar() {
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title} className={MENU_BUTTON_CLASS}>
           <NavLink to={item.url} end={item.end}>
-            <item.icon strokeWidth={1.75} />
+            <item.icon strokeWidth={1.5} />
             {!collapsed && <span className="flex-1 truncate">{item.title}</span>}
             {!collapsed && count > 0 && (
-              <span className="rounded-full bg-warning px-1.5 py-0.5 text-[10.5px] font-bold leading-none text-warning-foreground">
+              <span className="rounded-md border border-sidebar-border bg-sidebar-accent px-1.5 py-0.5 font-mono text-[10.5px] font-medium leading-none text-sidebar-foreground/70">
                 {count}
               </span>
             )}
@@ -217,26 +219,26 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" variant="floating" className="border-0">
-      <SidebarHeader className="px-3 pb-1 pt-3">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+      <SidebarHeader className="px-3 pb-1 pt-4">
         <button
           type="button"
           onClick={toggleSidebar}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="flex w-full items-center gap-2.5 rounded-2xl p-1.5 text-left transition-colors hover:bg-white/[.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1"
+          className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-sidebar-foreground/[.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1"
         >
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/[.08] ring-1 ring-white/10">
-            <img src={branding.logo_url ?? markWhite} alt={branding.product_name} className="h-6 w-6 object-contain" />
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent">
+            <img src={branding.logo_url ?? (sidebarDark ? markWhite : mark)} alt={branding.product_name} className="h-[18px] w-[18px] object-contain" />
           </div>
           {!collapsed && (
             <>
               <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-[14.5px] font-semibold text-sidebar-foreground">{branding.product_name}</div>
+                <div className="truncate font-brand text-[14px] font-semibold tracking-[-0.01em] text-sidebar-foreground">{branding.product_name}</div>
                 {branding.org_name && branding.org_name !== branding.product_name && (
                   <div className="truncate text-[11px] text-sidebar-foreground/55">{branding.org_name}</div>
                 )}
               </div>
-              <ChevronsUpDown className="h-4 w-4 shrink-0 text-sidebar-foreground/45" />
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-sidebar-foreground/40" />
             </>
           )}
         </button>
@@ -260,27 +262,27 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
 
-      <SidebarContent className="gap-1 px-2 pt-2">
+      <SidebarContent className="gap-0 px-2 pt-3">
         {(collapsed ? tabs.flatMap((t) => t.groups) : current?.groups ?? []).map((group) => (
           <SidebarGroup key={group.label} className="py-1">
             <SidebarGroupLabel className={GROUP_LABEL_CLASS}>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="gap-1">{group.items.map(renderItem)}</SidebarMenu>
+              <SidebarMenu className="gap-0.5">{group.items.map(renderItem)}</SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
       </SidebarContent>
 
       <SidebarFooter className="px-3 pb-3 pt-2">
-        <div className="flex items-center gap-2.5 rounded-2xl bg-white/[.06] p-2 ring-1 ring-white/[.06] group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:ring-0">
-          <Avatar className="h-9 w-9 shrink-0 rounded-full">
-            <AvatarFallback className="rounded-full bg-gradient-to-br from-sidebar-primary to-sidebar-accent text-[11.5px] font-semibold text-white">
+        <div className="flex items-center gap-2.5 rounded-lg border-t border-sidebar-border p-1.5 pt-3 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:ring-0">
+          <Avatar className="h-8 w-8 shrink-0 rounded-full">
+            <AvatarFallback className="rounded-full border border-sidebar-border bg-sidebar-accent text-[11px] font-medium text-sidebar-foreground">
               {initials}
             </AvatarFallback>
           </Avatar>
           {!collapsed && (
             <div className="flex min-w-0 flex-1 flex-col leading-tight">
-              <span className="truncate text-[13px] font-semibold text-sidebar-foreground">
+              <span className="truncate text-[13px] font-medium text-sidebar-foreground">
                 {profile?.full_name || "Usuário"}
               </span>
               <span className="truncate text-[11px] text-sidebar-foreground/55">{role ? ROLE_LABELS[role] : ""}</span>
@@ -292,7 +294,7 @@ export function AppSidebar() {
               onClick={signOut}
               title="Sair"
               aria-label="Sair"
-              className="rounded-xl p-2 text-sidebar-foreground/55 transition-colors hover:bg-white/[.08] hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              className="rounded-md p-1.5 text-sidebar-foreground/45 transition-colors hover:bg-sidebar-foreground/[.06] hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             >
               <LogOut className="h-4 w-4" />
             </button>

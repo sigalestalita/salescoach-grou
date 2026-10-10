@@ -37,7 +37,7 @@ export const PLATFORM_BRANDING: Branding = {
   primary_hsl: "214 74% 32%",
   primary_fg_hsl: "0 0% 100%",
   accent_hsl: "214 74% 45%",
-  sidebar_hsl: "212 76% 12%",
+  sidebar_hsl: "60 9% 97%",
   login_headline: null,
   login_subheadline: null,
   support_email: null,
@@ -45,6 +45,8 @@ export const PLATFORM_BRANDING: Branding = {
 
 interface BrandingContextValue {
   branding: Branding;
+  /** Menu lateral com fundo escuro (texto claro). */
+  sidebarDark: boolean;
   loading: boolean;
   /** Recarrega a marca — usado depois de salvar nas configurações. */
   refresh: () => Promise<void>;
@@ -52,6 +54,7 @@ interface BrandingContextValue {
 
 const BrandingContext = createContext<BrandingContextValue>({
   branding: PLATFORM_BRANDING,
+  sidebarDark: false,
   loading: true,
   refresh: async () => {},
 });
@@ -74,6 +77,56 @@ export function slugFromHost(hostname: string): string | null {
   return slug;
 }
 
+/** Lê "H S% L%" e devolve [h, s, l]; null se o formato não bater. */
+function parseHsl(value: string): [number, number, number] | null {
+  const m = value.trim().match(/^(-?[\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+/**
+ * O navy escuro era o fundo padrão do menu até a v2. Organizações que nunca
+ * mudaram essa cor recebem o menu claro novo; quem escolheu outra cor mantém
+ * a sua.
+ */
+export function isLegacySidebar(value: string): boolean {
+  const hsl = parseHsl(value);
+  if (!hsl) return false;
+  const [h, sat, l] = hsl;
+  return h >= 205 && h <= 220 && sat >= 60 && sat <= 90 && l >= 8 && l <= 16;
+}
+
+/** Menu escuro quando a organização define um fundo de pouca luminosidade. */
+export function isDarkSidebar(value: string): boolean {
+  if (isLegacySidebar(value)) return false;
+  const hsl = parseHsl(value);
+  return !!hsl && hsl[2] < 45;
+}
+
+const SIDEBAR_VARS = ["--sidebar-background", "--sidebar-foreground", "--sidebar-accent", "--sidebar-accent-foreground", "--sidebar-border"];
+
+function applySidebar(value: string) {
+  const root = document.documentElement;
+  const hsl = parseHsl(value);
+  if (!hsl || isLegacySidebar(value)) {
+    // Sem cor própria: o menu segue o tema (claro ou escuro) da plataforma.
+    SIDEBAR_VARS.forEach((v) => root.style.removeProperty(v));
+    return;
+  }
+  const [h, sat, l] = hsl;
+  root.style.setProperty("--sidebar-background", value);
+  if (l < 45) {
+    root.style.setProperty("--sidebar-foreground", "0 0% 98%");
+    root.style.setProperty("--sidebar-accent", `${h} ${sat}% ${Math.min(100, l + 7)}%`);
+    root.style.setProperty("--sidebar-accent-foreground", "0 0% 100%");
+    root.style.setProperty("--sidebar-border", `${h} ${Math.max(0, sat - 15)}% ${Math.min(100, l + 12)}%`);
+  } else {
+    root.style.setProperty("--sidebar-foreground", "225 10% 12%");
+    root.style.setProperty("--sidebar-accent", "0 0% 100%");
+    root.style.setProperty("--sidebar-accent-foreground", "225 10% 9%");
+    root.style.setProperty("--sidebar-border", `${h} ${Math.min(sat, 12)}% ${Math.max(0, l - 8)}%`);
+  }
+}
+
 function applyTokens(branding: Branding) {
   const root = document.documentElement;
   root.style.setProperty("--primary", branding.primary_hsl);
@@ -82,7 +135,7 @@ function applyTokens(branding: Branding) {
   root.style.setProperty("--sidebar-primary", branding.primary_hsl);
   root.style.setProperty("--sidebar-primary-foreground", branding.primary_fg_hsl);
   root.style.setProperty("--sidebar-ring", branding.primary_hsl);
-  root.style.setProperty("--sidebar-background", branding.sidebar_hsl);
+  applySidebar(branding.sidebar_hsl);
   root.style.setProperty("--brand-accent", branding.accent_hsl);
 
   document.title = branding.product_name;
@@ -173,7 +226,7 @@ export const BrandingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [refresh]);
 
   return (
-    <BrandingContext.Provider value={{ branding, loading, refresh }}>
+    <BrandingContext.Provider value={{ branding, sidebarDark: isDarkSidebar(branding.sidebar_hsl), loading, refresh }}>
       {children}
     </BrandingContext.Provider>
   );

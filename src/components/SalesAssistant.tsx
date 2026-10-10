@@ -127,19 +127,20 @@ export function SalesAssistant() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Fechar assistente" : "Abrir assistente de vendas"}
-        className="fixed bottom-5 right-5 z-50 grid h-14 w-14 place-items-center rounded-full bg-brand-gradient text-white shadow-[0_16px_40px_-14px_hsl(var(--brand-navy)/0.7)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="fixed bottom-5 right-5 z-50 flex h-10 items-center gap-2 rounded-full border border-border bg-card pl-3 pr-4 text-[13px] font-medium text-foreground shadow-float transition-[transform,box-shadow] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25"
       >
-        {open ? <X className="h-6 w-6" /> : <MessageCircleQuestion className="h-6 w-6" />}
+        {open ? <X className="h-4 w-4" /> : <MessageCircleQuestion className="h-4 w-4 text-primary" />}
+        {open ? "Fechar" : "Perguntar"}
       </button>
 
       {open && (
-        <div className="fixed bottom-24 right-5 z-50 flex h-[min(560px,70vh)] w-[min(380px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-[22px] border border-border/70 bg-card shadow-[0_30px_70px_-24px_hsl(var(--brand-navy)/0.5)]">
-          <div className="flex items-center justify-between gap-2 bg-brand-gradient px-4 py-3 text-white">
+        <div className="fixed bottom-[68px] right-5 z-50 flex h-[min(560px,70vh)] w-[min(380px,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-float">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
             <div className="min-w-0">
-              <div className="text-sm font-semibold">Assistente de vendas</div>
-              <div className="text-[11px] text-white/70">Pergunte sobre suas agendas</div>
+              <div className="text-[14px] font-medium">Assistente de vendas</div>
+              <div className="text-[12px] text-muted-foreground">Pergunte sobre suas agendas</div>
             </div>
-            <button type="button" onClick={startNew} title="Nova conversa" aria-label="Nova conversa" className="rounded-lg p-1.5 text-white/80 hover:bg-white/15 hover:text-white">
+            <button type="button" onClick={startNew} title="Nova conversa" aria-label="Nova conversa" className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground">
               <RotateCcw className="h-4 w-4" />
             </button>
           </div>
@@ -154,7 +155,7 @@ export function SalesAssistant() {
                       key={s}
                       type="button"
                       onClick={() => send(s)}
-                      className="rounded-xl border border-border/70 px-3 py-2 text-left text-xs text-foreground hover:border-primary/40 hover:bg-accent"
+                      className="rounded-lg border border-border px-3 py-2 text-left text-[12.5px] text-foreground transition-colors hover:bg-secondary"
                     >
                       {s}
                     </button>
@@ -164,14 +165,14 @@ export function SalesAssistant() {
             )}
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[85%] space-y-0.5 rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed ${m.role === "user" ? "whitespace-pre-wrap bg-brand-gradient text-white" : "bg-muted text-foreground"}`}>
+                <div className={`max-w-[85%] space-y-0.5 rounded-xl px-3.5 py-2 text-[13px] leading-relaxed ${m.role === "user" ? "whitespace-pre-wrap bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
                   {m.role === "assistant" ? renderRich(m.content) : m.content}
                 </div>
               </div>
             ))}
             {sending && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-1.5 rounded-2xl bg-muted px-3.5 py-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 rounded-xl bg-secondary px-3.5 py-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" /> consultando as agendas…
                 </div>
               </div>
@@ -179,7 +180,7 @@ export function SalesAssistant() {
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>
 
-          <div className="flex items-end gap-2 border-t border-border/70 p-3">
+          <div className="flex items-end gap-2 border-t border-border p-3">
             <Textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

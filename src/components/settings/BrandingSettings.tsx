@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useBranding } from "@/contexts/BrandingContext";
+import { useBranding, isLegacySidebar, PLATFORM_BRANDING } from "@/contexts/BrandingContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -94,7 +94,7 @@ export const BrandingSettings = () => {
     setProductName(branding.product_name);
     setPrimary(hslToHex(branding.primary_hsl));
     setAccent(hslToHex(branding.accent_hsl));
-    setSidebar(hslToHex(branding.sidebar_hsl));
+    setSidebar(hslToHex(isLegacySidebar(branding.sidebar_hsl) ? PLATFORM_BRANDING.sidebar_hsl : branding.sidebar_hsl));
     setHeadline(branding.login_headline ?? "");
     setSubheadline(branding.login_subheadline ?? "");
     setSupportEmail(branding.support_email ?? "");
