@@ -194,6 +194,36 @@ async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: strin
   throw new Error("AssemblyAI: transcription timed out after 30 minutes");
 }
 
+// ── Gravações .webm da extensão ─────────────────────────────────────────────
+// Um .webm válido começa com o cabeçalho EBML (1A 45 DF A3). Versões antigas da
+// extensão (até 1.6.0) podiam salvar pedaços de uma gravação anterior antes do
+// cabeçalho, ou perder o cabeçalho: a AssemblyAI recusa o arquivo ("Transcoding
+// failed ... application/octet-stream"). Se o cabeçalho estiver mais à frente,
+// cortamos o lixo do início; se não existir, a gravação não tem conserto.
+const EBML = [0x1a, 0x45, 0xdf, 0xa3];
+const GRAVACAO_CORROMPIDA =
+  "A gravação chegou corrompida e não pode ser transcrita. Isso acontecia na extensão até a versão 1.6.0: " +
+  "baixe a versão mais recente na página Extensão, reinstale no Chrome e grave a próxima reunião novamente.";
+
+async function repararWebm(blob: Blob): Promise<Blob | null> {
+  const inicio = new Uint8Array(await blob.slice(0, 8 * 1024 * 1024).arrayBuffer());
+  for (let i = 0; i + 3 < inicio.length; i++) {
+    if (inicio[i] === EBML[0] && inicio[i + 1] === EBML[1] && inicio[i + 2] === EBML[2] && inicio[i + 3] === EBML[3]) {
+      if (i > 0) console.log(`webm: cabeçalho EBML no byte ${i}, descartando o início`);
+      return i === 0 ? blob : blob.slice(i, blob.size, "video/webm");
+    }
+  }
+  return null;
+}
+
+function mensagemAmigavel(msg: string): string {
+  if (/Transcoding failed|may be unsupported|octet-stream/i.test(msg)) return GRAVACAO_CORROMPIDA;
+  if (/does not appear to contain audio|no spoken audio|audio duration/i.test(msg)) {
+    return "Não encontramos áudio na gravação. Confira se o microfone e o áudio da aba estavam liberados para a extensão e grave novamente.";
+  }
+  return msg;
+}
+
 async function uploadToAssemblyAI(fileData: Blob): Promise<string> {
   const apiKey = Deno.env.get("ASSEMBLYAI_API_KEY")!;
   console.log("Uploading file to AssemblyAI...");
@@ -313,17 +343,27 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         return;
       }
 
+      let audio: Blob = fileData;
+      if (/\.webm$/i.test(meeting.file_url) || meeting.file_type === "webm") {
+        const reparado = await repararWebm(fileData);
+        if (!reparado) {
+          await supabase.from("meetings").update({ status: "erro", error_message: GRAVACAO_CORROMPIDA }).eq("id", meetingId);
+          return;
+        }
+        audio = reparado;
+      }
+
       await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
 
       const assemblyKey = Deno.env.get("ASSEMBLYAI_API_KEY");
       if (assemblyKey) {
-        const uploadUrl = await uploadToAssemblyAI(fileData);
+        const uploadUrl = await uploadToAssemblyAI(audio);
         const result = await transcribeWithAssemblyAI(uploadUrl);
         transcript = result.text;
         speakers = result.speakers;
       } else {
         const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
-        transcript = await transcribeWithGroq(fileData, fileName);
+        transcript = await transcribeWithGroq(audio, fileName);
       }
 
       await logUsage(supabase, {
@@ -504,7 +544,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
     const errorMessage = error instanceof Error ? error.message : "Erro desconhecido durante o processamento.";
     await supabase
       .from("meetings")
-      .update({ status: "erro", error_message: errorMessage })
+      .update({ status: "erro", error_message: mensagemAmigavel(errorMessage) })
       .eq("id", meetingId);
   }
 }
