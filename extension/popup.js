@@ -93,6 +93,16 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   showLoginUI();
 });
 
+// ── Sugestão automática ao entrar numa reunião ──
+const autoDetectEl = document.getElementById('auto-detect');
+async function loadAutoDetect() {
+  const { autoDetect } = await chrome.storage.local.get(['autoDetect']);
+  autoDetectEl.checked = autoDetect !== false;
+}
+autoDetectEl.addEventListener('change', () => {
+  chrome.storage.local.set({ autoDetect: autoDetectEl.checked });
+});
+
 // ── UI ──
 function showLoginUI() {
   loginSection.classList.remove('hidden');
@@ -101,6 +111,7 @@ function showLoginUI() {
 }
 
 function showRecordingUI() {
+  loadAutoDetect();
   loginSection.classList.add('hidden');
   recordingSection.classList.remove('hidden');
   statusDot.classList.remove('offline');
@@ -133,6 +144,8 @@ async function loadMeetingTypes() {
 
     const types = await res.json();
     select.innerHTML = '';
+    // O cartão que aparece ao entrar numa reunião usa a mesma lista.
+    if (Array.isArray(types)) chrome.storage.local.set({ meetingTypesCache: types });
 
     if (!Array.isArray(types) || types.length === 0) {
       select.innerHTML = '<option value="">Sem tipos configurados</option>';

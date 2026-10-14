@@ -12,7 +12,14 @@ chrome.storage.local.get(['recordingState'], (data) => {
 });
 
 // Listen for messages from content script and popup
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  // O cartão "Gravar esta reunião?" (autodetect.js) pede o gravador na própria aba.
+  if (msg.action === 'injectRecorder' && sender.tab?.id) {
+    const target = { tabId: sender.tab.id };
+    chrome.scripting.insertCSS({ target, files: ['content.css'] })
+      .then(() => chrome.scripting.executeScript({ target, files: ['content.js'] }))
+      .catch((err) => console.error('Sales Coach: falha ao iniciar o gravador', err));
+  }
   if (msg.action === 'recordingStarted') {
     setBadge('REC');
   }

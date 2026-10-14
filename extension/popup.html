@@ -39,6 +39,8 @@
     .separator { height: 1px; background: var(--line); margin: 10px 0; }
     .logout-link { font-size: 11px; color: var(--ink-faint); text-align: center; cursor: pointer; }
     .logout-link:hover { color: var(--ink-soft); }
+    .auto-detect { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--ink-soft); margin: 0 0 10px; cursor: pointer; }
+    .auto-detect input { margin-top: 2px; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -106,6 +108,7 @@
       <div id="upload-status" class="hidden"></div>
 
       <div class="separator"></div>
+      <label class="auto-detect"><input type="checkbox" id="auto-detect"> Oferecer gravação ao entrar numa reunião do Meet ou do Teams</label>
       <div class="logout-link" id="btn-logout">Sair da conta</div>
     </div>
   </div>

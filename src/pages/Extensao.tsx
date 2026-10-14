@@ -115,13 +115,13 @@ export default function Extensao() {
           <CardTitle className="text-foreground">Como Usar</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>1. Clique no ícone da extensão na barra do Chrome</p>
-          <p>2. Faça login com suas credenciais do Sales Coach</p>
-          <p>3. Preencha o título da agenda e dados do lead</p>
-          <p>4. Clique em <strong className="text-foreground">"Iniciar Gravação"</strong> e selecione a tela/aba</p>
-          <p>5. Realize sua reunião normalmente</p>
-          <p>6. Ao finalizar, clique em <strong className="text-foreground">"Parar e Enviar"</strong></p>
-          <p>7. A gravação será enviada e analisada automaticamente</p>
+          <p>1. Clique no ícone da extensão na barra do Chrome e faça login com suas credenciais do Sales Coach (só na primeira vez)</p>
+          <p>2. Entre na reunião no Meet ou no Teams: a extensão pergunta <strong className="text-foreground">"Gravar esta reunião?"</strong> com o título já preenchido</p>
+          <p>3. Clique em <strong className="text-foreground">"Gravar"</strong> e, na janela do Chrome, compartilhe a aba da reunião com o áudio</p>
+          <p>4. Realize sua reunião normalmente: as dicas ao vivo aparecem na tela, só para você</p>
+          <p>5. Ao sair da chamada, a gravação para e é enviada sozinha (ou clique em <strong className="text-foreground">"Parar e Enviar"</strong> antes)</p>
+          <p>6. A análise começa automaticamente</p>
+          <p>Em outras plataformas, ou se preferir, grave pelo ícone da extensão, preenchendo os dados da agenda. A pergunta ao entrar na reunião pode ser desligada no próprio ícone da extensão.</p>
         </CardContent>
       </Card>
     </div>
