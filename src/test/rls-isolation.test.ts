@@ -33,6 +33,9 @@ const TENANT_TABLES = [
   "offer_types",
   "org_settings",
   "organization_invites",
+  "crm_connections",
+  "crm_field_mappings",
+  "crm_sync_jobs",
 ];
 
 function allMigrationsSql(): string {

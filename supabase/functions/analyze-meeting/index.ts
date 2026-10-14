@@ -431,6 +431,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       leadName: meeting.lead_name,
       leadCompany: meeting.lead_company,
       knowledgeContext,
+      meetingDate: (meeting.meeting_date ?? meeting.created_at ?? "").slice(0, 10) || null,
     });
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -536,6 +537,23 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
 
     if (updateError) {
       console.error("Failed to update meeting status:", JSON.stringify(updateError));
+    }
+
+    // Envio ao CRM do cliente, quando houver um conectado. Falha aqui não
+    // afeta a análise: o envio fica na fila da crm-sync.
+    try {
+      const crmRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/crm-sync`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          "x-internal-secret": Deno.env.get("INTERNAL_FUNCTION_SECRET") ?? "",
+        },
+        body: JSON.stringify({ meetingId }),
+      });
+      if (!crmRes.ok) console.error("crm-sync:", crmRes.status, await crmRes.text());
+    } catch (err) {
+      console.error("crm-sync indisponível:", err);
     }
 
     console.log("Meeting processing complete:", meetingId);
