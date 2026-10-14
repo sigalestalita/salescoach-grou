@@ -329,6 +329,214 @@ export type Database = {
           },
         ]
       }
+      crm_connections: {
+        Row: {
+          account_label: string | null
+          connected_at: string
+          connected_by: string | null
+          id: string
+          last_error: string | null
+          org_id: string
+          provider: string
+          settings: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          account_label?: string | null
+          connected_at?: string
+          connected_by?: string | null
+          id?: string
+          last_error?: string | null
+          org_id: string
+          provider: string
+          settings?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          account_label?: string | null
+          connected_at?: string
+          connected_by?: string | null
+          id?: string
+          last_error?: string | null
+          org_id?: string
+          provider?: string
+          settings?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_connections_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_credentials: {
+        Row: {
+          access_token_enc: string
+          api_domain: string | null
+          connection_id: string
+          expires_at: string | null
+          org_id: string
+          refresh_token_enc: string | null
+          refreshed_at: string
+        }
+        Insert: {
+          access_token_enc: string
+          api_domain?: string | null
+          connection_id: string
+          expires_at?: string | null
+          org_id: string
+          refresh_token_enc?: string | null
+          refreshed_at?: string
+        }
+        Update: {
+          access_token_enc?: string
+          api_domain?: string | null
+          connection_id?: string
+          expires_at?: string | null
+          org_id?: string
+          refresh_token_enc?: string | null
+          refreshed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_credentials_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: true
+            referencedRelation: "crm_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_credentials_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_field_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          mode: string
+          org_id: string
+          provider: string
+          source_key: string
+          target_entity: string
+          target_field: string
+          target_label: string | null
+          target_options: Json | null
+          target_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mode?: string
+          org_id: string
+          provider: string
+          source_key: string
+          target_entity?: string
+          target_field: string
+          target_label?: string | null
+          target_options?: Json | null
+          target_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mode?: string
+          org_id?: string
+          provider?: string
+          source_key?: string
+          target_entity?: string
+          target_field?: string
+          target_label?: string | null
+          target_options?: Json | null
+          target_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_field_mappings_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_sync_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          deal_id: string | null
+          id: string
+          last_error: string | null
+          meeting_id: string
+          next_attempt_at: string
+          org_id: string
+          provider: string
+          sent: Json | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          deal_id?: string | null
+          id?: string
+          last_error?: string | null
+          meeting_id: string
+          next_attempt_at?: string
+          org_id: string
+          provider: string
+          sent?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          deal_id?: string | null
+          id?: string
+          last_error?: string | null
+          meeting_id?: string
+          next_attempt_at?: string
+          org_id?: string
+          provider?: string
+          sent?: Json | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_sync_jobs_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_sync_jobs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       highlights: {
         Row: {
           created_at: string
@@ -562,6 +770,11 @@ export type Database = {
       meetings: {
         Row: {
           created_at: string
+          crm_deal_id: string | null
+          crm_deal_name: string | null
+          crm_linked_at: string | null
+          crm_linked_by: string | null
+          crm_provider: string | null
           duration_seconds: number | null
           error_message: string | null
           file_type: string | null
@@ -589,6 +802,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          crm_deal_id?: string | null
+          crm_deal_name?: string | null
+          crm_linked_at?: string | null
+          crm_linked_by?: string | null
+          crm_provider?: string | null
           duration_seconds?: number | null
           error_message?: string | null
           file_type?: string | null
@@ -616,6 +834,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          crm_deal_id?: string | null
+          crm_deal_name?: string | null
+          crm_linked_at?: string | null
+          crm_linked_by?: string | null
+          crm_provider?: string | null
           duration_seconds?: number | null
           error_message?: string | null
           file_type?: string | null
