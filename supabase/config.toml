@@ -40,3 +40,13 @@ verify_jwt = false
 # service role), validada dentro da função.
 [functions.crm-sync]
 verify_jwt = false
+
+# Webhooks da Recall.ai (bot de reunião e agenda). Sem token do Supabase: a
+# função exige a assinatura do workspace da Recall (RECALL_WEBHOOK_SECRET).
+[functions.recall-webhook]
+verify_jwt = false
+
+# Volta do OAuth da agenda (Google/Outlook). Só aceita um "state" assinado pela
+# meeting-bot, com validade de 15 minutos.
+[functions.calendar-oauth]
+verify_jwt = false

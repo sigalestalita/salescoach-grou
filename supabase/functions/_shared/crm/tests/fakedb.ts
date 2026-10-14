@@ -22,6 +22,8 @@ export function fakeDb(tables: Record<string, Row[]>) {
           const keys = st.conflict ? st.conflict.split(",") : (table === "crm_credentials" ? ["connection_id"] : null);
           const existing = keys && rows().find((r) => keys.every((k: string) => r[k] === v[k]));
           if (st.op === "upsert" && existing) { Object.assign(existing, v); return existing; }
+          // Restrição de unicidade usada pelos bots de reunião.
+          if (table === "meeting_bots" && rows().some((r) => r.recall_bot_id === v.recall_bot_id)) { st.error = { message: "duplicate key" }; return null; }
           const defaults = table === "crm_sync_jobs" ? { status: "pendente", attempts: 0, next_attempt_at: new Date().toISOString(), sent: null } : {};
           const row = { id: id(), created_at: new Date().toISOString(), ...defaults, ...v }; rows().push(row); return row;
         });
@@ -37,13 +39,18 @@ export function fakeDb(tables: Record<string, Row[]>) {
       eq(c: string, v: any) { st.filters.push((r: Row) => r[c] === v); return api; },
       neq(c: string, v: any) { st.filters.push((r: Row) => r[c] !== v); return api; },
       in(c: string, v: any[]) { st.filters.push((r: Row) => v.includes(r[c])); return api; },
+      not(c: string, op: string, v: any) {
+        if (op === "is") st.filters.push((r: Row) => r[c] !== v && !(v === null && r[c] === undefined));
+        else if (op === "in") { const list = String(v).replace(/[()]/g, "").split(","); st.filters.push((r: Row) => !list.includes(String(r[c]))); }
+        return api;
+      },
       lte(c: string, v: any) { st.filters.push((r: Row) => r[c] <= v); return api; },
       lt(c: string, v: any) { st.filters.push((r: Row) => r[c] < v); return api; },
       order(c: string, o?: any) { st.order = { col: c, asc: o?.ascending !== false }; return api; },
       limit(n: number) { st.limit = n; return api; },
-      maybeSingle: async () => ({ data: exec()[0] ?? null, error: null }),
-      single: async () => { const r = exec()[0]; return r ? { data: r, error: null } : { data: null, error: { message: "não encontrado" } }; },
-      then(res: any, rej: any) { try { const d = exec(); return Promise.resolve({ data: d, error: null }).then(res, rej); } catch (e) { return Promise.reject(e).then(res, rej); } },
+      maybeSingle: async () => { const d = exec(); return { data: st.error ? null : d[0] ?? null, error: st.error ?? null }; },
+      single: async () => { const r = exec()[0]; if (st.error) return { data: null, error: st.error }; return r ? { data: r, error: null } : { data: null, error: { message: "não encontrado" } }; },
+      then(res: any, rej: any) { try { const d = exec(); return Promise.resolve({ data: st.error ? null : d, error: st.error ?? null }).then(res, rej); } catch (e) { return Promise.reject(e).then(res, rej); } },
     };
     return api;
   }

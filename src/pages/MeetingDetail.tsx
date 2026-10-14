@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
+import { MeetingBotStatus } from "@/components/MeetingBotStatus";
 import { ShareControls } from "@/components/ShareControls";
 import { CrmMeetingCard } from "@/components/CrmMeetingCard";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
@@ -360,7 +361,8 @@ const MeetingDetail = () => {
       {meeting.status === "ao_vivo" && (
         <LiveMeetingPanel meetingId={meeting.id} />
       )}
-      {meeting.status !== "completo" && meeting.status !== "ao_vivo" && (
+      <MeetingBotStatus meetingId={meeting.id} onCancelled={() => meeting.status === "agendado" && navigate("/agendas")} />
+      {meeting.status !== "completo" && meeting.status !== "ao_vivo" && meeting.status !== "agendado" && meeting.status !== "gravando" && (
         <Card>
           <CardContent className="py-8">
             {meeting.status === "enviado" && (

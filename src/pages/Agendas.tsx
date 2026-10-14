@@ -59,6 +59,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BotPanel } from "@/components/BotPanel";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Meeting = Tables<"meetings">;
@@ -71,6 +72,8 @@ const isMeetingProcessingStalled = (meeting: Pick<Meeting, "status" | "updated_a
   Date.now() - new Date(meeting.updated_at).getTime() > PROCESSING_STALE_AFTER_MS;
 
 const statusLabels: Record<string, string> = {
+  agendado: "Bot agendado",
+  gravando: "Bot gravando",
   enviado: "Enviado",
   baixando: "Baixando",
   transcrevendo: "Transcrevendo",
@@ -80,6 +83,8 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
+  agendado: "bg-primary/10 text-primary",
+  gravando: "bg-destructive/10 text-destructive",
   enviado: "bg-muted text-muted-foreground",
   baixando: "bg-info/10 text-info",
   transcrevendo: "bg-info/10 text-info",
@@ -578,6 +583,8 @@ const Agendas = () => {
           </div>
         )}
       </div>
+
+      <BotPanel meetingTypes={meetingTypes} onScheduled={fetchMeetings} />
 
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
