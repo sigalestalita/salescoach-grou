@@ -8,6 +8,7 @@
 import { json, preflight } from "../_shared/cors.ts";
 import { adminClient, ANON_KEY, SUPABASE_URL, writeAudit } from "../_shared/tenant.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
+import { crmOverview } from "../_shared/crm/overview.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -145,6 +146,48 @@ Deno.serve(async (req) => {
       });
 
       return json(req, { success: true });
+    }
+
+    // Integrações com CRM: só conexão e contagens de envio, sem conteúdo de reunião.
+    if (action === "crm_overview") {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const [{ data: conns, error: e1 }, { data: maps, error: e2 }, { data: jobs, error: e3 }] = await Promise.all([
+        admin.from("crm_connections").select("org_id, provider, status, account_label, connected_at, last_error"),
+        admin.from("crm_field_mappings").select("org_id, provider"),
+        admin.from("crm_sync_jobs").select("org_id, status, updated_at, last_error").gte("updated_at", since).limit(20000),
+      ]);
+      if (e1 || e2 || e3) throw e1 ?? e2 ?? e3;
+      return json(req, { crm: crmOverview(conns ?? [], maps ?? [], jobs ?? []) });
+    }
+
+    // Põe de volta na fila os envios com erro dos últimos 30 dias (ex.: depois
+    // de uma instabilidade do CRM). A crm-sync manda em até 10 minutos.
+    if (action === "crm_retry_errors") {
+      const { org_id } = body;
+      if (!org_id) return json(req, { error: "org_id é obrigatório" }, 400);
+      const { data: conn } = await admin.from("crm_connections").select("id, status")
+        .eq("org_id", org_id).neq("status", "desconectado").maybeSingle();
+      if (!conn) return json(req, { error: "Essa empresa não tem CRM conectado." }, 409);
+      if (conn.status !== "ativo") {
+        return json(req, { error: "A conexão com o CRM precisa ser refeita por um admin da empresa antes de tentar de novo." }, 409);
+      }
+      const now = new Date().toISOString();
+      const { data: requeued, error } = await admin.from("crm_sync_jobs")
+        .update({ status: "pendente", attempts: 0, next_attempt_at: now, updated_at: now })
+        .eq("org_id", org_id).eq("status", "erro")
+        .gte("created_at", new Date(Date.now() - 30 * 864e5).toISOString())
+        .select("id");
+      if (error) throw error;
+
+      await writeAudit(admin, {
+        orgId: org_id,
+        actorUserId: user.id,
+        action: "crm.retry_errors",
+        entity: "crm_connections",
+        entityId: conn.id,
+        metadata: { jobs: requeued?.length ?? 0 },
+      });
+      return json(req, { success: true, requeued: requeued?.length ?? 0 });
     }
 
     if (action === "list_plans") {

@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Copy, Plus, RefreshCw, LogOut, Check } from "lucide-react";
+import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug } from "lucide-react";
+import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
 /**
  * Painel do provedor: criar, listar, suspender e reativar empresas clientes e
@@ -21,6 +22,7 @@ import { Building2, Copy, Plus, RefreshCw, LogOut, Check } from "lucide-react";
  *
  * Deliberadamente NÃO mostra conteúdo de reunião, transcrição ou base de
  * conhecimento de nenhum cliente. O operador do SaaS vê metadados e consumo.
+ * Do CRM, vê a conexão e a contagem de envios de cada empresa.
  */
 
 interface Plan {
@@ -48,6 +50,20 @@ interface Org {
     plans: { key: string; name: string } | null;
   } | null;
   usage: Record<string, { used: number; limit: number | null }> | null;
+}
+
+/** Integração com CRM de uma empresa (ver _shared/crm/overview.ts). */
+interface CrmOverview {
+  org_id: string;
+  provider: CrmProvider;
+  status: string;
+  account_label: string | null;
+  connected_at: string;
+  connection_error: string | null;
+  mapped_fields: number;
+  jobs: { enviado: number; erro: number; aguardando_vinculo: number; pendente: number };
+  last_sent_at: string | null;
+  last_job_error: string | null;
 }
 
 interface CreatedInvite {
@@ -92,6 +108,7 @@ const Plataforma = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [crm, setCrm] = useState<Record<string, CrmOverview>>({});
 
   // Formulário de criação.
   const [createOpen, setCreateOpen] = useState(false);
@@ -117,11 +134,14 @@ const Plataforma = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [orgsRes, plansRes] = await Promise.all([
+      const [orgsRes, plansRes, crmRes] = await Promise.all([
         call({ action: "list_orgs" }),
         call({ action: "list_plans" }),
+        // Sem a migração do CRM aplicada, o resto do painel continua funcionando.
+        call({ action: "crm_overview" }).catch(() => ({ crm: [] })),
       ]);
       setOrgs(orgsRes.organizations ?? []);
+      setCrm(Object.fromEntries((crmRes.crm ?? []).map((c: CrmOverview) => [c.org_id, c])));
       setPlans((plansRes.plans ?? []).filter((p: Plan) => p.is_active));
     } catch (err: any) {
       toast({ title: "Erro ao carregar", description: err.message, variant: "destructive" });
@@ -208,6 +228,32 @@ const Plataforma = () => {
       setBusy(null);
     }
   };
+
+  const retryCrm = async (org: Org) => {
+    setBusy(`crm:${org.id}`);
+    try {
+      const { requeued } = await call({ action: "crm_retry_errors", org_id: org.id });
+      toast({ title: `${requeued} envio(s) de ${org.name} de volta na fila`, description: "Saem em até 10 minutos." });
+      await load();
+    } catch (err) {
+      toast({ title: "Não foi possível tentar de novo", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const crmBadge = (org: Org) => {
+    const c = crm[org.id];
+    if (!c) return <span className="text-xs text-muted-foreground">—</span>;
+    const ok = c.status === "ativo";
+    return (
+      <Badge variant={ok ? (c.jobs.erro ? "outline" : "secondary") : "destructive"} className="whitespace-nowrap">
+        {CRM_NAME[c.provider] ?? c.provider}{ok ? (c.jobs.erro ? ` · ${c.jobs.erro} erro(s)` : "") : " · reconectar"}
+      </Badge>
+    );
+  };
+
+  const crmOrgs = orgs.filter((o) => crm[o.id]);
 
   const copyInvite = async () => {
     try {
@@ -368,6 +414,7 @@ const Plataforma = () => {
                       <TableHead>Empresa</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Plano</TableHead>
+                      <TableHead>CRM</TableHead>
                       <TableHead className="text-right">Usuários</TableHead>
                       <TableHead className="text-right">Reuniões</TableHead>
                       <TableHead>Consumo no ciclo</TableHead>
@@ -402,6 +449,7 @@ const Plataforma = () => {
                               </SelectContent>
                             </Select>
                           </TableCell>
+                          <TableCell>{crmBadge(org)}</TableCell>
                           <TableCell className="text-right tabular-nums">{org.users ?? 0}</TableCell>
                           <TableCell className="text-right tabular-nums">{org.meetings ?? 0}</TableCell>
                           <TableCell>{usageSummary(org)}</TableCell>
@@ -423,6 +471,83 @@ const Plataforma = () => {
                                 }}
                               >
                                 Suspender
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Plug className="h-5 w-5" />
+              Integrações com CRM
+            </CardTitle>
+            <CardDescription>
+              Quem conectou qual CRM e como estão os envios dos últimos 30 dias. Cada empresa conecta e mapeia o próprio CRM
+              em Configurações; daqui dá para acompanhar e mandar de novo o que falhou.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {crmOrgs.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Nenhuma empresa conectou um CRM ainda.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>CRM</TableHead>
+                      <TableHead className="text-right">Campos</TableHead>
+                      <TableHead>Envios (30 dias)</TableHead>
+                      <TableHead>Último envio</TableHead>
+                      <TableHead>Último erro</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {crmOrgs.map((org) => {
+                      const c = crm[org.id];
+                      const erro = c.connection_error ?? c.last_job_error;
+                      return (
+                        <TableRow key={org.id}>
+                          <TableCell className="font-medium">{org.name}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {crmBadge(org)}
+                              <span className="text-xs text-muted-foreground">
+                                {c.account_label ?? CRM_NAME[c.provider]} · desde {new Date(c.connected_at).toLocaleDateString("pt-BR")}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {c.mapped_fields || <span className="text-destructive">0</span>}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums">
+                              <span>{c.jobs.enviado} enviados</span>
+                              {c.jobs.erro > 0 && <span className="font-medium text-destructive">{c.jobs.erro} com erro</span>}
+                              {c.jobs.aguardando_vinculo > 0 && <span>{c.jobs.aguardando_vinculo} esperando negócio</span>}
+                              {c.jobs.pendente > 0 && <span className="text-muted-foreground">{c.jobs.pendente} na fila</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs tabular-nums">
+                            {c.last_sent_at ? new Date(c.last_sent_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                          </TableCell>
+                          <TableCell className="max-w-[280px] text-xs text-muted-foreground">
+                            <span className="line-clamp-2" title={erro ?? undefined}>{erro ?? "—"}</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {c.jobs.erro > 0 && c.status === "ativo" && (
+                              <Button variant="outline" size="sm" disabled={busy === `crm:${org.id}`} onClick={() => retryCrm(org)}>
+                                Tentar de novo
                               </Button>
                             )}
                           </TableCell>
