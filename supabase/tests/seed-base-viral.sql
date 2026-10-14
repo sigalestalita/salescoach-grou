@@ -35,7 +35,8 @@ DECLARE
   -- E-mail que recebe o convite de administrador da Base Viral. Use um e-mail
   -- que ainda não tenha conta no Sales Coach: aceitar o convite leva a conta
   -- para esta organização. Deixe NULL para não gerar convite.
-  v_email_admin TEXT := NULL;
+  -- Acesso de demonstração enviado ao Rodrigo Noll (Base Viral).
+  v_email_admin TEXT := 'contato@rodrigonoll.com.br';
   -- ──────────────────────────────────────────────────────────────────────────
 
   v_org    UUID;
