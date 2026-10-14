@@ -85,7 +85,9 @@ export function CrmSettings() {
 
   const connect = (provider: CrmProvider) => run(`connect:${provider}`, async () => {
     const { url } = await crmApi.connect(provider);
-    window.location.assign(url);
+    // O CRM não abre dentro de moldura (ex.: pré-visualização): vai numa aba nova.
+    if (window.self !== window.top) window.open(url, "_blank", "noopener");
+    else window.location.assign(url);
   });
 
   const connectKommoToken = () => run("connect:kommo-token", async () => {
