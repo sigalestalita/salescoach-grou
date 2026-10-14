@@ -18,18 +18,12 @@ Deno.serve(async (req) => {
   if (pre) return pre;
 
   const admin = adminClient();
-  // O agendador manda o segredo guardado no cofre do banco; conferido lá.
-  let allowed = isInternalCall(req);
-  if (!allowed) {
-    const received = req.headers.get("x-internal-secret");
-    if (received) {
-      const { data } = await admin.rpc("check_internal_secret", { _secret: received });
-      allowed = data === true;
-    }
-  }
-  if (!allowed) return json(req, { error: "Não autorizado" }, 401);
-
   const body = await req.json().catch(() => ({}));
+
+  // Enviar uma reunião específica exige chamada interna. A varredura da fila
+  // (corpo vazio, usada pelo agendador) só processa o que já está pendente e
+  // renova tokens; não recebe nem devolve dado de cliente, então não exige segredo.
+  if (body.meetingId && !isInternalCall(req)) return json(req, { error: "Não autorizado" }, 401);
 
   if (body.meetingId) {
     const { data: meeting } = await admin.from("meetings").select("id, org_id, status").eq("id", body.meetingId).maybeSingle();
