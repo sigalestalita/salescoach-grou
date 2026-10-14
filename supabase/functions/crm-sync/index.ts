@@ -74,5 +74,6 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (!isInternalCall(req)) return json(req, { enviados: results.length, renovadas });
   return json(req, { enviados: results, renovadas });
 });
