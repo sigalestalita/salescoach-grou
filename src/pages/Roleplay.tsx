@@ -565,11 +565,11 @@ const Roleplay = () => {
       ]);
       if (!sessao) throw new Error("Treino não encontrado");
 
-      const caminhos = (falas ?? []).map((f: { audio_path?: string | null }) => f.audio_path).filter(Boolean) as string[];
+      const caminhos = ((falas ?? []) as Array<{ audio_path?: string | null }>).map((f) => f.audio_path).filter(Boolean) as string[];
       const audios = caminhos.length ? await baixaAudios(caminhos) : new Map<string, Blob>();
 
       setSession(sessao as unknown as Session);
-      setMessages((falas ?? []).map((f: { role: string; content: string; audio_path?: string | null }) => ({
+      setMessages(((falas ?? []) as Array<{ role: string; content: string; audio_path?: string | null }>).map((f) => ({
         role: f.role as "seller" | "lead",
         content: f.content,
         audios: f.audio_path && audios.get(f.audio_path) ? [audios.get(f.audio_path)!] : undefined,
