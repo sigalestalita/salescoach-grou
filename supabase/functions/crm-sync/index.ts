@@ -16,10 +16,14 @@ import { enqueueMeeting, JobRow, processJob } from "../_shared/crm/sync.ts";
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
-  if (!isInternalCall(req)) return json(req, { error: "Não autorizado" }, 401);
 
   const admin = adminClient();
   const body = await req.json().catch(() => ({}));
+
+  // Enviar uma reunião específica exige chamada interna. A varredura da fila
+  // (corpo vazio, usada pelo agendador) só processa o que já está pendente e
+  // renova tokens; não recebe nem devolve dado de cliente, então não exige segredo.
+  if (body.meetingId && !isInternalCall(req)) return json(req, { error: "Não autorizado" }, 401);
 
   if (body.meetingId) {
     const { data: meeting } = await admin.from("meetings").select("id, org_id, status").eq("id", body.meetingId).maybeSingle();
@@ -70,5 +74,6 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (!isInternalCall(req)) return json(req, { enviados: results.length, renovadas });
   return json(req, { enviados: results, renovadas });
 });
