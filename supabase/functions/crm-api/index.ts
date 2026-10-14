@@ -7,6 +7,7 @@
 //   meeting           vínculo da reunião com o negócio e histórico de envios
 //   settings          preferências de envio (admin)
 //   disconnect        desliga o CRM e apaga os tokens (admin)
+//   connect_token     conecta o Kommo com token de longa duração (admin)
 //   search_deals      busca negócio por nome (quem vê a reunião)
 //   suggest_deals     negócios do e-mail do lead da reunião
 //   link_deal         vincula a reunião a um negócio e envia
@@ -17,7 +18,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { json, preflight } from "../_shared/cors.ts";
 import { ANON_KEY, CallerContext, getCaller, HttpError, requireRole, SUPABASE_URL } from "../_shared/tenant.ts";
 import { loadTemplate } from "../_shared/analysis-template.ts";
-import { activeConnection, connectorFor } from "../_shared/crm/connection.ts";
+import { accountLabel, activeConnection, connectorFor, saveConnection } from "../_shared/crm/connection.ts";
+import { kommoAccountName, kommoBase, tokenExpiry } from "../_shared/crm/kommo.ts";
 import { sourceCatalog } from "../_shared/crm/mapping.ts";
 import { enqueueMeeting, processJob } from "../_shared/crm/sync.ts";
 import { CrmError } from "../_shared/crm/types.ts";
@@ -139,6 +141,26 @@ Deno.serve(async (req) => {
           lead_email: meeting.lead_email ?? null,
           jobs: jobs ?? [],
         });
+      }
+
+      case "connect_token": {
+        // Kommo antes da aprovação da integração pública: o admin cria uma
+        // integração privada na conta dele e cola aqui o token de longa duração.
+        requireRole(ctx, "admin");
+        if (body.provider !== "kommo") throw new HttpError(400, "Conexão por token só para o Kommo.");
+        const apiDomain = kommoBase(String(body.subdomain ?? ""));
+        if (!apiDomain) throw new HttpError(400, "Informe o endereço da conta no Kommo (ex.: suaempresa.kommo.com).");
+        const token = String(body.token ?? "").trim();
+        if (token.length < 20) throw new HttpError(400, "Cole o token de longa duração gerado no Kommo.");
+        const name = await kommoAccountName(token, apiDomain);
+        await saveConnection(ctx.admin, ctx.orgId, "kommo", ctx.userId,
+          { accessToken: token, refreshToken: null, expiresAt: tokenExpiry(token), apiDomain },
+          accountLabel("kommo", apiDomain, name));
+        await ctx.admin.from("audit_log").insert({
+          org_id: ctx.orgId, actor_user_id: ctx.userId, action: "crm_conectado", entity: "crm_connections",
+          metadata: { provider: "kommo", modo: "token" },
+        }).then(() => {}, () => {});
+        return json(req, { ok: true });
       }
 
       case "settings": {

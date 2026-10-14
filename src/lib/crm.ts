@@ -102,6 +102,9 @@ export const crmApi = {
     call<{ ok: true }>("crm-api", { action: "save_mapping", source_key, target_field, mode }),
   saveSettings: (settings: CrmSettings) => call<{ settings: CrmSettings }>("crm-api", { action: "settings", settings }),
   disconnect: () => call<{ ok: true }>("crm-api", { action: "disconnect" }),
+  /** Kommo com token de longa duração (integração privada na conta do cliente). */
+  connectToken: (provider: CrmProvider, subdomain: string, token: string) =>
+    call<{ ok: true }>("crm-api", { action: "connect_token", provider, subdomain, token }),
   meeting: (meetingId: string) =>
     call<{
       connection: { provider: CrmProvider; status: string; account_label: string | null } | null;

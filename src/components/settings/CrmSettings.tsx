@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -17,7 +18,7 @@ import {
 } from "@/lib/crm";
 
 /**
- * Integração com CRM (admin). Conecta o CRM (RD Station, HubSpot ou Pipedrive) por OAuth e define em
+ * Integração com CRM (admin). Conecta o CRM (RD Station, HubSpot, Pipedrive ou Kommo) e define em
  * qual campo do negócio cada dado do Sales Coach é gravado ao fim da análise.
  */
 
@@ -27,6 +28,7 @@ const DISPONIVEIS: [CrmProvider, string][] = [
   ["rdstation", "Você autoriza no RD Station e volta para cá."],
   ["hubspot", "Você escolhe a conta do HubSpot, autoriza e volta para cá."],
   ["pipedrive", "Você entra no Pipedrive, escolhe a empresa, autoriza e volta para cá."],
+  ["kommo", "Autorize pelo Kommo ou cole o token de longa duração de uma integração privada da sua conta."],
 ];
 
 /** Dados que valem um campo próprio no CRM; o resto já vai na anotação. */
@@ -40,6 +42,9 @@ export function CrmSettings() {
   const [catalog, setCatalog] = useState<CrmSource[]>([]);
   const [fields, setFields] = useState<CrmField[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [kommoForm, setKommoForm] = useState(false);
+  const [kommoSub, setKommoSub] = useState("");
+  const [kommoToken, setKommoToken] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -83,6 +88,35 @@ export function CrmSettings() {
     window.location.assign(url);
   });
 
+  const connectKommoToken = () => run("connect:kommo-token", async () => {
+    await crmApi.connectToken("kommo", kommoSub, kommoToken);
+    setKommoToken(""); setKommoForm(false);
+    toast({ title: "Kommo conectado", description: "Agora escolha em quais campos cada dado é gravado." });
+    await load();
+  });
+
+  const kommoTokenForm = (
+    <div className="space-y-3 rounded-lg border border-dashed border-border p-4">
+      <p className="text-sm text-muted-foreground">
+        No Kommo, em Configurações → Integrações → Criar integração, crie uma integração privada. Na aba "Chaves e escopos",
+        gere um token de longa duração e cole aqui. O token fica criptografado e só o Sales Coach o usa.
+      </p>
+      <div className="grid gap-3 md:grid-cols-[1fr_2fr_auto] md:items-end">
+        <div className="space-y-1">
+          <Label htmlFor="kommo-sub">Endereço da conta</Label>
+          <Input id="kommo-sub" placeholder="suaempresa.kommo.com" value={kommoSub} onChange={(e) => setKommoSub(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="kommo-token">Token de longa duração</Label>
+          <Input id="kommo-token" type="password" autoComplete="off" value={kommoToken} onChange={(e) => setKommoToken(e.target.value)} />
+        </div>
+        <Button onClick={connectKommoToken} disabled={!!busy || !kommoSub.trim() || !kommoToken.trim()}>
+          {busy === "connect:kommo-token" ? "Conferindo…" : "Conectar"}
+        </Button>
+      </div>
+    </div>
+  );
+
   const savePrefs = (p: Prefs) => run("prefs", async () => {
     const { settings } = await crmApi.saveSettings(p);
     setConnection((c) => (c ? { ...c, settings } : c));
@@ -116,7 +150,7 @@ export function CrmSettings() {
           Integração com CRM
         </CardTitle>
         <CardDescription>
-          Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM (RD Station CRM, HubSpot ou Pipedrive),
+          Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM (RD Station CRM, HubSpot, Pipedrive ou Kommo),
           cria uma anotação com o resumo e uma tarefa com o próximo passo.
         </CardDescription>
       </CardHeader>
@@ -131,20 +165,26 @@ export function CrmSettings() {
                   <p className="font-medium">{CRM_NAME[provider]}</p>
                   <p className="text-sm text-muted-foreground">{hint}</p>
                 </div>
-                <Button onClick={() => connect(provider)} disabled={!!busy}>
-                  <Link2 className="mr-2 h-4 w-4" />
-                  {busy === `connect:${provider}` ? "Abrindo…" : "Conectar"}
-                </Button>
+                <div className="flex gap-2">
+                  {provider === "kommo" && (
+                    <Button variant="outline" onClick={() => setKommoForm((v) => !v)} disabled={!!busy}>Usar token</Button>
+                  )}
+                  <Button onClick={() => connect(provider)} disabled={!!busy}>
+                    <Link2 className="mr-2 h-4 w-4" />
+                    {busy === `connect:${provider}` ? "Abrindo…" : "Conectar"}
+                  </Button>
+                </div>
               </div>
             ))}
-            <p className="text-xs text-muted-foreground">O Kommo chega em seguida. Uma empresa usa um CRM por vez.</p>
+            {kommoForm && kommoTokenForm}
+            <p className="text-xs text-muted-foreground">Uma empresa usa um CRM por vez.</p>
           </div>
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border p-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium">{CRM_NAME[connection.provider]}</p>
+                  <p className="font-medium">{connection.account_label ?? CRM_NAME[connection.provider]}</p>
                   <Badge variant={connection.status === "ativo" ? "secondary" : "destructive"}>
                     {connection.status === "ativo" ? "Conectado" : "Precisa reconectar"}
                   </Badge>
@@ -155,6 +195,9 @@ export function CrmSettings() {
                 </p>
               </div>
               <div className="flex gap-2">
+                {connection.status !== "ativo" && connection.provider === "kommo" && (
+                  <Button variant="outline" onClick={() => setKommoForm((v) => !v)} disabled={!!busy}>Novo token</Button>
+                )}
                 {connection.status !== "ativo" && (
                   <Button onClick={() => connect(connection.provider)} disabled={!!busy}>Reconectar</Button>
                 )}
@@ -178,6 +221,8 @@ export function CrmSettings() {
                 </AlertDialog>
               </div>
             </div>
+
+            {kommoForm && connection.provider === "kommo" && kommoTokenForm}
 
             <div className="grid gap-4 md:grid-cols-3">
               {([

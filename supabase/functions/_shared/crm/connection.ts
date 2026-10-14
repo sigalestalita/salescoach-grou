@@ -6,6 +6,7 @@ import { decryptToken, encryptToken } from "./crypto.ts";
 import { rdConnector, rdOAuth } from "./rdstation.ts";
 import { hubspotConnector, hubspotOAuth } from "./hubspot.ts";
 import { pipedriveConnector, pipedriveOAuth } from "./pipedrive.ts";
+import { kommoConnector, kommoOAuth } from "./kommo.ts";
 import { CrmConnector, CrmError, CrmOAuth, CrmProvider, TokenSet } from "./types.ts";
 
 export interface ConnectionRow {
@@ -17,15 +18,34 @@ export interface ConnectionRow {
   settings: { criar_anotacao?: boolean; criar_tarefa?: boolean; envio_automatico?: boolean; dias_tarefa?: number };
 }
 
-const OAUTH: Partial<Record<CrmProvider, CrmOAuth>> = { rdstation: rdOAuth, hubspot: hubspotOAuth, pipedrive: pipedriveOAuth };
+const OAUTH: Partial<Record<CrmProvider, CrmOAuth>> = {
+  rdstation: rdOAuth, hubspot: hubspotOAuth, pipedrive: pipedriveOAuth, kommo: kommoOAuth,
+};
 const CONNECTORS: Partial<Record<CrmProvider, (token: string, apiDomain: string | null) => CrmConnector>> = {
   rdstation: rdConnector,
   hubspot: hubspotConnector,
   pipedrive: pipedriveConnector,
+  kommo: kommoConnector,
 };
 
 /** CRMs que já podem ser conectados. */
 export const AVAILABLE_PROVIDERS = Object.keys(CONNECTORS) as CrmProvider[];
+
+const LABEL: Record<CrmProvider, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot", pipedrive: "Pipedrive", kommo: "Kommo" };
+
+/** Nome da conexão: o CRM e, quando há, o subdomínio da conta (ex.: "Kommo · acme"). */
+export function accountLabel(provider: CrmProvider, apiDomain?: string | null, accountName?: string | null): string {
+  const name = LABEL[provider] ?? provider;
+  if (accountName) return `${name} · ${accountName}`;
+  try {
+    return apiDomain ? `${name} · ${new URL(apiDomain).hostname.split(".")[0]}` : name;
+  } catch {
+    return name;
+  }
+}
+
+/** URL de retorno do OAuth, a mesma cadastrada no app de cada CRM. */
+export const oauthRedirectUri = () => `${(Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "")}/functions/v1/crm-oauth`;
 
 export function oauthFor(provider: CrmProvider): CrmOAuth {
   const o = OAUTH[provider];
@@ -119,12 +139,20 @@ export async function markConnectionError(admin: SupabaseClient, connectionId: s
 export async function refreshConnection(admin: SupabaseClient, conn: ConnectionRow): Promise<string> {
   const { data: cred } = await admin
     .from("crm_credentials")
-    .select("refresh_token_enc")
+    .select("refresh_token_enc, api_domain")
     .eq("connection_id", conn.id)
     .maybeSingle();
-  if (!cred?.refresh_token_enc) throw new CrmError("Conexão sem refresh token. Reconecte o CRM.", "auth");
+  if (!cred?.refresh_token_enc) {
+    // Token colado à mão (Kommo, longa duração): não renova; venceu, reconecta.
+    const msg = "O token do CRM venceu ou foi revogado. Um administrador precisa reconectar.";
+    if (cred) await markConnectionError(admin, conn.id, msg);
+    throw new CrmError(msg, "auth");
+  }
   try {
-    const tokens = await oauthFor(conn.provider).refresh(await decryptToken(cred.refresh_token_enc));
+    const tokens = await oauthFor(conn.provider).refresh(await decryptToken(cred.refresh_token_enc), {
+      apiDomain: cred.api_domain ?? null,
+      redirectUri: oauthRedirectUri(),
+    });
     await storeTokens(admin, conn.id, conn.org_id, tokens);
     if (conn.status === "erro") {
       await admin.from("crm_connections").update({ status: "ativo", last_error: null }).eq("id", conn.id);
@@ -146,7 +174,9 @@ export async function accessToken(admin: SupabaseClient, conn: ConnectionRow): P
     .eq("connection_id", conn.id)
     .maybeSingle();
   if (!cred) throw new CrmError("Conexão sem credenciais. Reconecte o CRM.", "auth");
-  const expires = cred.expires_at ? Date.parse(cred.expires_at) : 0;
+  // Sem validade conhecida (token de longa duração sem data): usa como está.
+  if (!cred.expires_at) return decryptToken(cred.access_token_enc);
+  const expires = Date.parse(cred.expires_at);
   if (expires - Date.now() < 5 * 60 * 1000) return refreshConnection(admin, conn);
   return decryptToken(cred.access_token_enc);
 }

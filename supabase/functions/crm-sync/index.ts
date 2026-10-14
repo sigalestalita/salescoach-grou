@@ -54,13 +54,14 @@ Deno.serve(async (req) => {
   const limite = new Date(Date.now() - 7 * 864e5).toISOString();
   const { data: stale } = await admin
     .from("crm_credentials")
-    .select("connection_id, crm_connections!inner(id, org_id, provider, status, account_label, settings)")
+    .select("connection_id, refresh_token_enc, crm_connections!inner(id, org_id, provider, status, account_label, settings)")
     .lt("refreshed_at", limite)
     .limit(50);
   let renovadas = 0;
   for (const row of stale ?? []) {
     const conn = (row as unknown as { crm_connections: ConnectionRow }).crm_connections;
-    if (conn.status === "desconectado") continue;
+    // Token de longa duração (Kommo) não tem refresh: nada a renovar.
+    if (conn.status === "desconectado" || !(row as { refresh_token_enc?: string | null }).refresh_token_enc) continue;
     try {
       await refreshConnection(admin, conn);
       renovadas++;

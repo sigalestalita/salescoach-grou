@@ -3,8 +3,8 @@
 O Sales Coach grava no negócio do CRM do cliente o resultado de cada análise:
 campos (nota, temperatura, critérios, próximo passo…), uma anotação com o resumo
 e uma tarefa com o próximo passo. CRMs disponíveis: **RD Station CRM (API v2)**,
-**HubSpot (CRM API v3)** e **Pipedrive (API v2)**. O Kommo entra como novo
-conector, sem mudar o resto. Cada organização usa um CRM por vez: conectar um desliga o outro.
+**HubSpot (CRM API v3)**, **Pipedrive (API v2)** e **Kommo (API v4)**. Um CRM
+novo entra como mais um conector, sem mudar o resto. Cada organização usa um CRM por vez: conectar um desliga o outro.
 
 ## Como funciona
 
@@ -31,6 +31,7 @@ conector, sem mudar o resto. Cada organização usa um CRM por vez: conectar um 
 | Conector RD Station | `supabase/functions/_shared/crm/rdstation.ts` |
 | Conector HubSpot | `supabase/functions/_shared/crm/hubspot.ts` |
 | Conector Pipedrive | `supabase/functions/_shared/crm/pipedrive.ts` |
+| Conector Kommo | `supabase/functions/_shared/crm/kommo.ts` |
 | Dado → campo, anotação, tarefa | `supabase/functions/_shared/crm/mapping.ts` (testado em `src/test/crm-mapping.test.ts`) |
 | Tela de configuração | `src/components/settings/CrmSettings.tsx` |
 | Cartão na reunião | `src/components/CrmMeetingCard.tsx` |
@@ -59,10 +60,22 @@ a tarefa vence em 2 dias úteis.
    cadastro do app. Cada cliente instala pelo link de instalação do app, ou
    pelo botão em Configurações. Para listar no Marketplace depois, o Pipedrive
    faz uma revisão.
+   **Kommo** — duas formas, que convivem:
+   - *Token de longa duração (já funciona, sem aprovação):* o admin do cliente
+     cria uma integração **privada** na conta Kommo dele (Configurações →
+     Integrações → Criar integração), gera um token de longa duração na aba
+     "Chaves e escopos" (validade de 1 dia a 5 anos) e cola no Sales Coach,
+     com o endereço da conta. O token é conferido no Kommo antes de salvar.
+   - *Autorização (OAuth):* exige uma integração **pública**, criada numa conta
+     técnica do Kommo (pedida ao suporte do Kommo, gratuita) e aprovada na
+     moderação (1 a 2 dias úteis). Antes da aprovação, a autorização só
+     funciona na própria conta técnica. URL de retorno: a mesma dos outros CRMs.
 2. **Segredos das edge functions** (Lovable → backend → secrets):
    - `RDSTATION_CRM_CLIENT_ID` e `RDSTATION_CRM_CLIENT_SECRET`: do app da RD
    - `HUBSPOT_CLIENT_ID` e `HUBSPOT_CLIENT_SECRET`: do app do HubSpot
    - `PIPEDRIVE_CLIENT_ID` e `PIPEDRIVE_CLIENT_SECRET`: do app do Pipedrive
+   - `KOMMO_CLIENT_ID` e `KOMMO_CLIENT_SECRET`: da integração pública do Kommo
+     (só para o OAuth; o token de longa duração não precisa deles)
    - `CRM_TOKEN_KEY`: texto aleatório de 32 caracteres ou mais. Se mudar, todas
      as conexões precisam ser refeitas.
    - `APP_URL`: endereço do app (ex.: `https://salescoach.groupp.com.br`), usado
@@ -84,6 +97,7 @@ CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env _shared/
 CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-net --allow-read _shared/crm/tests/sync_check.ts
 CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-net --allow-read _shared/crm/tests/hubspot_check.ts
 CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-net --allow-read _shared/crm/tests/pipedrive_check.ts
+CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-net --allow-read _shared/crm/tests/kommo_check.ts
 ```
 
 As verificações em Deno usam CRMs e um banco simulados. Antes do piloto,
@@ -96,6 +110,9 @@ validar com contas reais:
 - **Pipedrive** (conta de sandbox de desenvolvedor, gratuita): conferir a
   criação dos campos, a anotação fixada e a atividade do tipo "Tarefa" (contas
   que apagaram esse tipo de atividade recusam a tarefa).
+- **Kommo** (conta de teste de 14 dias, ou a conta técnica): conectar por token
+  de longa duração, conferir a busca do contato pelo e-mail, a data gravada no
+  campo de data e a tarefa do tipo "Follow-up".
 
 Diferenças entre os CRMs que o núcleo já trata:
 - No HubSpot, uma propriedade de lista grava o `value` da opção; o conector
@@ -107,13 +124,20 @@ Diferenças entre os CRMs que o núcleo já trata:
   campo de texto curto aceita até 255 caracteres (o conector corta). Só os
   campos personalizados do negócio aparecem para mapear; tipos como usuário,
   pessoa, telefone e endereço ficam de fora.
-- O refresh token do RD Station morre com 14 dias sem uso e o do Pipedrive com
-  60 (a `crm-sync` renova os dois); o do HubSpot vale enquanto o app estiver
-  instalado.
+- No Kommo, o negócio é o "lead"; cada conta tem seu endereço
+  (`https://<conta>.kommo.com`), que só é aceito se terminar em `kommo.com`
+  (a troca de token manda o `client_secret` para ele). Lista grava o `enum_id`,
+  data vai em Unix timestamp (meio-dia de Brasília) e a tarefa vence às 18h. A
+  busca de contato do Kommo é por texto: o conector confere o e-mail exato.
+- O refresh token do RD Station morre com 14 dias sem uso, o do Pipedrive com
+  60 e o do Kommo com 90 (a `crm-sync` renova os três); o do HubSpot vale
+  enquanto o app estiver instalado. O token de longa duração do Kommo não
+  renova: quando vence ou é revogado, a conexão fica em "Precisa reconectar" e
+  o admin cola um token novo.
 
 ## Limitações desta primeira versão
 
-- RD Station CRM, HubSpot e Pipedrive; um CRM por organização.
+- RD Station CRM, HubSpot, Pipedrive e Kommo; um CRM por organização.
 - Grava no negócio (deal); contato e empresa não são atualizados.
 - A etapa do funil não muda sozinha.
 - O vendedor escolhe o negócio no app; a escolha direto na extensão do Chrome

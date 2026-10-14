@@ -56,6 +56,8 @@ export interface CrmConnector {
 
 export interface CrmOAuth {
   authorizeUrl(state: string, redirectUri: string): string;
-  exchangeCode(code: string, redirectUri: string): Promise<TokenSet>;
-  refresh(refreshToken: string): Promise<TokenSet>;
+  /** `callback`: parâmetros da volta do OAuth (o Kommo manda o endereço da conta neles). */
+  exchangeCode(code: string, redirectUri: string, callback?: URLSearchParams): Promise<TokenSet>;
+  /** `ctx`: endereço da conta e URL de retorno, para CRMs que pedem os dois na renovação. */
+  refresh(refreshToken: string, ctx?: { apiDomain?: string | null; redirectUri?: string }): Promise<TokenSet>;
 }

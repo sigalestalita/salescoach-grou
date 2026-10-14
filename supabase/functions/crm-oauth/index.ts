@@ -9,14 +9,13 @@
 // Supabase; a autenticidade vem do "state" assinado.
 
 import { json, preflight } from "../_shared/cors.ts";
-import { getCaller, HttpError, adminClient, requireRole, SUPABASE_URL } from "../_shared/tenant.ts";
+import { getCaller, HttpError, adminClient, requireRole } from "../_shared/tenant.ts";
 import { signState, verifyState } from "../_shared/crm/crypto.ts";
-import { AVAILABLE_PROVIDERS, oauthFor, saveConnection } from "../_shared/crm/connection.ts";
+import { accountLabel, AVAILABLE_PROVIDERS, oauthFor, oauthRedirectUri, saveConnection } from "../_shared/crm/connection.ts";
 import { CrmError, CrmProvider } from "../_shared/crm/types.ts";
 
 const PROVIDERS: CrmProvider[] = AVAILABLE_PROVIDERS;
-const LABEL: Record<string, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot", pipedrive: "Pipedrive" };
-const redirectUri = () => `${SUPABASE_URL}/functions/v1/crm-oauth`;
+const redirectUri = oauthRedirectUri;
 
 /** Só volta para domínios da própria plataforma (evita redirecionamento aberto). */
 function safeReturn(url: string | undefined): string {
@@ -58,14 +57,14 @@ Deno.serve(async (req) => {
 
     try {
       const provider = state.provider as CrmProvider;
-      const tokens = await oauthFor(provider).exchangeCode(code, redirectUri());
+      const tokens = await oauthFor(provider).exchangeCode(code, redirectUri(), url.searchParams);
       const admin = adminClient();
       // Quem iniciou ainda precisa ser admin da mesma organização.
       const { data: role } = await admin.from("user_roles").select("role")
         .eq("user_id", state.userId).eq("org_id", state.orgId).maybeSingle();
       if (role?.role !== "admin") return backTo(returnTo, { crm: "erro", motivo: "sem_permissao" });
 
-      await saveConnection(admin, state.orgId, provider, state.userId, tokens, LABEL[provider] ?? provider);
+      await saveConnection(admin, state.orgId, provider, state.userId, tokens, accountLabel(provider, tokens.apiDomain));
       await admin.from("audit_log").insert({
         org_id: state.orgId, actor_user_id: state.userId, action: "crm_conectado", entity: "crm_connections", metadata: { provider },
       }).then(() => {}, () => {});
