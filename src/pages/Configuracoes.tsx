@@ -13,6 +13,7 @@ import { Settings, Brain, Database, CreditCard, Users, Plus, KeyRound, Trash2, S
 import { useToast } from "@/hooks/use-toast";
 import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { MethodologySettings } from "@/components/settings/MethodologySettings";
+import { CrmSettings } from "@/components/settings/CrmSettings";
 import { PlanUsageCard } from "@/components/settings/PlanUsageCard";
 
 interface ManagedUser {
@@ -374,6 +375,7 @@ const Configuracoes = () => {
         <>
           <BrandingSettings />
           <MethodologySettings />
+          <CrmSettings />
         </>
       )}
 

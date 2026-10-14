@@ -128,6 +128,8 @@ export interface PromptInput {
   leadName: string | null;
   leadCompany: string | null;
   knowledgeContext: string;
+  /** Data da reunião (AAAA-MM-DD), para a IA converter "sexta que vem" em data. */
+  meetingDate?: string | null;
   /**
    * Só no modo de treino: em que fase da relação a conversa aconteceu e o
    * que conta como boa condução ali. Sem isso, uma conversa de pós-venda é
@@ -179,6 +181,7 @@ CONTEXTO:
 - Vendedor está conversando com o lead: ${input.leadName || "desconhecido"} da empresa ${input.leadCompany || "desconhecida"}
 - Título da reunião: ${input.meetingTitle}
 - Tipo de reunião: ${input.meetingTypeLabel || "não especificado"}
+- Data da reunião: ${input.meetingDate || "não informada"}
 ${input.meetingTypeContext}${input.scenarioContext ? `
 ${input.scenarioContext}
 ` : ""}${knowledgeSection}
@@ -200,7 +203,7 @@ RETORNE um JSON com EXATAMENTE esta estrutura (sem markdown, apenas JSON puro):
   "bant_score": { ${criteriaSchema(t.qualification_criteria)} },${meddicBlock}${spinBlock}${talkRatioBlock}
   "conversation_metrics": { "total_questions": <número>, "open_questions": <número>, "objections_handled": <número> },
   "insights": { "positives": ["..."], "improvements": ["..."], "key_moments": ["..."] },
-  "sales_coach": { "next_steps": ["..."], "suggestions": ["..."], "scripts": ["..."] },
+  "sales_coach": { "next_steps": ["..."], "next_step_date": "<AAAA-MM-DD do próximo passo combinado com o lead, calculada a partir da data da reunião; null se nenhuma data foi combinada>", "suggestions": ["..."], "scripts": ["..."] },
   "highlights": [{ "type": "<objecao|sinal_compra|momento_chave|dor|necessidade>", "text": "...", "speaker": "<vendedor|lead>" }],
   "meeting_summary": {
     "company_name": "<nome da empresa do lead, se mencionado>",

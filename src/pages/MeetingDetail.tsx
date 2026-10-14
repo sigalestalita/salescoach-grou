@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { Tables } from "@/integrations/supabase/types";
 import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { ShareControls } from "@/components/ShareControls";
+import { CrmMeetingCard } from "@/components/CrmMeetingCard";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 
 const MetricTooltip = ({ text }: { text: string }) => (
@@ -454,6 +455,9 @@ const MeetingDetail = () => {
       {/* Analysis results */}
       {analysis && (
         <>
+          {/* Envio ao CRM do cliente (some quando não há CRM conectado) */}
+          <CrmMeetingCard meetingId={meeting.id} />
+
           {/* Resumo Descritivo da Reunião */}
           {rawAnalysis?.meeting_summary && (() => {
             const summary = rawAnalysis.meeting_summary;
