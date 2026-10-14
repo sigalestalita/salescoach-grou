@@ -16,9 +16,19 @@ import { enqueueMeeting, JobRow, processJob } from "../_shared/crm/sync.ts";
 Deno.serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
-  if (!isInternalCall(req)) return json(req, { error: "Não autorizado" }, 401);
 
   const admin = adminClient();
+  // O agendador manda o segredo guardado no cofre do banco; conferido lá.
+  let allowed = isInternalCall(req);
+  if (!allowed) {
+    const received = req.headers.get("x-internal-secret");
+    if (received) {
+      const { data } = await admin.rpc("check_internal_secret", { _secret: received });
+      allowed = data === true;
+    }
+  }
+  if (!allowed) return json(req, { error: "Não autorizado" }, 401);
+
   const body = await req.json().catch(() => ({}));
 
   if (body.meetingId) {
