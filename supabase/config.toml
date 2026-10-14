@@ -26,17 +26,14 @@ verify_jwt = false
 [functions.get-branding]
 verify_jwt = false
 
-# Formulário do site institucional. Público por natureza; a função tem
-# campo-isca, validação e limite de envios por IP.
-[functions.site-lead]
-verify_jwt = false
-
 # Volta do OAuth dos CRMs: o navegador chega sem token do Supabase. A função
 # só aceita um "state" assinado por ela mesma, com validade de 15 minutos.
 [functions.crm-oauth]
 verify_jwt = false
 
-# Fila de envio ao CRM. Aceita só chamada interna (segredo compartilhado ou
-# service role), validada dentro da função.
+# Fila de envio ao CRM. Enviar uma reunião específica ({meetingId}) exige
+# chamada interna (segredo compartilhado ou service role). A varredura da fila
+# (corpo vazio, usada pelo agendador) é aberta: só processa o que já está na
+# hora e não devolve dado de cliente.
 [functions.crm-sync]
 verify_jwt = false
