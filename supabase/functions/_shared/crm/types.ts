@@ -45,7 +45,8 @@ export interface CrmConnector {
   /** Negócios ligados ao contato com este e-mail (abertos primeiro). */
   dealsForEmail(email: string): Promise<CrmDeal[]>;
   searchDeals(term: string): Promise<CrmDeal[]>;
-  getDeal(id: string): Promise<CrmDeal>;
+  /** `fieldKeys`: campos cujo valor atual é preciso ler (regra "só se vazio"). */
+  getDeal(id: string, fieldKeys?: string[]): Promise<CrmDeal>;
   updateDealFields(id: string, fields: Record<string, string | number>): Promise<void>;
   createNote(dealId: string, text: string): Promise<void>;
   createTask(dealId: string, task: { name: string; description: string; dueDate: string }): Promise<void>;

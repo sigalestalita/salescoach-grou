@@ -2,8 +2,9 @@
 
 O Sales Coach grava no negócio do CRM do cliente o resultado de cada análise:
 campos (nota, temperatura, critérios, próximo passo…), uma anotação com o resumo
-e uma tarefa com o próximo passo. Primeiro CRM: **RD Station CRM (API v2)**.
-HubSpot, Pipedrive e Kommo entram como novos conectores, sem mudar o resto.
+e uma tarefa com o próximo passo. CRMs disponíveis: **RD Station CRM (API v2)**
+e **HubSpot (CRM API v3)**. Pipedrive e Kommo entram como novos conectores, sem
+mudar o resto. Cada organização usa um CRM por vez: conectar um desliga o outro.
 
 ## Como funciona
 
@@ -28,6 +29,7 @@ HubSpot, Pipedrive e Kommo entram como novos conectores, sem mudar o resto.
 | Ações do app | `supabase/functions/crm-api` |
 | Fila e renovação de token | `supabase/functions/crm-sync` |
 | Conector RD Station | `supabase/functions/_shared/crm/rdstation.ts` |
+| Conector HubSpot | `supabase/functions/_shared/crm/hubspot.ts` |
 | Dado → campo, anotação, tarefa | `supabase/functions/_shared/crm/mapping.ts` (testado em `src/test/crm-mapping.test.ts`) |
 | Tela de configuração | `src/components/settings/CrmSettings.tsx` |
 | Cartão na reunião | `src/components/CrmMeetingCard.tsx` |
@@ -42,8 +44,16 @@ a tarefa vence em 2 dias úteis.
    criar um app do produto **RD Station CRM** com a URL de retorno
    `https://xgpfuunmmjkgwjefofcd.supabase.co/functions/v1/crm-oauth`. Ele gera o
    `client_id` e o `client_secret`.
+   **App no HubSpot** — numa conta de desenvolvedor do HubSpot, criar um app
+   público (OAuth) com a mesma URL de retorno e os escopos `oauth`,
+   `crm.objects.deals.read`, `crm.objects.deals.write`,
+   `crm.objects.contacts.read`, `crm.objects.contacts.write`,
+   `crm.schemas.deals.read` e `crm.schemas.deals.write`. Com distribuição pelo
+   Marketplace, o app aceita até 25 contas instaladas antes da revisão do
+   HubSpot; a listagem pede 3 instalações ativas.
 2. **Segredos das edge functions** (Lovable → backend → secrets):
-   - `RDSTATION_CRM_CLIENT_ID` e `RDSTATION_CRM_CLIENT_SECRET`: do passo 1
+   - `RDSTATION_CRM_CLIENT_ID` e `RDSTATION_CRM_CLIENT_SECRET`: do app da RD
+   - `HUBSPOT_CLIENT_ID` e `HUBSPOT_CLIENT_SECRET`: do app do HubSpot
    - `CRM_TOKEN_KEY`: texto aleatório de 32 caracteres ou mais. Se mudar, todas
      as conexões precisam ser refeitas.
    - `APP_URL`: endereço do app (ex.: `https://salescoach.groupp.com.br`), usado
@@ -63,16 +73,28 @@ npx vitest run src/test/crm-mapping.test.ts src/test/rls-isolation.test.ts
 cd supabase/functions
 CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env _shared/crm/tests/rdstation_check.ts
 CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-net --allow-read _shared/crm/tests/sync_check.ts
+CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-net --allow-read _shared/crm/tests/hubspot_check.ts
 ```
 
-As verificações em Deno usam um RD Station e um banco simulados. Antes do piloto,
-validar com uma conta real (sandbox de parceiro da RD): a documentação da RD tem
-pequenas divergências (endereço do token, `PUT` × `PATCH` no negócio, formato de
-múltipla escolha) que só o teste real confirma.
+As verificações em Deno usam CRMs e um banco simulados. Antes do piloto,
+validar com contas reais:
+- **RD Station** (sandbox de parceiro da RD): a documentação tem pequenas
+  divergências (endereço do token, `PUT` × `PATCH` no negócio, formato de
+  múltipla escolha) que só o teste real confirma.
+- **HubSpot** (conta de teste de desenvolvedor, gratuita): conferir a criação
+  do grupo e das propriedades "Sales Coach" e a associação de nota e tarefa.
+
+Diferenças entre os dois que o núcleo já trata:
+- No HubSpot, uma propriedade de lista grava o `value` da opção; o conector
+  traduz o rótulo (ex.: "Muito quente" → `muito_quente`).
+- No HubSpot, o "Próximo passo" nativo do negócio (`hs_next_step`) aparece na
+  lista de campos, junto com as propriedades personalizadas.
+- O refresh token do RD Station morre com 14 dias sem uso (a `crm-sync` renova);
+  o do HubSpot vale enquanto o app estiver instalado.
 
 ## Limitações desta primeira versão
 
-- Só o RD Station CRM; um CRM por organização.
+- RD Station CRM e HubSpot; um CRM por organização.
 - Grava no negócio (deal); contato e empresa não são atualizados.
 - A etapa do funil não muda sozinha.
 - O vendedor escolhe o negócio no app; a escolha direto na extensão do Chrome

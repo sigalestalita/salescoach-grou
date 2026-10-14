@@ -13,7 +13,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Link2, Plug, RefreshCw } from "lucide-react";
 import {
-  compatible, CRM_NAME, crmApi, CrmConnection, CrmField, CrmMapping, CrmSettings as Prefs, CrmSource,
+  compatible, CRM_NAME, crmApi, CrmConnection, CrmField, CrmMapping, CrmProvider, CrmSettings as Prefs, CrmSource,
 } from "@/lib/crm";
 
 /**
@@ -22,6 +22,12 @@ import {
  */
 
 const NAO_ENVIAR = "__nao_enviar__";
+/** CRMs que já conectam, com o que a pessoa vai ver ao clicar. */
+const DISPONIVEIS: [CrmProvider, string][] = [
+  ["rdstation", "Você autoriza no RD Station e volta para cá."],
+  ["hubspot", "Você escolhe a conta do HubSpot, autoriza e volta para cá."],
+];
+
 /** Dados que valem um campo próprio no CRM; o resto já vai na anotação. */
 const SUGERIDOS = ["nota", "temperatura", "proximo_passo", "data_proximo_passo", "link_analise"];
 
@@ -71,8 +77,8 @@ export function CrmSettings() {
     } finally { setBusy(null); }
   };
 
-  const connect = () => run("connect", async () => {
-    const { url } = await crmApi.connect("rdstation");
+  const connect = (provider: CrmProvider) => run(`connect:${provider}`, async () => {
+    const { url } = await crmApi.connect(provider);
     window.location.assign(url);
   });
 
@@ -91,7 +97,7 @@ export function CrmSettings() {
   const createFields = () => run("create", async () => {
     const wanted = catalog.filter((s) => SUGERIDOS.includes(s.key) || s.key.startsWith("criterio:")).map((s) => s.key);
     const { created } = await crmApi.createFields(wanted);
-    toast({ title: `${created.length} campos prontos no ${CRM_NAME.rdstation}`, description: "O mapeamento já foi preenchido." });
+    toast({ title: `${created.length} campos prontos no ${connection ? CRM_NAME[connection.provider] : "CRM"}`, description: "O mapeamento já foi preenchido." });
     await load();
   });
 
@@ -109,7 +115,7 @@ export function CrmSettings() {
           Integração com CRM
         </CardTitle>
         <CardDescription>
-          Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM,
+          Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM (RD Station CRM ou HubSpot),
           cria uma anotação com o resumo e uma tarefa com o próximo passo.
         </CardDescription>
       </CardHeader>
@@ -117,15 +123,20 @@ export function CrmSettings() {
         {loading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : !connection ? (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border p-4">
-            <div>
-              <p className="font-medium">{CRM_NAME.rdstation}</p>
-              <p className="text-sm text-muted-foreground">Você autoriza no RD Station e volta para cá. HubSpot, Pipedrive e Kommo chegam em seguida.</p>
-            </div>
-            <Button onClick={connect} disabled={busy === "connect"}>
-              <Link2 className="mr-2 h-4 w-4" />
-              {busy === "connect" ? "Abrindo…" : "Conectar"}
-            </Button>
+          <div className="space-y-3">
+            {DISPONIVEIS.map(([provider, hint]) => (
+              <div key={provider} className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border p-4">
+                <div>
+                  <p className="font-medium">{CRM_NAME[provider]}</p>
+                  <p className="text-sm text-muted-foreground">{hint}</p>
+                </div>
+                <Button onClick={() => connect(provider)} disabled={!!busy}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  {busy === `connect:${provider}` ? "Abrindo…" : "Conectar"}
+                </Button>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">Pipedrive e Kommo chegam em seguida. Uma empresa usa um CRM por vez.</p>
           </div>
         ) : (
           <>
@@ -144,7 +155,7 @@ export function CrmSettings() {
               </div>
               <div className="flex gap-2">
                 {connection.status !== "ativo" && (
-                  <Button onClick={connect} disabled={busy === "connect"}>Reconectar</Button>
+                  <Button onClick={() => connect(connection.provider)} disabled={!!busy}>Reconectar</Button>
                 )}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -155,7 +166,7 @@ export function CrmSettings() {
                       <AlertDialogTitle>Desconectar o CRM?</AlertDialogTitle>
                       <AlertDialogDescription>
                         As próximas análises deixam de ir para o {CRM_NAME[connection.provider]}. O que já foi enviado continua lá.
-                        O mapeamento de campos fica salvo para quando reconectar.
+                        O mapeamento de campos fica salvo para quando reconectar. Para trocar de CRM, desconecte e conecte o outro.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

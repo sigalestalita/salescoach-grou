@@ -11,11 +11,11 @@
 import { json, preflight } from "../_shared/cors.ts";
 import { getCaller, HttpError, adminClient, requireRole, SUPABASE_URL } from "../_shared/tenant.ts";
 import { signState, verifyState } from "../_shared/crm/crypto.ts";
-import { oauthFor, saveConnection } from "../_shared/crm/connection.ts";
+import { AVAILABLE_PROVIDERS, oauthFor, saveConnection } from "../_shared/crm/connection.ts";
 import { CrmError, CrmProvider } from "../_shared/crm/types.ts";
 
-const PROVIDERS: CrmProvider[] = ["rdstation"];
-const LABEL: Record<string, string> = { rdstation: "RD Station CRM" };
+const PROVIDERS: CrmProvider[] = AVAILABLE_PROVIDERS;
+const LABEL: Record<string, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot" };
 const redirectUri = () => `${SUPABASE_URL}/functions/v1/crm-oauth`;
 
 /** Só volta para domínios da própria plataforma (evita redirecionamento aberto). */

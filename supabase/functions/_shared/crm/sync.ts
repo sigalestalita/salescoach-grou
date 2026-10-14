@@ -85,9 +85,10 @@ async function resolveDeal(
   crm: CrmConnector,
   meeting: Record<string, unknown>,
   provider: string,
+  fieldKeys: string[],
 ): Promise<{ deal: CrmDeal | null; reason?: string }> {
   if (meeting.crm_deal_id && meeting.crm_provider === provider) {
-    return { deal: await crm.getDeal(String(meeting.crm_deal_id)) };
+    return { deal: await crm.getDeal(String(meeting.crm_deal_id), fieldKeys) };
   }
   const email = String(meeting.lead_email ?? "").trim();
   if (!email) return { deal: null, reason: "A reunião não tem e-mail do lead. Escolha o negócio do CRM na reunião." };
@@ -99,7 +100,7 @@ async function resolveDeal(
     await admin.from("meetings").update({
       crm_provider: provider, crm_deal_id: d.id, crm_deal_name: d.name, crm_linked_at: new Date().toISOString(),
     }).eq("id", meeting.id);
-    return { deal: await crm.getDeal(d.id) };
+    return { deal: await crm.getDeal(d.id, fieldKeys) };
   }
   if (!abertos.length) return { deal: null, reason: `Nenhum negócio aberto no CRM para ${email}. Escolha o negócio na reunião.` };
   return { deal: null, reason: `${abertos.length} negócios abertos para ${email}. Escolha o certo na reunião.` };
@@ -158,7 +159,8 @@ export async function processJob(admin: SupabaseClient, job: JobRow): Promise<Jo
     };
 
     return await withAuthRetry(admin, conn, async (crm) => {
-      const { deal, reason } = await resolveDeal(admin, crm, meeting, job.provider);
+      const fieldKeys = ((mappings ?? []) as FieldMapping[]).map((m) => m.target_field);
+      const { deal, reason } = await resolveDeal(admin, crm, meeting, job.provider, fieldKeys);
       if (!deal) {
         await finish("aguardando_vinculo", { last_error: reason, next_attempt_at: now });
         return { status: "aguardando_vinculo" as const, message: reason };

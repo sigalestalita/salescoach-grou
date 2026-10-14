@@ -4,6 +4,7 @@
 import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 import { decryptToken, encryptToken } from "./crypto.ts";
 import { rdConnector, rdOAuth } from "./rdstation.ts";
+import { hubspotConnector, hubspotOAuth } from "./hubspot.ts";
 import { CrmConnector, CrmError, CrmOAuth, CrmProvider, TokenSet } from "./types.ts";
 
 export interface ConnectionRow {
@@ -15,8 +16,14 @@ export interface ConnectionRow {
   settings: { criar_anotacao?: boolean; criar_tarefa?: boolean; envio_automatico?: boolean; dias_tarefa?: number };
 }
 
-const OAUTH: Partial<Record<CrmProvider, CrmOAuth>> = { rdstation: rdOAuth };
-const CONNECTORS: Partial<Record<CrmProvider, (token: string) => CrmConnector>> = { rdstation: rdConnector };
+const OAUTH: Partial<Record<CrmProvider, CrmOAuth>> = { rdstation: rdOAuth, hubspot: hubspotOAuth };
+const CONNECTORS: Partial<Record<CrmProvider, (token: string) => CrmConnector>> = {
+  rdstation: rdConnector,
+  hubspot: hubspotConnector,
+};
+
+/** CRMs que já podem ser conectados. */
+export const AVAILABLE_PROVIDERS = Object.keys(CONNECTORS) as CrmProvider[];
 
 export function oauthFor(provider: CrmProvider): CrmOAuth {
   const o = OAUTH[provider];
@@ -75,6 +82,14 @@ export async function saveConnection(
     .single();
   if (error || !data) throw new Error(`Não foi possível salvar a conexão: ${error?.message}`);
   await storeTokens(admin, data.id, orgId, tokens);
+
+  // Um CRM por organização: conectar um desliga o outro e apaga os tokens dele.
+  const { data: others } = await admin.from("crm_connections").select("id")
+    .eq("org_id", orgId).neq("provider", provider).neq("status", "desconectado");
+  for (const o of others ?? []) {
+    await admin.from("crm_credentials").delete().eq("connection_id", o.id);
+    await admin.from("crm_connections").update({ status: "desconectado", updated_at: new Date().toISOString() }).eq("id", o.id);
+  }
   return data.id;
 }
 
