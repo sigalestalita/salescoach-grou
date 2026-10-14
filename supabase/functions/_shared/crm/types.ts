@@ -27,6 +27,8 @@ export interface TokenSet {
   refreshToken: string | null;
   /** ISO 8601 */
   expiresAt: string | null;
+  /** Base da API da conta, quando o CRM tem uma por cliente (Pipedrive). */
+  apiDomain?: string | null;
 }
 
 export type CrmErrorKind = "auth" | "rate" | "not_found" | "invalid" | "server";

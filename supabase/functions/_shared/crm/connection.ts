@@ -5,6 +5,7 @@ import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 import { decryptToken, encryptToken } from "./crypto.ts";
 import { rdConnector, rdOAuth } from "./rdstation.ts";
 import { hubspotConnector, hubspotOAuth } from "./hubspot.ts";
+import { pipedriveConnector, pipedriveOAuth } from "./pipedrive.ts";
 import { CrmConnector, CrmError, CrmOAuth, CrmProvider, TokenSet } from "./types.ts";
 
 export interface ConnectionRow {
@@ -16,10 +17,11 @@ export interface ConnectionRow {
   settings: { criar_anotacao?: boolean; criar_tarefa?: boolean; envio_automatico?: boolean; dias_tarefa?: number };
 }
 
-const OAUTH: Partial<Record<CrmProvider, CrmOAuth>> = { rdstation: rdOAuth, hubspot: hubspotOAuth };
-const CONNECTORS: Partial<Record<CrmProvider, (token: string) => CrmConnector>> = {
+const OAUTH: Partial<Record<CrmProvider, CrmOAuth>> = { rdstation: rdOAuth, hubspot: hubspotOAuth, pipedrive: pipedriveOAuth };
+const CONNECTORS: Partial<Record<CrmProvider, (token: string, apiDomain: string | null) => CrmConnector>> = {
   rdstation: rdConnector,
   hubspot: hubspotConnector,
+  pipedrive: pipedriveConnector,
 };
 
 /** CRMs que já podem ser conectados. */
@@ -101,6 +103,8 @@ async function storeTokens(admin: SupabaseClient, connectionId: string, orgId: s
     refresh_token_enc: t.refreshToken ? await encryptToken(t.refreshToken) : null,
     expires_at: t.expiresAt,
     refreshed_at: new Date().toISOString(),
+    // Sem api_domain na resposta, a renovação mantém o que já estava gravado.
+    ...(t.apiDomain ? { api_domain: t.apiDomain } : {}),
   });
   if (error) throw new Error(`Não foi possível salvar os tokens: ${error.message}`);
 }
@@ -151,5 +155,8 @@ export async function connectorFor(admin: SupabaseClient, conn: ConnectionRow): 
   const make = CONNECTORS[conn.provider];
   if (!make) throw new CrmError(`O CRM ${conn.provider} ainda não está disponível.`, "invalid");
   if (conn.status === "desconectado") throw new CrmError("O CRM está desconectado.", "auth");
-  return make(await accessToken(admin, conn));
+  const token = await accessToken(admin, conn);
+  // Lido depois do token: uma renovação pode ter trazido um endereço novo.
+  const { data: cred } = await admin.from("crm_credentials").select("api_domain").eq("connection_id", conn.id).maybeSingle();
+  return make(token, cred?.api_domain ?? null);
 }

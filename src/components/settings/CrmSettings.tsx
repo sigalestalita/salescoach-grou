@@ -17,7 +17,7 @@ import {
 } from "@/lib/crm";
 
 /**
- * Integração com CRM (admin). Conecta o RD Station CRM por OAuth e define em
+ * Integração com CRM (admin). Conecta o CRM (RD Station, HubSpot ou Pipedrive) por OAuth e define em
  * qual campo do negócio cada dado do Sales Coach é gravado ao fim da análise.
  */
 
@@ -26,6 +26,7 @@ const NAO_ENVIAR = "__nao_enviar__";
 const DISPONIVEIS: [CrmProvider, string][] = [
   ["rdstation", "Você autoriza no RD Station e volta para cá."],
   ["hubspot", "Você escolhe a conta do HubSpot, autoriza e volta para cá."],
+  ["pipedrive", "Você entra no Pipedrive, escolhe a empresa, autoriza e volta para cá."],
 ];
 
 /** Dados que valem um campo próprio no CRM; o resto já vai na anotação. */
@@ -115,7 +116,7 @@ export function CrmSettings() {
           Integração com CRM
         </CardTitle>
         <CardDescription>
-          Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM (RD Station CRM ou HubSpot),
+          Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM (RD Station CRM, HubSpot ou Pipedrive),
           cria uma anotação com o resumo e uma tarefa com o próximo passo.
         </CardDescription>
       </CardHeader>
@@ -136,7 +137,7 @@ export function CrmSettings() {
                 </Button>
               </div>
             ))}
-            <p className="text-xs text-muted-foreground">Pipedrive e Kommo chegam em seguida. Uma empresa usa um CRM por vez.</p>
+            <p className="text-xs text-muted-foreground">O Kommo chega em seguida. Uma empresa usa um CRM por vez.</p>
           </div>
         ) : (
           <>

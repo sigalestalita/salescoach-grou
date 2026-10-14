@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS public.crm_credentials (
   access_token_enc   TEXT NOT NULL,
   refresh_token_enc  TEXT,
   expires_at         TIMESTAMPTZ,
+  -- Base da API da conta, quando o CRM tem uma por cliente (Pipedrive)
+  api_domain         TEXT,
   refreshed_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

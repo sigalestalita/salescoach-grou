@@ -15,7 +15,7 @@ import { AVAILABLE_PROVIDERS, oauthFor, saveConnection } from "../_shared/crm/co
 import { CrmError, CrmProvider } from "../_shared/crm/types.ts";
 
 const PROVIDERS: CrmProvider[] = AVAILABLE_PROVIDERS;
-const LABEL: Record<string, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot" };
+const LABEL: Record<string, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot", pipedrive: "Pipedrive" };
 const redirectUri = () => `${SUPABASE_URL}/functions/v1/crm-oauth`;
 
 /** Só volta para domínios da própria plataforma (evita redirecionamento aberto). */
