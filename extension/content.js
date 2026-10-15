@@ -40,64 +40,180 @@
   let lastToken = null;
 
   // ── Overlay DOM ──
+  //
+  // Painel claro: a dica mais recente em destaque, o tempo de gravação e o
+  // botão de parar no cabeçalho, medidores de áudio e a transcrição recolhida.
+  // Arrastável pelo cabeçalho; minimizado vira uma pílula com o tempo.
   const overlay = document.createElement('div');
   overlay.id = 'salescoach-overlay';
   overlay.innerHTML = `
-    <button class="sc-minimize" id="sc-minimize" title="Minimizar">─</button>
-    <div class="sc-header">
+    <div class="sc-head" id="sc-head" title="Arraste para mover">
+      <span class="sc-grip" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
       <img class="sc-mark" src="${chrome.runtime.getURL('icon48.png')}" alt="">
-      <h2>Sales Coach</h2>
-      <div class="sc-dot"></div>
+      <span class="sc-name">Sales Coach</span>
+      <span class="sc-spacer"></span>
+      <span class="sc-rec" id="sc-rec" hidden><i></i><span>REC <span id="sc-timer">00:00</span></span></span>
+      <button type="button" class="sc-ibtn sc-stop" id="sc-btn-stop" title="Parar e enviar" aria-label="Parar e enviar" hidden><span></span></button>
+      <button type="button" class="sc-ibtn" id="sc-minimize" title="Minimizar" aria-label="Minimizar">
+        <svg viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
     </div>
     <div class="sc-body">
-      <div id="sc-init" class="sc-status sending">Selecione a tela para compartilhar…</div>
-      <div id="sc-recording" style="display:none;">
-        <div class="sc-recording-indicator">
-          <div class="sc-pulse"></div>
-          <span>Gravando</span>
-          <span id="sc-live-flag" class="sc-live-flag">LIVE</span>
+      <div id="sc-init" class="sc-status sending">Escolha a aba da reunião e clique em Compartilhar.</div>
+      <div id="sc-recording" class="sc-section" hidden>
+        <div class="sc-confirm" id="sc-confirm" hidden>
+          <b>Encerrar a gravação?</b>
+          <span id="sc-confirm-text">A gravação é enviada para análise. O resultado chega em alguns minutos.</span>
+          <div class="sc-row">
+            <button type="button" class="sc-btn" id="sc-confirm-no">Continuar gravando</button>
+            <button type="button" class="sc-btn sc-btn-danger" id="sc-confirm-yes">Parar e enviar</button>
+          </div>
         </div>
-        <div class="sc-timer" id="sc-timer">00:00:00</div>
-        <div class="sc-mode" id="sc-mode">Tela + áudio</div>
-
-        <div class="sc-section-title">Dicas ao vivo</div>
-        <div id="sc-tips" class="sc-tips">
-          <div class="sc-tips-empty">Aguardando primeiras falas…</div>
+        <div id="sc-alerts" class="sc-section" hidden></div>
+        <div id="sc-tips"><div class="sc-empty">Conectando o coach…</div></div>
+        <div id="sc-older" hidden>
+          <button type="button" class="sc-link" id="sc-older-btn" aria-expanded="false"></button>
+          <ul class="sc-older-list" id="sc-older-list" hidden></ul>
         </div>
-
-        <div class="sc-section-title">Transcrição</div>
-        <div id="sc-live-text" class="sc-live-text">…</div>
-
-        <button class="sc-btn sc-btn-danger" id="sc-btn-stop">Parar e enviar</button>
+        <div class="sc-meters" aria-label="Nível de áudio">
+          <span>Você</span><div class="sc-bar"><i id="sc-meter-vendedor"></i></div>
+          <span>Cliente</span><div class="sc-bar"><i id="sc-meter-cliente"></i></div>
+        </div>
+        <div class="sc-tx">
+          <div class="sc-tx-head">
+            <span class="sc-label">Transcrição</span>
+            <button type="button" class="sc-link" id="sc-tx-btn" aria-expanded="false">ver tudo</button>
+          </div>
+          <div class="sc-tx-last" id="sc-live-text">…</div>
+          <div class="sc-tx-full" id="sc-tx-full" hidden></div>
+        </div>
       </div>
-      <div id="sc-status-msg" style="display:none;"></div>
+      <div id="sc-status-msg" hidden></div>
     </div>
+    <button type="button" class="sc-pill" id="sc-pill" title="Abrir o painel">
+      <span class="sc-pill-dot"></span>
+      <span class="sc-pill-time" id="sc-pill-time">00:00</span>
+      <span class="sc-pill-new" id="sc-pill-new" hidden></span>
+    </button>
   `;
   document.body.appendChild(overlay);
 
-  const initEl = document.getElementById('sc-init');
-  const recordingEl = document.getElementById('sc-recording');
-  const statusMsgEl = document.getElementById('sc-status-msg');
-  const timerEl = document.getElementById('sc-timer');
-  const modeEl = document.getElementById('sc-mode');
-  const stopBtn = document.getElementById('sc-btn-stop');
-  const minimizeBtn = document.getElementById('sc-minimize');
-  const tipsEl = document.getElementById('sc-tips');
-  const liveTextEl = document.getElementById('sc-live-text');
-  const liveFlag = document.getElementById('sc-live-flag');
+  const $id = (id) => document.getElementById(id);
+  const initEl = $id('sc-init');
+  const recordingEl = $id('sc-recording');
+  const statusMsgEl = $id('sc-status-msg');
+  const timerEl = $id('sc-timer');
+  const recEl = $id('sc-rec');
+  const stopBtn = $id('sc-btn-stop');
+  const minimizeBtn = $id('sc-minimize');
+  const confirmEl = $id('sc-confirm');
+  const alertsEl = $id('sc-alerts');
+  const tipsEl = $id('sc-tips');
+  const olderEl = $id('sc-older');
+  const olderBtn = $id('sc-older-btn');
+  const olderList = $id('sc-older-list');
+  const liveTextEl = $id('sc-live-text');
+  const txFullEl = $id('sc-tx-full');
+  const txBtn = $id('sc-tx-btn');
+  const pillBtn = $id('sc-pill');
+  const pillTime = $id('sc-pill-time');
+  const pillNew = $id('sc-pill-new');
+  const meterEls = { vendedor: $id('sc-meter-vendedor'), cliente: $id('sc-meter-cliente') };
 
-  minimizeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    overlay.classList.toggle('minimized');
-    minimizeBtn.textContent = overlay.classList.contains('minimized') ? '◻' : '─';
+  // Minimizar / restaurar. Dicas que chegam minimizado viram contador na pílula.
+  let unseenTips = 0;
+  function setMinimized(min) {
+    overlay.classList.toggle('minimized', min);
+    if (!min) { unseenTips = 0; updatePill(); }
+  }
+  function updatePill() {
+    pillNew.hidden = unseenTips === 0;
+    pillNew.textContent = unseenTips === 1 ? '1 dica nova' : `${unseenTips} dicas novas`;
+  }
+  minimizeBtn.addEventListener('click', (e) => { e.stopPropagation(); setMinimized(true); });
+  pillBtn.addEventListener('click', () => setMinimized(false));
+
+  // Parar pede confirmação: o botão fica no cabeçalho, perto do minimizar.
+  stopBtn.addEventListener('click', () => {
+    setMinimized(false);
+    $id('sc-confirm-text').textContent = `A gravação de ${timerEl.textContent} é enviada para análise. O resultado chega em alguns minutos.`;
+    confirmEl.hidden = false;
+    $id('sc-confirm-no').focus();
   });
-  overlay.addEventListener('click', () => {
-    if (overlay.classList.contains('minimized')) {
-      overlay.classList.remove('minimized');
-      minimizeBtn.textContent = '─';
+  $id('sc-confirm-no').addEventListener('click', () => { confirmEl.hidden = true; });
+  $id('sc-confirm-yes').addEventListener('click', () => { confirmEl.hidden = true; stopRecording(); });
+
+  olderBtn.addEventListener('click', () => {
+    const open = olderList.hidden;
+    olderList.hidden = !open;
+    olderBtn.setAttribute('aria-expanded', String(open));
+    renderOlderLabel();
+  });
+  txBtn.addEventListener('click', () => {
+    const open = txFullEl.hidden;
+    txFullEl.hidden = !open;
+    liveTextEl.hidden = open;
+    txBtn.setAttribute('aria-expanded', String(open));
+    txBtn.textContent = open ? 'recolher' : 'ver tudo';
+    if (open) txFullEl.scrollTop = txFullEl.scrollHeight;
+  });
+
+  // ── Arrastar ──
+  // A posição fica salva: a próxima reunião abre o painel no mesmo lugar.
+  function placeAt(left, top) {
+    const r = overlay.getBoundingClientRect();
+    const x = Math.min(Math.max(8, left), Math.max(8, window.innerWidth - r.width - 8));
+    const y = Math.min(Math.max(8, top), Math.max(8, window.innerHeight - 48));
+    overlay.style.left = `${x}px`;
+    overlay.style.top = `${y}px`;
+    overlay.style.right = 'auto';
+    return { left: x, top: y };
+  }
+  $id('sc-head').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    const r = overlay.getBoundingClientRect();
+    const dx = e.clientX - r.left, dy = e.clientY - r.top;
+    overlay.classList.add('dragging');
+    const move = (ev) => placeAt(ev.clientX - dx, ev.clientY - dy);
+    const up = (ev) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      overlay.classList.remove('dragging');
+      safeStorageSet({ overlayPos: placeAt(ev.clientX - dx, ev.clientY - dy) });
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    e.preventDefault();
+  });
+  try {
+    chrome.storage.local.get(['overlayPos']).then(({ overlayPos }) => {
+      if (overlayPos && Number.isFinite(overlayPos.left)) placeAt(overlayPos.left, overlayPos.top);
+    }).catch(() => {});
+  } catch {}
+  window.addEventListener('resize', () => {
+    if (overlay.style.right === 'auto') placeAt(parseFloat(overlay.style.left), parseFloat(overlay.style.top));
+  });
+
+  // ── Avisos em linguagem simples ──
+  // Cada aviso tem uma chave; o mesmo problema não aparece duas vezes.
+  const alerts = new Map();
+  function setAlert(key, alert) {
+    if (alert) alerts.set(key, alert); else alerts.delete(key);
+    alertsEl.innerHTML = '';
+    alertsEl.hidden = alerts.size === 0;
+    for (const a of alerts.values()) {
+      const el = document.createElement('div');
+      el.className = `sc-alert ${a.kind}`;
+      el.setAttribute('role', 'status');
+      const icon = a.kind === 'info' ? '<span class="sc-spin"></span>' : '!';
+      el.innerHTML = `<span class="sc-alert-ic">${icon}</span><div><b>${escape(a.title)}</b><span>${escape(a.text)}</span></div>`;
+      if (a.detail) el.title = a.detail;
+      alertsEl.appendChild(el);
     }
-  });
-  stopBtn.addEventListener('click', () => stopRecording());
+  }
+  const RECONNECTING = {
+    kind: 'info', title: 'Dicas pausadas, reconectando…', text: 'A gravação continua normalmente. Nada se perde.',
+  };
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === 'startRecording') startRecording();
@@ -215,9 +331,9 @@
   async function beginRecording() {
 
     let hasScreen = false, hasSystemAudio = false;
-    initEl.style.display = '';
-    recordingEl.style.display = 'none';
-    statusMsgEl.style.display = 'none';
+    initEl.hidden = false;
+    recordingEl.hidden = true;
+    statusMsgEl.hidden = true;
 
     try {
       screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -313,10 +429,19 @@
     mediaRecorder.start(1000);
 
     startTime = Date.now();
-    initEl.style.display = 'none';
-    recordingEl.style.display = '';
-    modeEl.textContent = isVideo ? 'Tela + áudio' : 'Apenas áudio';
+    initEl.hidden = true;
+    recordingEl.hidden = false;
+    recEl.hidden = false;
+    stopBtn.hidden = false;
+    recEl.title = isVideo ? 'Gravando tela e áudio' : 'Gravando só o áudio';
     startTimer();
+    startMeters(micStream, hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null);
+    if (!hasSystemAudio) {
+      setAlert('sem-cliente', {
+        kind: 'warn', title: 'Não estou ouvindo o cliente',
+        text: 'Só a sua voz entra. Pare e compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
+      });
+    }
     safeStorageSet({
       recordingState: 'recording', recordingStartTime: startTime,
       recordingMode: mode, isScreenSharing: isVideo,
@@ -324,8 +449,8 @@
     notifyBackground('recordingStarted', { mode, startTime });
 
     // ── Live coach pipeline ──
-    setLiveText('Conectando transcrição…');
-    setTipsStatus('Conectando coach…');
+    setLiveText('Conectando a transcrição…');
+    setTipsStatus('Conectando o coach…');
     try {
       const token = await getValidToken();
       if (!token) throw new Error('sessão expirada — refaça login na extensão');
@@ -344,21 +469,27 @@
       }
     } catch (e) {
       console.warn('Live coach off:', e);
-      liveFlag.style.display = 'none';
-      setLiveText('Live indisponível: ' + (e?.message || e));
-      setTipsStatus('Coach indisponível.');
+      setLiveText('Transcrição ao vivo desligada nesta reunião.');
+      setTipsStatus(null);
+      tipsEl.innerHTML = '';
+      setAlert('live-off', {
+        kind: 'warn', title: 'Dicas ao vivo indisponíveis',
+        text: 'A gravação continua normalmente e a análise sai no final.',
+        detail: String(e?.message || e),
+      });
     }
   }
 
   function stopRecording() {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
-      recordingEl.style.display = 'none';
+      recordingEl.hidden = true;
     }
   }
 
   function cleanup() {
     stopTimer();
+    stopMeters();
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
     if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
@@ -404,10 +535,18 @@
     return data.tokens;
   }
 
+  function lineHtml(who, text) {
+    return `<b>${escape(LABEL[who])}:</b> ${escape(text)}`;
+  }
   function renderLive(partial) {
-    const lines = liveLines.slice(-3).map((l) => `${LABEL[l.who]}: ${l.text}`);
-    if (partial) lines.push(`${LABEL[partial.who]}: ${partial.text}…`);
-    setLiveText(lines.length ? lines.join('\n') : 'Conectado. Aguardando fala…');
+    const last = partial ? { ...partial, text: `${partial.text}…` } : liveLines[liveLines.length - 1];
+    if (last) liveTextEl.innerHTML = lineHtml(last.who, last.text);
+    else setLiveText('Conectado. Aguardando a primeira fala…');
+    const all = liveLines.map((l) => `<div>${lineHtml(l.who, l.text)}</div>`);
+    if (partial) all.push(`<div>${lineHtml(partial.who, `${partial.text}…`)}</div>`);
+    const atEnd = txFullEl.scrollHeight - txFullEl.scrollTop - txFullEl.clientHeight < 24;
+    txFullEl.innerHTML = all.join('') || '<div>Nenhuma fala ainda.</div>';
+    if (atEnd) txFullEl.scrollTop = txFullEl.scrollHeight;
   }
 
   async function saveSegment(mid, who, text) {
@@ -465,7 +604,8 @@
     ch.ws = ws;
     ws.onopen = () => {
       ch.attempts = 0;
-      liveFlag.classList.add('on');
+      ch.down = false;
+      if (!Object.values(liveChannels).some((c) => c.down)) setAlert('reconectando', null);
       if (!liveLines.length) renderLive(null);
     };
     ws.onmessage = (ev) => {
@@ -476,7 +616,7 @@
         if (!text) return;
         if (m.end_of_turn) {
           liveLines.push({ who, text });
-          if (liveLines.length > 20) liveLines.shift();
+          if (liveLines.length > 60) liveLines.shift();
           renderLive(null);
           if (text.length > 2) saveSegment(mid, who, text);
         } else {
@@ -487,7 +627,8 @@
     ws.onclose = (ev) => {
       if (liveStopping || ch.ws !== ws) return;
       console.warn(`Sales Coach: trilha ${who} caiu (${ev.code} ${ev.reason || ''}); reconectando`);
-      liveFlag.classList.remove('on');
+      ch.down = true;
+      setAlert('reconectando', RECONNECTING);
       // Reconecta com um token novo, com espera crescente (1, 2, 4... até 30 s).
       const delay = Math.min(30000, 1000 * 2 ** ch.attempts);
       setTimeout(async () => {
@@ -496,7 +637,7 @@
           const tokens = await liveTokens(mid, [who]);
           openChannel(mid, who, stream, tokens[who], ch.attempts + 1);
         } catch (e) {
-          setLiveText(`Reconectando a transcrição… (${e.message})`);
+          console.warn('Sales Coach: reconexão falhou', e);
           ch.attempts += 1;
           ws.onclose({ code: 0, reason: 'retry' });
         }
@@ -513,7 +654,7 @@
     const tokens = await liveTokens(mid, channels);
     for (const who of channels) openChannel(mid, who, streams[who], tokens[who]);
     if (!channels.includes('cliente')) {
-      setLiveText('Só a sua voz entra no live: compartilhe a aba com o áudio para o coach ouvir o cliente.');
+      // O aviso "Não estou ouvindo o cliente" já está no painel.
     }
     startTipsRealtime(token, mid);
   }
@@ -556,15 +697,17 @@
           const msg = JSON.parse(ev.data);
           if (msg.event === 'phx_reply' && msg.ref === joinRef) {
             if (msg.payload?.status === 'ok') {
-              setTipsStatus(null); // ready, waiting for tips
+              setTipsStatus(null); // pronto, aguardando dicas
+              setAlert('dicas', null);
             } else {
-              setTipsStatus('Falha ao conectar coach: ' + (msg.payload?.response?.reason || 'desconhecido'));
+              setTipsStatus(null);
+              setAlert('dicas', { ...RECONNECTING, kind: 'warn', title: 'Dicas ao vivo indisponíveis', detail: msg.payload?.response?.reason || '' });
               console.error('phx_join failed', msg);
             }
             return;
           }
           if (msg.event === 'phx_error') {
-            setTipsStatus('Erro no canal de dicas.');
+            setAlert('dicas', RECONNECTING);
             console.error('phx_error', msg);
             return;
           }
@@ -577,7 +720,7 @@
 
       tipsWS.onerror = (event) => {
         console.error('Sales Coach tips Realtime WS error:', event);
-        setTipsStatus('Erro no WebSocket de dicas.');
+        setAlert('dicas', RECONNECTING);
       };
       tipsWS.onclose = (event) => {
         console.error('Sales Coach tips Realtime WS closed:', event.code, event.reason);
@@ -586,21 +729,14 @@
       };
     } catch (e) {
       console.warn('Realtime fail:', e);
-      setTipsStatus('Falha ao iniciar canal de dicas.');
+      setAlert('dicas', { ...RECONNECTING, kind: 'warn', title: 'Dicas ao vivo indisponíveis' });
     }
   }
 
   function setLiveText(t) { liveTextEl.textContent = t; }
   function setTipsStatus(t) {
-    if (!t) {
-      if (!tipsEl.querySelector('.sc-tip')) {
-        tipsEl.innerHTML = '<div class="sc-tips-empty">Aguardando primeiras falas…</div>';
-      }
-      return;
-    }
-    if (!tipsEl.querySelector('.sc-tip')) {
-      tipsEl.innerHTML = `<div class="sc-tips-empty">${escape(t)}</div>`;
-    }
+    if (tipsEl.querySelector('.sc-hero')) return;
+    tipsEl.innerHTML = `<div class="sc-empty">${escape(t || 'As dicas aparecem aqui conforme a conversa avança.')}</div>`;
   }
 
 
@@ -636,20 +772,91 @@
     }
   }
 
+  // Dica mais recente em destaque; as anteriores ficam numa lista recolhida.
+  const tipHistory = [];
   function addTip(tip) {
-    if (tipsEl.querySelector('.sc-tips-empty')) tipsEl.innerHTML = '';
-    const card = document.createElement('div');
-    card.className = `sc-tip sc-tip-${tip.urgencia || 'media'}`;
-    card.innerHTML = `
-      <div class="sc-tip-head">
-        <span class="sc-tip-cat">${escape(tip.categoria || 'dica')}</span>
-        <span class="sc-tip-urg">${escape(tip.urgencia || 'media')}</span>
-      </div>
-      ${tip.acao ? `<div class="sc-tip-action"><span class="sc-tip-say">Fale agora</span>${escape(tip.acao)}</div>` : ''}
-      <div class="sc-tip-title">${escape(tip.titulo || '')}</div>
-    `;
-    tipsEl.prepend(card);
-    while (tipsEl.children.length > 5) tipsEl.removeChild(tipsEl.lastChild);
+    tipHistory.unshift({ ...tip, at: Date.now() });
+    if (tipHistory.length > 6) tipHistory.pop();
+    const urg = tip.urgencia === 'alta' ? 'alta' : '';
+    const main = tip.acao || tip.titulo || '';
+    tipsEl.innerHTML = `
+      <div class="sc-hero ${urg}">
+        <div class="sc-hero-top">
+          <span class="sc-chip">${escape(tip.categoria || 'dica')}</span>
+          <span class="sc-age" id="sc-tip-age">agora</span>
+        </div>
+        ${tip.acao ? '<span class="sc-say">Fale agora</span>' : ''}
+        <p class="sc-hero-text">${escape(main)}</p>
+        ${tip.acao && tip.titulo ? `<div class="sc-why">${escape(tip.titulo)}</div>` : ''}
+      </div>`;
+    const older = tipHistory.slice(1);
+    olderEl.hidden = older.length === 0;
+    olderList.innerHTML = older.map((t) => `<li>${escape(t.acao || t.titulo || '')}</li>`).join('');
+    renderOlderLabel();
+    if (overlay.classList.contains('minimized')) { unseenTips += 1; updatePill(); }
+  }
+  function renderOlderLabel() {
+    const n = tipHistory.length - 1;
+    const arrow = olderList.hidden ? '▸' : '▾';
+    olderBtn.textContent = `${arrow} ${n === 1 ? '1 dica anterior' : `${n} dicas anteriores`}`;
+  }
+  function updateTipAge() {
+    const el = document.getElementById('sc-tip-age');
+    if (!el || !tipHistory[0]) return;
+    const min = Math.floor((Date.now() - tipHistory[0].at) / 60000);
+    el.textContent = min < 1 ? 'agora' : `há ${min} min`;
+  }
+
+  // ── Medidores de áudio ──
+  // Um analisador por trilha, lido a cada 100 ms. Se o áudio do cliente fica
+  // mudo por muito tempo, avisa: costuma ser a aba compartilhada sem áudio.
+  const CLIENT_SILENCE_MS = 90000;
+  let meterCtx = null;
+  let meterTimer = null;
+  function startMeters(mic, tab) {
+    stopMeters();
+    try {
+      meterCtx = new AudioContext();
+      const analysers = {};
+      for (const [who, stream] of Object.entries({ vendedor: mic, cliente: tab })) {
+        if (!stream || !stream.getAudioTracks().length) continue;
+        const a = meterCtx.createAnalyser();
+        a.fftSize = 1024;
+        meterCtx.createMediaStreamSource(stream).connect(a);
+        analysers[who] = { a, buf: new Float32Array(a.fftSize) };
+      }
+      let lastClientSound = Date.now();
+      meterTimer = setInterval(() => {
+        for (const who of ['vendedor', 'cliente']) {
+          const m = analysers[who];
+          let level = 0;
+          if (m) {
+            m.a.getFloatTimeDomainData(m.buf);
+            let sum = 0;
+            for (let i = 0; i < m.buf.length; i++) sum += m.buf[i] * m.buf[i];
+            const rms = Math.sqrt(sum / m.buf.length);
+            level = Math.min(1, Math.sqrt(rms) * 2);
+            if (who === 'cliente' && rms > 0.01) lastClientSound = Date.now();
+          }
+          meterEls[who].style.transform = `scaleX(${level.toFixed(2)})`;
+        }
+        if (analysers.cliente) {
+          const quiet = Date.now() - lastClientSound > CLIENT_SILENCE_MS;
+          if (quiet !== alerts.has('cliente-mudo')) {
+            setAlert('cliente-mudo', quiet ? {
+              kind: 'warn', title: 'Não ouço o cliente há mais de 1 minuto',
+              text: 'Se ele está falando, confira se a aba foi compartilhada com áudio.',
+            } : null);
+          }
+        }
+      }, 100);
+    } catch (e) {
+      console.warn('Sales Coach: medidor de áudio indisponível', e);
+    }
+  }
+  function stopMeters() {
+    if (meterTimer) { clearInterval(meterTimer); meterTimer = null; }
+    if (meterCtx) { meterCtx.close().catch(() => {}); meterCtx = null; }
   }
   function escape(s) { return String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -700,9 +907,12 @@
 
   // ── Helpers ──
   function showStatus(type, text) {
-    initEl.style.display = 'none';
-    recordingEl.style.display = 'none';
-    statusMsgEl.style.display = '';
+    setMinimized(false);
+    initEl.hidden = true;
+    recordingEl.hidden = true;
+    recEl.hidden = true;
+    stopBtn.hidden = true;
+    statusMsgEl.hidden = false;
     statusMsgEl.className = `sc-status ${type}`;
     statusMsgEl.textContent = text;
   }
@@ -727,18 +937,14 @@
     const a = document.createElement('a');
     a.href = url;
     a.download = `reuniao-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.webm`;
-    a.className = 'sc-btn';
-    a.style.display = 'block';
-    a.style.marginTop = '10px';
-    a.style.textAlign = 'center';
-    a.style.textDecoration = 'none';
+    a.className = 'sc-btn sc-btn-primary';
     a.textContent = 'Baixar a gravação';
     const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:12px;opacity:.8;margin-top:8px;text-align:center';
+    hint.className = 'sc-hint';
     hint.textContent = 'Depois, envie o arquivo em Agendas → Nova Agenda.';
     const close = document.createElement('button');
+    close.type = 'button';
     close.className = 'sc-btn';
-    close.style.marginTop = '8px';
     close.textContent = 'Fechar';
     close.addEventListener('click', () => { URL.revokeObjectURL(url); autoRemove(0); });
     statusMsgEl.after(a, hint, close);
@@ -755,10 +961,13 @@
     stopTimer();
     timerInterval = setInterval(() => {
       const e = Math.floor((Date.now() - startTime) / 1000);
-      const h = String(Math.floor(e / 3600)).padStart(2, '0');
+      const h = Math.floor(e / 3600);
       const m = String(Math.floor((e % 3600) / 60)).padStart(2, '0');
       const s = String(e % 60).padStart(2, '0');
-      timerEl.textContent = `${h}:${m}:${s}`;
+      const text = h ? `${h}:${m}:${s}` : `${m}:${s}`;
+      timerEl.textContent = text;
+      pillTime.textContent = text;
+      if (e % 30 === 0) updateTipAge();
     }, 1000);
   }
   function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
