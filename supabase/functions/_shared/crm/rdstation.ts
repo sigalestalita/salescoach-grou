@@ -157,6 +157,16 @@ export function rdConnector(accessToken: string): CrmConnector {
     },
 
     async createTask(dealId, task) {
+      // O RD Station exige quem criou a tarefa ("Created by is required when
+      // creating a task"). A integração não tem usuário próprio no CRM: a
+      // tarefa sai em nome do responsável pelo negócio, que também fica como
+      // dono dela. Sem responsável no negócio, usa o primeiro usuário da conta.
+      const deal = await req("GET", `/deals/${encodeURIComponent(dealId)}`);
+      let userId = (deal.data as Json | undefined)?.owner_id as string | number | undefined;
+      if (!userId) {
+        const users = list(await req("GET", `/users?${new URLSearchParams({ "page[size]": "1" })}`).catch(() => ({})));
+        userId = users[0]?.id as string | number | undefined;
+      }
       await req("POST", "/tasks", {
         data: {
           name: task.name,
@@ -165,6 +175,7 @@ export function rdConnector(accessToken: string): CrmConnector {
           // Meio da manhã no horário de Brasília, para não virar o dia anterior.
           due_date: `${task.dueDate}T09:00:00-03:00`,
           deal_id: dealId,
+          ...(userId ? { created_by_id: String(userId), owner_ids: [String(userId)] } : {}),
         },
       });
     },
