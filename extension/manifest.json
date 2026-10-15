@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sales Coach — Gravador e Coach ao Vivo",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Grave reuniões no Meet e no Teams e receba orientação ao vivo, na tela, pela metodologia da sua empresa. Oferece a gravação ao entrar na chamada.",
   "permissions": [
     "storage",
@@ -16,7 +16,8 @@
     "https://meet.google.com/*",
     "https://teams.microsoft.com/*",
     "https://teams.live.com/*",
-    "https://teams.cloud.microsoft/*"
+    "https://teams.cloud.microsoft/*",
+    "wss://streaming.assemblyai.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

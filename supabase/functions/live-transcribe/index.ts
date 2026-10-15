@@ -53,6 +53,11 @@ Deno.serve(async (req) => {
   }
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
+  // Versões antigas da extensão ainda usam este relay. Sem uma promessa
+  // pendente, o Supabase pode encerrar a função com o socket aberto; isto
+  // segura até o fim da conexão (o limite de 150/400 s continua valendo).
+  // As versões novas conectam direto na AssemblyAI (ver live-session).
+  EdgeRuntime.waitUntil(new Promise<void>((resolve) => client.addEventListener("close", () => resolve())));
 
   // Connect to AssemblyAI Streaming v3 using a temporary token in querystring.
   // speech_model is required by v3; u3-rt-pro supports PT and multilingual.
