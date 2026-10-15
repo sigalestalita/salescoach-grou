@@ -16,7 +16,6 @@ export type Database = {
     Tables: {
       analysis_results: {
         Row: {
-          methodology: Json | null
           bant_score: Json | null
           conversation_metrics: Json | null
           created_at: string
@@ -24,6 +23,7 @@ export type Database = {
           insights: Json | null
           meddic_score: Json | null
           meeting_id: string
+          methodology: Json | null
           model_used: string | null
           org_id: string
           overall_score: number | null
@@ -35,7 +35,6 @@ export type Database = {
           temperature: string | null
         }
         Insert: {
-          methodology?: Json | null
           bant_score?: Json | null
           conversation_metrics?: Json | null
           created_at?: string
@@ -43,6 +42,7 @@ export type Database = {
           insights?: Json | null
           meddic_score?: Json | null
           meeting_id: string
+          methodology?: Json | null
           model_used?: string | null
           org_id: string
           overall_score?: number | null
@@ -54,7 +54,6 @@ export type Database = {
           temperature?: string | null
         }
         Update: {
-          methodology?: Json | null
           bant_score?: Json | null
           conversation_metrics?: Json | null
           created_at?: string
@@ -62,6 +61,7 @@ export type Database = {
           insights?: Json | null
           meddic_score?: Json | null
           meeting_id?: string
+          methodology?: Json | null
           model_used?: string | null
           org_id?: string
           overall_score?: number | null
@@ -840,6 +840,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meeting_types_analysis_template_id_fkey"
+            columns: ["analysis_template_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meeting_types_org_id_fkey"
             columns: ["org_id"]
