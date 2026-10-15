@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     // ── Contexto da organização ───────────────────────────────────────────
     const [template, typeContext, { data: typeRow }, { data: offers }, { data: docs }, { data: items }] =
       await Promise.all([
-        loadTemplate(admin, orgId),
+        loadTemplate(admin, orgId, meeting.meeting_type),
         loadMeetingTypeContext(admin, orgId, meeting.meeting_type),
         admin.from("meeting_types").select("label").eq("org_id", orgId).eq("key", meeting.meeting_type ?? "").maybeSingle(),
         admin.from("offer_types").select("label, instructions").eq("org_id", orgId).eq("is_active", true).order("sort_order"),

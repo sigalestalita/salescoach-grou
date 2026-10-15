@@ -13,6 +13,7 @@ import {
   fetchKnowledgeContext,
   loadMeetingTypeContext,
   loadTemplate,
+  methodologySnapshot,
 } from "../_shared/analysis-template.ts";
 
 const ANALYSIS_MODEL = Deno.env.get("ANALYSIS_MODEL") ?? "google/gemini-2.5-flash";
@@ -410,7 +411,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
     // Template, tipo de reunião e base de conhecimento — tudo da organização
     // dona da reunião.
     const [template, knowledgeContext, meetingTypeContext] = await Promise.all([
-      loadTemplate(supabase, orgId),
+      loadTemplate(supabase, orgId, meeting.meeting_type),
       fetchKnowledgeContext(supabase, orgId),
       loadMeetingTypeContext(supabase, orgId, meeting.meeting_type),
     ]);
@@ -522,6 +523,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       sales_coach: analysisData.sales_coach,
       rag_results: analysisData.rag_results || null,
       raw_analysis: analysisData,
+      methodology: methodologySnapshot(template),
       model_used: ANALYSIS_MODEL,
     });
 

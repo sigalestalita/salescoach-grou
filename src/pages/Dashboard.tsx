@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgConfig } from "@/hooks/useOrgConfig";
+import { methodologyOf } from "@/lib/methodology";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
 import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare } from "lucide-react";
 
@@ -19,7 +20,8 @@ interface DashboardData {
   sellerRanking: { name: string; avgScore: number; meetings: number }[];
   scoreEvolution: Record<string, any>[];
   scoreEvolutionSellers: string[];
-  avgBant: { key: string; label: string; avg: number }[];
+  /** Médias por metodologia: com várias (uma por tipo de reunião), um card para cada. */
+  avgMethods: { label: string; items: { key: string; label: string; avg: number }[]; max: number }[];
   avgMeddic: { key: string; label: string; avg: number }[];
   avgSpin: { key: string; label: string; avg: number }[];
   avgTalkRatio: { seller: number; lead: number } | null;
@@ -81,7 +83,7 @@ const Dashboard = () => {
       setLoading(true);
       const [meetingsRes, analysisRes, profilesRes] = await Promise.all([
         supabase.from("meetings").select("id, status, temperature, overall_score, seller_id, meeting_date"),
-        supabase.from("analysis_results").select("meeting_id, overall_score, temperature, bant_score, meddic_score, spin_score, talk_ratio, created_at"),
+        supabase.from("analysis_results").select("meeting_id, overall_score, temperature, bant_score, meddic_score, spin_score, talk_ratio, methodology, created_at"),
         supabase.from("profiles").select("user_id, full_name"),
       ]);
 
@@ -230,12 +232,23 @@ const Dashboard = () => {
       }
 
       // Average framework scores
-      const avgBant = computeAvgFramework(
-        uniqueAnalyses,
-        "bant_score",
-        config.criteria.map((c) => ({ key: c.key, label: c.label })),
-        config.maxCriterionScore,
-      );
+      // Agrupa as análises pela metodologia com que foram feitas; as antigas,
+      // sem esse registro, contam na metodologia padrão atual.
+      const groups = new Map<string, { method: ReturnType<typeof methodologyOf>; rows: typeof uniqueAnalyses }>();
+      for (const a of uniqueAnalyses) {
+        const method = methodologyOf(a, config);
+        const g = groups.get(method.label) ?? { method, rows: [] };
+        g.rows.push(a);
+        groups.set(method.label, g);
+      }
+      if (!groups.size) groups.set(config.methodologyLabel, { method: methodologyOf(null, config), rows: [] });
+      const avgMethods = [...groups.values()]
+        .sort((x, y) => y.rows.length - x.rows.length)
+        .map(({ method, rows }) => ({
+          label: method.label,
+          max: method.maxCriterionScore,
+          items: computeAvgFramework(rows, "bant_score", method.criteria.map((c) => ({ key: c.key, label: c.label })), method.maxCriterionScore),
+        }));
 
 
       const avgMeddic = computeAvgFramework(uniqueAnalyses, "meddic_score", [
@@ -267,7 +280,7 @@ const Dashboard = () => {
 
       setData({
         totalMeetings, completedMeetings, avgScore, hotRate, tempDistribution,
-        sellerRanking, scoreEvolution, scoreEvolutionSellers, avgBant, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
+        sellerRanking, scoreEvolution, scoreEvolutionSellers, avgMethods, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
       });
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -411,13 +424,16 @@ const Dashboard = () => {
 
       {/* Framework Averages */}
       <div className="grid gap-4 md:grid-cols-3 animate-stagger">
-        <FrameworkCard
-          title={`${config.methodologyLabel} ${isFiltered ? "Individual" : "Médio"}`}
-          items={data.avgBant}
-          maxValue={config.maxCriterionScore}
-        />
-        <FrameworkCard title={isFiltered ? "MEDDIC Individual" : "MEDDIC Médio"} items={data.avgMeddic} maxValue={17} />
-        <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
+        {data.avgMethods.map((m) => (
+          <FrameworkCard key={m.label} title={`${m.label} ${isFiltered ? "Individual" : "Médio"}`} items={m.items} maxValue={m.max} />
+        ))}
+        {/* MEDDIC e SPIN podem estar desligados na metodologia: sem dados, o card some. */}
+        {data.avgMeddic.length > 0 && (
+          <FrameworkCard title={isFiltered ? "MEDDIC Individual" : "MEDDIC Médio"} items={data.avgMeddic} maxValue={17} />
+        )}
+        {data.avgSpin.length > 0 && (
+          <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
+        )}
       </div>
 
       {/* Talk Ratio + Ranking */}
