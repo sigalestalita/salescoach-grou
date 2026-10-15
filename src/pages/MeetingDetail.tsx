@@ -15,6 +15,7 @@ import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { ShareControls } from "@/components/ShareControls";
 import { CrmMeetingCard } from "@/components/CrmMeetingCard";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
+import type { Attendee } from "@/lib/calendar";
 
 const MetricTooltip = ({ text }: { text: string }) => (
   <Tooltip>
@@ -36,6 +37,22 @@ const getMetricValue = (val: any): { score: number; reason?: string } => {
 };
 
 type Meeting = Tables<"meetings">;
+
+/** Participantes do convite da agenda, quando a gravação veio com eles. */
+function AttendeeList({ attendees }: { attendees?: Attendee[] | null }) {
+  if (!attendees?.length) return null;
+  return (
+    <p className="mt-1 text-xs text-muted-foreground">
+      Participantes:{" "}
+      {attendees.map((a, i) => (
+        <span key={a.email} title={a.email}>
+          {i > 0 && ", "}
+          <span className={a.externo ? "font-medium text-foreground" : undefined}>{a.name || a.email}</span>
+        </span>
+      ))}
+    </p>
+  );
+}
 type AnalysisResult = Tables<"analysis_results">;
 type Transcription = Tables<"transcriptions">;
 type Highlight = Tables<"highlights">;
@@ -197,6 +214,7 @@ const MeetingDetail = () => {
               <span>• {new Date(meeting.meeting_date).toLocaleDateString("pt-BR")}</span>
             )}
           </div>
+          <AttendeeList attendees={(meeting as Meeting & { attendees?: Attendee[] | null }).attendees} />
         </div>
         {meeting.share_token && (
           <ShareControls meeting={meeting} onChange={fetchData} />

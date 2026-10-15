@@ -41,8 +41,8 @@ const steps = [
     desc: (
       <>
         Ao entrar numa chamada do Google Meet ou do Teams, aparece o cartão{" "}
-        <strong className="text-foreground">Gravar esta reunião?</strong>. Não precisa preencher nada: o título vem do nome
-        da reunião. Se clicar em Agora não, ele lembra de novo em 2 minutos.
+        <strong className="text-foreground">Gravar esta reunião?</strong>. Não precisa preencher nada: com a agenda
+        conectada, o título e o lead vêm do convite. Se clicar em Agora não, ele lembra de novo em 2 minutos.
       </>
     ),
   },
@@ -70,6 +70,7 @@ const steps = [
 ];
 
 const tips = [
+  "Conecte sua agenda (Google ou Outlook) na página Agendas: as gravações já vêm com o título, os participantes e o lead.",
   "Avise o cliente no início da reunião que ela está sendo gravada.",
   "Não feche a aba da reunião antes de o painel mostrar \"Gravação enviada\".",
   "Quer preencher os dados do lead antes? Clique no ícone da extensão e use Iniciar gravação.",

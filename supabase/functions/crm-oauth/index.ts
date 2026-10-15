@@ -13,34 +13,10 @@ import { getCaller, HttpError, adminClient, requireRole } from "../_shared/tenan
 import { signState, verifyState } from "../_shared/crm/crypto.ts";
 import { accountLabel, AVAILABLE_PROVIDERS, oauthFor, oauthRedirectUri, saveConnection } from "../_shared/crm/connection.ts";
 import { CrmError, CrmProvider } from "../_shared/crm/types.ts";
+import { backTo, safeReturn } from "../_shared/redirect.ts";
 
 const PROVIDERS: CrmProvider[] = AVAILABLE_PROVIDERS;
 const redirectUri = oauthRedirectUri;
-
-/** Só volta para domínios da própria plataforma (evita redirecionamento aberto). */
-function safeReturn(url: string | undefined): string {
-  const fallback = (Deno.env.get("APP_URL") ?? "").replace(/\/$/, "") + "/configuracoes";
-  if (!url) return fallback;
-  try {
-    const u = new URL(url);
-    const host = u.hostname.toLowerCase();
-    const app = Deno.env.get("APP_URL") ? new URL(Deno.env.get("APP_URL")!).hostname : "";
-    const domains = (Deno.env.get("PLATFORM_DOMAINS") ?? "").split(",").map((d) => d.trim().toLowerCase()).filter(Boolean);
-    const extras = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((o) => o.trim().toLowerCase()).filter(Boolean);
-    const ok = u.protocol === "https:" && (
-      host === app || domains.some((d) => host === d || host.endsWith(`.${d}`)) || extras.includes(u.origin.toLowerCase())
-    );
-    return ok ? u.toString() : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function backTo(returnTo: string, params: Record<string, string>): Response {
-  const u = new URL(returnTo);
-  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-  return new Response(null, { status: 302, headers: { Location: u.toString() } });
-}
 
 Deno.serve(async (req) => {
   const pre = preflight(req);

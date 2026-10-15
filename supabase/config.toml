@@ -40,3 +40,12 @@ verify_jwt = false
 # service role), validada dentro da função.
 [functions.crm-sync]
 verify_jwt = false
+
+# Agenda do vendedor. O GET é a volta do OAuth (vem do navegador, sem token do
+# Supabase) e só aceita um "state" assinado; o POST valida o usuário na função.
+[functions.calendar]
+verify_jwt = false
+
+# Login automático da extensão: exige o token do usuário logado no site.
+[functions.extension-session]
+verify_jwt = true

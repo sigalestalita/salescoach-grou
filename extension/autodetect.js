@@ -100,13 +100,30 @@
     if (now - inCallSince < 3000) return;
 
     if (offer.key !== callKey()) offer = { key: callKey(), shown: 0, snoozedAt: 0 };
+    const opts = { loggedIn, types: s.meetingTypesCache || [], lastType: s.lastMeetingType };
     if (offer.shown === 0) {
       offer.shown = 1;
-      showCard({ loggedIn, types: s.meetingTypesCache || [], lastType: s.lastMeetingType, reminder: false });
+      showCard({ ...opts, reminder: false, event: loggedIn ? await eventForCall() : null });
     } else if (offer.shown === 1 && offer.snoozedAt && now - offer.snoozedAt > REMIND_AFTER_MS) {
       offer.shown = 2;
-      showCard({ loggedIn, types: s.meetingTypesCache || [], lastType: s.lastMeetingType, reminder: true });
+      showCard({ ...opts, reminder: true, event: loggedIn ? await eventForCall() : null });
     }
+  }
+
+  // Evento da agenda desta chamada (consultado uma vez por chamada). Espera no
+  // máximo 4 segundos: sem resposta, o cartão sai com o título da página.
+  let eventCache = { key: null, event: null };
+  async function eventForCall() {
+    if (eventCache.key === callKey()) return eventCache.event;
+    const lookup = new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage({ action: 'calendarLookup', meetingUrl: location.href, title: document.title },
+          (res) => resolve(res?.event || null));
+      } catch { resolve(null); }
+    });
+    const event = await Promise.race([lookup, new Promise((r) => setTimeout(() => r(null), 4000))]);
+    eventCache = { key: callKey(), event };
+    return event;
   }
 
   function removeCard() {
@@ -114,13 +131,15 @@
     card = null;
   }
 
-  function showCard({ loggedIn, types, lastType, reminder }) {
+  function showCard({ loggedIn, types, lastType, reminder, event }) {
     const host = document.createElement('div');
     host.id = 'salescoach-autodetect';
     host.dataset.loggedIn = String(loggedIn);
     host.style.cssText = 'position:fixed;right:20px;bottom:96px;z-index:2147483647';
     const root = host.attachShadow({ mode: 'closed' });
-    const title = meetingTitle();
+    const title = event?.title || meetingTitle();
+    const lead = event?.lead;
+    const leadLine = lead ? [lead.name, lead.email].filter(Boolean).join(' · ') : '';
     // Tipo de reunião: só aparece quando a empresa tem mais de um. Vem marcado
     // o último usado.
     const typeKeys = types.map((t) => t.key);
@@ -146,6 +165,8 @@
         .h img{width:22px;height:22px}
         p{margin:8px 0 10px;color:#a9b7cc;font-size:13px}
         .t{font-size:12px;color:#8fa3bf;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .t:has(+ .l){margin-bottom:4px}
+        .l{color:#c9d6e8}
         select{width:100%;box-sizing:border-box;background:#0e2b4c;color:#fff;border:1px solid rgba(143,193,255,.25);
            border-radius:8px;padding:7px 9px;font:inherit;font-size:13px}
         .b{display:flex;gap:8px;margin-top:12px}
@@ -156,7 +177,9 @@
       <div class="c" role="dialog" aria-label="Sales Coach">
         <div class="h"><img src="${chrome.runtime.getURL('icon48.png')}" alt="">${esc(heading)}</div>
         <p>${esc(text)}</p>
-        ${loggedIn ? `<div class="t" title="${esc(title)}">${esc(title)}</div>${typeSelect}` : ''}
+        ${loggedIn ? `<div class="t" title="${esc(title)}">${esc(title)}</div>` : ''}
+        ${loggedIn && leadLine ? `<div class="t l" title="${esc(leadLine)}">Lead: ${esc(leadLine)}</div>` : ''}
+        ${loggedIn ? typeSelect : ''}
         <div class="b"><button class="no" id="no">Agora não</button><button class="go" id="go">${esc(primary)}</button></div>
       </div>`;
 
@@ -173,9 +196,16 @@
         return;
       }
       const meetingType = root.getElementById('k')?.value || selected || null;
-      // Sem formulário: nome e empresa do lead ficam em branco e a análise os
-      // identifica pela conversa. O vendedor pode corrigir depois no Sales Coach.
-      const meetingData = { title, meetingType, leadName: '', leadCompany: '', leadEmail: '' };
+      // Sem formulário: o lead vem da agenda quando ela está conectada; o que
+      // faltar, a análise identifica pela conversa. O vendedor corrige depois
+      // no Sales Coach, se precisar.
+      const meetingData = {
+        title, meetingType,
+        leadName: lead?.name || '', leadCompany: '', leadEmail: lead?.email || '',
+        meetingUrl: location.href,
+        calendarEventId: event?.eventId || null,
+        attendees: event?.attendees || [],
+      };
       removeCard();
       try {
         await chrome.storage.local.set({ meetingData, lastMeetingType: meetingType });

@@ -16,7 +16,7 @@ chrome.storage.local.get(['recordingState'], (data) => {
 });
 
 // Listen for messages from content script and popup
-chrome.runtime.onMessage.addListener((msg, sender) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // O cartão "Gravar esta reunião?" (autodetect.js) pede o gravador na própria aba.
   if (msg.action === 'injectRecorder' && sender.tab?.id) {
     const target = { tabId: sender.tab.id };
@@ -27,6 +27,13 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   // Sem login na extensão: abre o Sales Coach, que entrega a sessão sozinho.
   if (msg.action === 'openApp') {
     chrome.tabs.create({ url: `${APP_URL}/agendas` });
+  }
+  // Evento da agenda para a reunião aberta (cartão e popup).
+  if (msg.action === 'calendarLookup') {
+    calendarLookup(msg.meetingUrl, msg.title)
+      .then((event) => sendResponse({ event }))
+      .catch(() => sendResponse({ event: null }));
+    return true;
   }
   if (msg.action === 'recordingStarted') {
     setBadge('REC');
@@ -100,4 +107,45 @@ async function connectWithTokenHash(tokenHash) {
     userEmail: data.user.email || '',
   });
   return data.user.id;
+}
+
+// ── Agenda ──
+// O Sales Coach procura, na agenda conectada do vendedor, o evento da reunião
+// aberta: título, participantes e lead. Sem agenda, ou link avulso, vem null.
+
+async function callFunction(name, body, token) {
+  return fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify(body),
+  });
+}
+
+async function refreshSession() {
+  const { refreshToken } = await chrome.storage.local.get(['refreshToken']);
+  if (!refreshToken) return null;
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!res.ok) return null;
+  const r = await res.json();
+  await chrome.storage.local.set({ accessToken: r.access_token, refreshToken: r.refresh_token });
+  return r.access_token;
+}
+
+async function calendarLookup(meetingUrl, title) {
+  const { accessToken } = await chrome.storage.local.get(['accessToken']);
+  if (!accessToken) return null;
+  const body = { action: 'lookup', meetingUrl, title };
+  let res = await callFunction('calendar', body, accessToken);
+  if (res.status === 401) {
+    const fresh = await refreshSession();
+    if (!fresh) return null;
+    res = await callFunction('calendar', body, fresh);
+  }
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.event || null;
 }

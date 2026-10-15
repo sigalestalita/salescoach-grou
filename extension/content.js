@@ -170,6 +170,9 @@
         lead_name: meta.leadName || null,
         lead_company: meta.leadCompany || null,
         lead_email: meta.leadEmail || null,
+        meeting_url: meta.meetingUrl || location.href,
+        calendar_event_id: meta.calendarEventId || null,
+        attendees: meta.attendees?.length ? meta.attendees : null,
         status: 'ao_vivo',
         meeting_date: new Date().toISOString(),
         seller_id: userId,
@@ -546,6 +549,9 @@
       formData.append('lead_company', meta.leadCompany || '');
       formData.append('lead_email', meta.leadEmail || '');
       if (meetingId) formData.append('meeting_id', meetingId);
+      formData.append('meeting_url', meta.meetingUrl || location.href);
+      if (meta.calendarEventId) formData.append('calendar_event_id', meta.calendarEventId);
+      if (meta.attendees?.length) formData.append('attendees', JSON.stringify(meta.attendees));
 
       // Prazo generoso: uma reunião longa pode ter centenas de MB.
       const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/upload-recording`, {

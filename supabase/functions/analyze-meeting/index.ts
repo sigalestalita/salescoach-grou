@@ -431,6 +431,14 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         `Use null para o que não for dito com clareza; não invente.`
       : "";
 
+    // Participantes da agenda, quando a reunião veio com eles: ajudam a saber
+    // quem é quem na transcrição e de que empresa é o lead (pelo domínio).
+    const attendeeList = Array.isArray(meeting.attendees) ? meeting.attendees as { name?: string | null; email?: string; externo?: boolean }[] : [];
+    const attendeesContext = attendeeList.length
+      ? `\n\nParticipantes do convite da agenda:\n` + attendeeList.slice(0, 30).map((a) =>
+          `- ${a.name ? `${a.name} ` : ""}<${a.email}> (${a.externo ? "cliente / de fora" : "equipe do vendedor"})`).join("\n")
+      : "";
+
     const analysisPrompt = buildAnalysisPrompt({
       template,
       transcript,
@@ -453,7 +461,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         model: ANALYSIS_MODEL,
         messages: [
           { role: "system", content: "Você é um analista de vendas B2B experiente. Responda APENAS com JSON válido, sem markdown." },
-          { role: "user", content: analysisPrompt + leadInstruction },
+          { role: "user", content: analysisPrompt + attendeesContext + leadInstruction },
         ],
       }),
     });
