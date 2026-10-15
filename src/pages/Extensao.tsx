@@ -18,7 +18,8 @@ const STORE_URL = "https://chromewebstore.google.com/detail/icabeghcpefeaeklfldp
  * nova: rode o script e atualize MANUAL_VERSION. Quando a loja estiver em dia,
  * MANUAL_VERSION = null esconde a seção.
  */
-const MANUAL_VERSION: string | null = "1.10.1";
+// A 1.10.1 foi aprovada na loja: sem versão manual no momento.
+const MANUAL_VERSION: string | null = null;
 const MANUAL_URL = MANUAL_VERSION ? `/downloads/sales-coach-extensao-${MANUAL_VERSION}.zip` : "";
 const EXTENSIONS_PAGE = "chrome://extensions";
 
@@ -94,6 +95,7 @@ const tips = [
   "Quer preencher os dados do lead antes? Clique no ícone da extensão e use Iniciar gravação.",
   "Se o envio falhar, o painel oferece o botão \"Baixar a gravação\". Guarde o arquivo e envie depois em Agendas, no botão Nova Agenda.",
   "Para não ver mais o cartão nas reuniões, clique no ícone da extensão e desmarque a opção de oferecer gravação.",
+  "Instalou a extensão pelo arquivo, sem a loja? Remova essa versão em chrome://extensions, instale pelo botão Instalar no Chrome e desligue o Modo do desenvolvedor. Pela loja, ela se atualiza sozinha.",
 ];
 
 const B = ({ children }: { children: React.ReactNode }) => <strong className="text-foreground">{children}</strong>;
