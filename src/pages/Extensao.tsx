@@ -96,7 +96,7 @@ export default function Extensao() {
               A extensão está na Chrome Web Store e se atualiza sozinha.
             </p>
           </div>
-          <Button asChild size="lg" className="w-full md:w-auto">
+          <Button asChild size="lg" className="w-full md:w-auto" data-tour="ext-instalar">
             <a href={STORE_URL} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="mr-2 h-4 w-4" />
               Instalar no Chrome
@@ -105,7 +105,7 @@ export default function Extensao() {
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card border-border" data-tour="ext-passos">
         <CardHeader>
           <CardTitle className="text-foreground">Passo a passo</CardTitle>
         </CardHeader>

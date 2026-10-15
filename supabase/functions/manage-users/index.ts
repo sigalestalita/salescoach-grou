@@ -172,7 +172,8 @@ Deno.serve(async (req) => {
     if (action === "list_invites") {
       const { data, error } = await admin
         .from("organization_invites")
-        .select("id, email, role, expires_at, accepted_at, revoked_at, created_at")
+        // O token permite copiar o link de novo enquanto o convite estiver pendente.
+        .select("id, email, role, token, expires_at, accepted_at, revoked_at, created_at")
         .eq("org_id", orgId)
         .order("created_at", { ascending: false });
       if (error) throw error;

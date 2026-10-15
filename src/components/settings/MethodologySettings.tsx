@@ -133,7 +133,7 @@ export const MethodologySettings = () => {
   }
 
   return (
-    <Card>
+    <Card data-tour="cfg-metodologia">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Brain className="h-5 w-5" />

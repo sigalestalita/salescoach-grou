@@ -179,7 +179,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
           })()}
 
           {/* Score + Temperatura + Talk Ratio */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3" data-tour="reuniao-scores">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Target className="h-4 w-4" /> Score Geral <MetricTooltip text="Avaliação geral da reunião comercial de 0 a 100." /></CardTitle></CardHeader>
               <CardContent>
@@ -266,7 +266,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
           </div>
 
           {/* Insights + Coach */}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2" data-tour="reuniao-coach">
             <Card>
               <CardHeader><CardTitle className="text-sm">💡 Insights</CardTitle></CardHeader>
               <CardContent className="space-y-3">
@@ -345,7 +345,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
 
           {/* Transcrição */}
           {transcription && (
-            <Card>
+            <Card data-tour="reuniao-transcricao">
               <CardHeader><CardTitle className="text-sm">📝 Transcrição</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground">{transcription.full_text}</p>

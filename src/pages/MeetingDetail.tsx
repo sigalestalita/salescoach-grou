@@ -206,7 +206,7 @@ const MeetingDetail = () => {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{meeting.title}</h1>
+          <h1 className="text-2xl font-bold" data-tour="reuniao-titulo">{meeting.title}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             {meeting.lead_name && <span>{meeting.lead_name}</span>}
             {meeting.lead_company && <span>• {meeting.lead_company}</span>}
@@ -217,7 +217,7 @@ const MeetingDetail = () => {
           <AttendeeList attendees={(meeting as Meeting & { attendees?: Attendee[] | null }).attendees} />
         </div>
         {meeting.share_token && (
-          <ShareControls meeting={meeting} onChange={fetchData} />
+          <div data-tour="reuniao-compartilhar"><ShareControls meeting={meeting} onChange={fetchData} /></div>
         )}
         {(meeting.status === "enviado" || meeting.status === "erro" || isStaleProcessing) && (
           <Button onClick={handleAnalyze} disabled={processing || (isLinkBased && !meeting.youtube_url && !manualTranscript.trim())}>
@@ -474,7 +474,7 @@ const MeetingDetail = () => {
       {analysis && (
         <>
           {/* Envio ao CRM do cliente (some quando não há CRM conectado) */}
-          <CrmMeetingCard meetingId={meeting.id} />
+          <div data-tour="reuniao-crm"><CrmMeetingCard meetingId={meeting.id} /></div>
 
           {/* Resumo Descritivo da Reunião */}
           {rawAnalysis?.meeting_summary && (() => {

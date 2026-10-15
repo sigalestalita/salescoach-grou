@@ -303,7 +303,7 @@ const Dashboard = () => {
           </p>
         </div>
         <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger className="w-[220px]" data-tour="dash-filtro">
             <SelectValue placeholder="Filtrar vendedor" />
           </SelectTrigger>
           <SelectContent>
@@ -316,7 +316,7 @@ const Dashboard = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger" data-tour="dash-stats">
         <StatCard tone="navy" icon={Calendar} label="Total de Agendas" value={data.totalMeetings} hint={`${data.completedMeetings} analisadas`} />
         <StatCard tone="blue" icon={Target} label="Score Médio" value={data.avgScore ?? "--"} hint="de 100 pontos" />
         <StatCard tone="coral" icon={Thermometer} label="Reuniões Quentes" value={`${data.hotRate}%`} hint="Taxa de agendas quentes" />
@@ -330,7 +330,7 @@ const Dashboard = () => {
       </div>
 
       {/* Charts Row */}
-      <div className="grid gap-4 md:grid-cols-2 animate-stagger">
+      <div className="grid gap-4 md:grid-cols-2 animate-stagger" data-tour="dash-graficos">
         {/* Score Evolution */}
         <Card className="glass-card card-hover-glow">
           <CardHeader>

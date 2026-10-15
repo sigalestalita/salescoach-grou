@@ -150,7 +150,7 @@ export const BrandingSettings = () => {
   };
 
   return (
-    <Card>
+    <Card data-tour="cfg-marca">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Palette className="h-5 w-5" />

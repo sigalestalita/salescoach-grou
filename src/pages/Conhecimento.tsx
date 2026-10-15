@@ -291,7 +291,7 @@ const Conhecimento = () => {
               <p>{extractedDocsCount} doc(s) processado(s)</p>
               {pendingDocsCount > 0 && <p className="text-warning">{pendingDocsCount} pendente(s)</p>}
             </div>
-            <Button
+            <Button data-tour="kb-treinar"
               onClick={handleTrainAI}
               disabled={training}
               variant={pendingDocsCount > 0 ? "default" : "outline"}
@@ -314,7 +314,7 @@ const Conhecimento = () => {
       </div>
 
       <Tabs defaultValue="documentos">
-        <TabsList>
+        <TabsList data-tour="kb-abas">
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="itens">Produtos & Serviços</TabsTrigger>
         </TabsList>
@@ -323,7 +323,7 @@ const Conhecimento = () => {
           {isAdmin && (
             <Dialog open={docDialogOpen} onOpenChange={setDocDialogOpen}>
               <DialogTrigger asChild>
-                <Button><Plus className="h-4 w-4 mr-2" />Adicionar Documento</Button>
+                <Button data-tour="kb-adicionar"><Plus className="h-4 w-4 mr-2" />Adicionar Documento</Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Novo Documento</DialogTitle></DialogHeader>
