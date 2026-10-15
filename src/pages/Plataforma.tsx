@@ -419,7 +419,7 @@ const Plataforma = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             <Building2 className="h-5 w-5 text-primary" />
             <div>
@@ -440,7 +440,7 @@ const Plataforma = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+      <main className="mx-auto max-w-[1400px] space-y-6 px-6 py-8">
         {access && (
           <Card className="border-primary/40">
             <CardHeader>
@@ -617,7 +617,7 @@ const Plataforma = () => {
                       return (
                         <TableRow key={org.id}>
                           <TableCell>
-                            <div className="font-medium">{org.name}</div>
+                            <div className="whitespace-nowrap font-medium">{org.name}</div>
                             <div className="font-mono text-xs text-muted-foreground">{org.custom_domain ?? org.slug}</div>
                           </TableCell>
                           <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
@@ -639,7 +639,7 @@ const Plataforma = () => {
                               onValueChange={(key) => setPlan(org, key)}
                               disabled={isBusy}
                             >
-                              <SelectTrigger className="h-8 w-[160px] text-xs">
+                              <SelectTrigger className="h-8 w-[130px] text-xs">
                                 <SelectValue placeholder="Sem plano" />
                               </SelectTrigger>
                               <SelectContent>
