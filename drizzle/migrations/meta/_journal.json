@@ -43,6 +43,13 @@
       "when": 1792041172387,
       "tag": "0005_excluir_reuniao",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792041996123,
+      "tag": "0006_demo_e_configuracao",
+      "breakpoints": true
     }
   ]
 }
