@@ -13,15 +13,17 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug } from "lucide-react";
+import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye } from "lucide-react";
+import { enterSupport } from "@/lib/support";
 import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
 /**
  * Painel do provedor: criar, listar, suspender e reativar empresas clientes e
  * acompanhar o consumo de cada uma.
  *
- * Deliberadamente NÃO mostra conteúdo de reunião, transcrição ou base de
- * conhecimento de nenhum cliente. O operador do SaaS vê metadados e consumo.
+ * A lista mostra metadados e consumo. Para ver o conteúdo de uma empresa
+ * (reuniões, análises, equipe), "Ver conta" abre o app no modo suporte: como
+ * admin dela, só leitura, por até 8 horas e com registro no audit_log.
  * Do CRM, vê a conexão e a contagem de envios de cada empresa.
  */
 
@@ -225,6 +227,18 @@ const Plataforma = () => {
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
     } finally {
+      setBusy(null);
+    }
+  };
+
+  const viewOrg = async (org: Org) => {
+    setBusy(org.id);
+    try {
+      await enterSupport(org.id);
+      // Recarrega o app inteiro: sessão, marca e consultas passam a ser da empresa.
+      window.location.assign("/agendas");
+    } catch (err) {
+      toast({ title: "Não foi possível abrir a conta", description: (err as Error).message, variant: "destructive" });
       setBusy(null);
     }
   };
@@ -453,7 +467,11 @@ const Plataforma = () => {
                           <TableCell className="text-right tabular-nums">{org.users ?? 0}</TableCell>
                           <TableCell className="text-right tabular-nums">{org.meetings ?? 0}</TableCell>
                           <TableCell>{usageSummary(org)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="space-x-1 whitespace-nowrap text-right">
+                            <Button variant="outline" size="sm" disabled={isBusy} onClick={() => viewOrg(org)}>
+                              <Eye className="mr-1 h-3.5 w-3.5" />
+                              Ver conta
+                            </Button>
                             {suspended ? (
                               <Button variant="outline" size="sm" disabled={isBusy} onClick={() => setStatus(org, "active")}>
                                 Reativar

@@ -120,11 +120,16 @@ export const BrandingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return null;
 
+    // O operador da plataforma enxerga a marca de todas as empresas: filtra
+    // pela organização atual (a dele, ou a visitada no modo suporte).
+    const { data: orgId } = await supabase.rpc("current_org_id");
+    if (!orgId) return null;
     const { data } = await supabase
       .from("organization_branding")
       .select(
         "org_id, product_name, logo_url, logo_dark_url, favicon_url, primary_hsl, primary_fg_hsl, accent_hsl, sidebar_hsl, login_headline, login_subheadline, support_email",
       )
+      .eq("org_id", orgId)
       .maybeSingle();
 
     return data ? normalize(data as Record<string, unknown>) : null;

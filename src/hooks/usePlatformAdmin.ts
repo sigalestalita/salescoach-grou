@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
  *
  * A policy de `platform_admins` só devolve linha para quem já é operador, então
  * a própria consulta é a verificação. Esse acesso vê organizações, planos e
- * consumo — nunca conteúdo de reunião dos clientes.
+ * consumo; o conteúdo de um cliente só aparece no modo suporte (lib/support.ts).
  */
 export function usePlatformAdmin() {
   const { user, loading: authLoading } = useAuth();
