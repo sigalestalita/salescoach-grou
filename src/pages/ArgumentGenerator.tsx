@@ -245,7 +245,7 @@ export default function ArgumentGenerator() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* LEFT: Filters */}
         <div className="lg:col-span-1 space-y-4">
-          <Card className="glass-card">
+          <Card className="glass-card" data-tour="arg-contexto">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Contexto do Lead</CardTitle>
             </CardHeader>
@@ -391,7 +391,7 @@ export default function ArgumentGenerator() {
             </CardContent>
           </Card>
 
-          <Button onClick={handleGenerate} disabled={loading || selectedPains.length === 0} className="w-full">
+          <Button data-tour="arg-gerar" onClick={handleGenerate} disabled={loading || selectedPains.length === 0} className="w-full">
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
             {loading ? "Gerando argumentos..." : `Gerar Argumentos (${selectedPains.length} dores)`}
           </Button>

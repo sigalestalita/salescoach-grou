@@ -667,7 +667,7 @@ const Roleplay = () => {
       </div>
 
       {!session && !feedback && (
-        <Card>
+        <Card data-tour="treino-config">
           <CardHeader>
             <CardTitle className="text-base">Configure a simulação</CardTitle>
             <CardDescription>A IA monta um lead com uma dor e objeções reais já vistas nas suas reuniões.</CardDescription>
@@ -729,7 +729,7 @@ const Roleplay = () => {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" data-tour="treino-modo">
               <label className="text-xs font-medium text-muted-foreground">Como você quer treinar</label>
               <div className="grid gap-2 sm:grid-cols-2">
                 <button
@@ -803,7 +803,7 @@ const Roleplay = () => {
               </div>
             )}
 
-            <Button onClick={startSession} disabled={starting} className="w-full md:w-auto">
+            <Button data-tour="treino-comecar" onClick={startSession} disabled={starting} className="w-full md:w-auto">
               {starting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
               Começar treino
             </Button>

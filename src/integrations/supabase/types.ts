@@ -329,6 +329,69 @@ export type Database = {
           },
         ]
       }
+      calendar_accounts: {
+        Row: {
+          connected_at: string
+          email: string | null
+          id: string
+          last_error: string | null
+          org_id: string
+          provider: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string
+          email?: string | null
+          id?: string
+          last_error?: string | null
+          org_id: string
+          provider: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connected_at?: string
+          email?: string | null
+          id?: string
+          last_error?: string | null
+          org_id?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_onboarding: {
+        Row: {
+          completed_steps: string[]
+          org_id: string
+          tour_done_at: string | null
+          updated_at: string
+          user_id: string
+          welcome_seen_at: string | null
+        }
+        Insert: {
+          completed_steps?: string[]
+          org_id?: string
+          tour_done_at?: string | null
+          updated_at?: string
+          user_id: string
+          welcome_seen_at?: string | null
+        }
+        Update: {
+          completed_steps?: string[]
+          org_id?: string
+          tour_done_at?: string | null
+          updated_at?: string
+          user_id?: string
+          welcome_seen_at?: string | null
+        }
+        Relationships: []
+      }
       crm_connections: {
         Row: {
           account_label: string | null

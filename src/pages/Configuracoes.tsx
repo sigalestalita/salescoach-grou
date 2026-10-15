@@ -179,7 +179,7 @@ const Configuracoes = () => {
 
       {/* Admin User Management */}
       {role === "admin" && (
-        <Card>
+        <Card data-tour="cfg-usuarios">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -375,7 +375,7 @@ const Configuracoes = () => {
         <>
           <BrandingSettings />
           <MethodologySettings />
-          <CrmSettings />
+          <div data-tour="cfg-crm"><CrmSettings /></div>
         </>
       )}
 

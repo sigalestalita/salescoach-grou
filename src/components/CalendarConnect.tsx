@@ -75,7 +75,7 @@ export function CalendarConnect() {
   const broken = conn?.status === "erro";
 
   return (
-    <Card>
+    <Card data-tour="agenda-conectar">
       <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-primary/10 p-2">

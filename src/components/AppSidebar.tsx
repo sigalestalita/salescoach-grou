@@ -202,7 +202,7 @@ export function AppSidebar() {
     return (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title} className={MENU_BUTTON_CLASS}>
-          <NavLink to={item.url} end={item.end}>
+          <NavLink to={item.url} end={item.end} data-tour={`nav-${item.url === "/" ? "inicio" : item.url.slice(1)}`}>
             <item.icon strokeWidth={1.75} />
             {!collapsed && <span className="flex-1 truncate">{item.title}</span>}
             {!collapsed && count > 0 && (

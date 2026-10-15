@@ -1,10 +1,11 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { SalesAssistant } from "@/components/SalesAssistant";
+import { HelpHub } from "@/components/hub/HelpHub";
+import { useHub } from "@/components/hub/HubContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { Button } from "@/components/ui/button";
-import { Eye } from "lucide-react";
+import { Eye, CircleHelp } from "lucide-react";
 import { exitSupport } from "@/lib/support";
 import { useEffect } from "react";
 import { syncExtensionSession } from "@/lib/extensionBridge";
@@ -30,34 +31,36 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <AppSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          {support && <SupportBanner orgName={support.orgName} until={support.until} />}
-          <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="rounded-xl text-muted-foreground hover:bg-card hover:text-foreground" />
-              {branding.org_name && (
-                <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
-                  {branding.org_name}
+      <HelpHub>
+        <div className="flex min-h-screen w-full">
+          <AppSidebar />
+          <div className="flex min-w-0 flex-1 flex-col">
+            {support && <SupportBanner orgName={support.orgName} until={support.until} />}
+            <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
+              <div className="flex items-center gap-3">
+                <SidebarTrigger className="rounded-xl text-muted-foreground hover:bg-card hover:text-foreground" />
+                {branding.org_name && (
+                  <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
+                    {branding.org_name}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <HelpButton />
+                {role && (
+                  <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-secondary-foreground">
+                    {ROLE_LABELS[role]}
+                  </span>
+                )}
+                <span className="text-sm font-medium text-foreground">
+                  {profile?.full_name || "Usuário"}
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              {role && (
-                <span className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-secondary-foreground">
-                  {ROLE_LABELS[role]}
-                </span>
-              )}
-              <span className="text-sm font-medium text-foreground">
-                {profile?.full_name || "Usuário"}
-              </span>
-            </div>
-          </header>
-          <main className="flex-1 overflow-auto px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">{children}</main>
+              </div>
+            </header>
+            <main className="flex-1 overflow-auto px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">{children}</main>
+          </div>
         </div>
-      </div>
-      <SalesAssistant />
+      </HelpHub>
     </SidebarProvider>
   );
 }
@@ -99,4 +102,21 @@ function useExtensionLogin(userId: string | null) {
     window.addEventListener("focus", run);
     return () => window.removeEventListener("focus", run);
   }, [userId]);
+}
+
+/** Atalho no topo para a ajuda da tela aberta. */
+function HelpButton() {
+  const { openHub } = useHub();
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      data-tour="ajuda"
+      onClick={() => openHub("ajuda")}
+      className="h-8 gap-1.5 rounded-full px-2.5 text-muted-foreground hover:text-foreground"
+    >
+      <CircleHelp className="h-4 w-4" />
+      <span className="hidden sm:inline">Ajuda</span>
+    </Button>
+  );
 }

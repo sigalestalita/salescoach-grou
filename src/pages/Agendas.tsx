@@ -365,7 +365,7 @@ const Agendas = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div data-tour="agendas-titulo">
           <h1 className="text-3xl font-bold">Agendas</h1>
           <p className="text-muted-foreground">{isVendedor ? "Visualize suas reuniões e análises" : "Gerencie e analise suas reuniões comerciais"}</p>
         </div>
@@ -438,7 +438,7 @@ const Agendas = () => {
             </Dialog>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button data-tour="nova-agenda">
               <Plus className="h-4 w-4 mr-2" />
               Nova Agenda
             </Button>
@@ -583,7 +583,7 @@ const Agendas = () => {
       <CalendarConnect />
 
       {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3" data-tour="agendas-filtros">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -635,7 +635,7 @@ const Agendas = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 animate-stagger">
+        <div className="grid gap-4 animate-stagger" data-tour="agendas-lista">
           {filtered.map((meeting) => (
             <Card
               key={meeting.id}
