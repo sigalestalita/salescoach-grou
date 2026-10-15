@@ -1,127 +1,136 @@
-import { Download, Chrome, Monitor, Mic, Upload, CheckCircle2 } from "lucide-react";
+import { ExternalLink, Pin, LogIn, MonitorPlay, Volume2, Lightbulb, Send, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+const STORE_URL = "https://chromewebstore.google.com/detail/icabeghcpefeaeklfldpdfklkjfpbbkd";
+
 const steps = [
-  { icon: Download, title: "Baixe a extensão", desc: "Clique no botão abaixo para baixar o arquivo ZIP da extensão." },
-  { icon: Chrome, title: "Abra chrome://extensions", desc: "No Chrome, digite chrome://extensions na barra de endereço e pressione Enter." },
-  { icon: CheckCircle2, title: "Ative o Modo Desenvolvedor", desc: "No canto superior direito da página, ative o toggle 'Modo do desenvolvedor'." },
-  { icon: Upload, title: "Carregue a extensão", desc: "Clique em 'Carregar sem compactação', selecione a pasta descompactada e confirme." },
+  {
+    icon: ExternalLink,
+    title: "Instale pela Chrome Web Store",
+    desc: (
+      <>
+        Clique em <strong className="text-foreground">Instalar no Chrome</strong>, logo acima, e depois em{" "}
+        <strong className="text-foreground">Usar no Chrome</strong>. Funciona também no Edge e no Brave.
+      </>
+    ),
+  },
+  {
+    icon: Pin,
+    title: "Fixe o ícone na barra",
+    desc: (
+      <>
+        Clique no ícone de quebra-cabeça, no canto superior direito do Chrome, e no alfinete ao lado de{" "}
+        <strong className="text-foreground">Sales Coach</strong>. Assim ele fica sempre à mão.
+      </>
+    ),
+  },
+  {
+    icon: LogIn,
+    title: "Entre com a sua conta",
+    desc: "Clique no ícone do Sales Coach e entre com o mesmo e-mail e senha que você usa aqui. Só precisa fazer isso uma vez.",
+  },
+  {
+    icon: MonitorPlay,
+    title: "Na reunião, inicie a gravação",
+    desc: (
+      <>
+        Com a reunião aberta no Google Meet ou no Teams, clique no ícone, preencha o título e os dados do lead e clique em{" "}
+        <strong className="text-foreground">Iniciar gravação</strong>.
+      </>
+    ),
+  },
+  {
+    icon: Volume2,
+    title: "Escolha a aba da reunião, com áudio",
+    desc: (
+      <>
+        O Chrome pergunta o que compartilhar. Escolha <strong className="text-foreground">Guia do Chrome</strong>, selecione a
+        aba da reunião e deixe ligado <strong className="text-foreground">Compartilhar áudio da guia</strong>. Sem o áudio,
+        só a sua voz é gravada. Se pedir o microfone, clique em Permitir.
+      </>
+    ),
+  },
+  {
+    icon: Lightbulb,
+    title: "Conduza a reunião",
+    desc: "Um painel no canto da tela mostra a transcrição e dicas ao vivo. Ele pode ser minimizado e só você o vê; os outros participantes não.",
+  },
+  {
+    icon: Send,
+    title: "Ao terminar, clique em Parar e enviar",
+    desc: "A gravação vai para o Sales Coach e a análise fica pronta em alguns minutos na página Agendas.",
+  },
+];
+
+const tips = [
+  "Avise o cliente no início da reunião que ela está sendo gravada.",
+  "Não feche a aba da reunião antes de o painel mostrar \"Gravação enviada\".",
+  "Se o envio falhar, o painel oferece o botão \"Baixar a gravação\". Guarde o arquivo e envie depois em Agendas, no botão Nova Agenda.",
+  "Se o painel disser que a sessão expirou, clique no ícone, em Sair da conta, e entre de novo.",
 ];
 
 export default function Extensao() {
-  const handleDownload = () => {
-    fetch("/sales-coach-extension.zip")
-      .then((res) => {
-        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-        return res.blob();
-      })
-      .then((blob) => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "sales-coach-extension.zip";
-        a.click();
-        URL.revokeObjectURL(a.href);
-      })
-      .catch((err) => alert("Erro ao baixar: " + err.message));
-  };
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Extensão Chrome</h1>
+        <h1 className="text-2xl font-bold text-foreground">Extensão do Chrome</h1>
         <p className="text-muted-foreground mt-1">
-          Grave suas reuniões com tela e áudio diretamente do navegador
+          Grave suas reuniões no Google Meet e no Teams e receba dicas ao vivo, direto no navegador.
         </p>
       </div>
 
-      {/* Features */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6 text-center">
-            <Monitor className="h-10 w-10 text-primary mx-auto mb-3" />
-            <h3 className="font-semibold text-foreground">Gravação de Tela</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Capture a apresentação compartilhada durante a reunião
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6 text-center">
-            <Mic className="h-10 w-10 text-primary mx-auto mb-3" />
-            <h3 className="font-semibold text-foreground">Áudio Completo</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Grava áudio do sistema + microfone automaticamente
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card border-border">
-          <CardContent className="pt-6 text-center">
-            <Upload className="h-10 w-10 text-primary mx-auto mb-3" />
-            <h3 className="font-semibold text-foreground">Envio Automático</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Ao parar a gravação, o arquivo é enviado para análise automaticamente
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Download */}
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <Download className="h-5 w-5 text-primary" />
-            Download da Extensão
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={handleDownload} size="lg" className="w-full md:w-auto">
-            <Download className="mr-2 h-4 w-4" />
-            Baixar Extensão (.zip)
+        <CardContent className="flex flex-col gap-4 pt-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="font-semibold text-foreground">Instale em um clique</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              A extensão está na Chrome Web Store e se atualiza sozinha.
+            </p>
+          </div>
+          <Button asChild size="lg" className="w-full md:w-auto">
+            <a href={STORE_URL} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Instalar no Chrome
+            </a>
           </Button>
-          <p className="text-xs text-muted-foreground mt-3">
-            Compatível com Chrome, Edge, Brave e outros navegadores Chromium.
-          </p>
         </CardContent>
       </Card>
 
-      {/* Instructions */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Como Instalar</CardTitle>
+          <CardTitle className="text-foreground">Passo a passo</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
+          <ol className="space-y-6">
             {steps.map((step, i) => (
-              <div key={i} className="flex items-start gap-4">
+              <li key={step.title} className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <step.icon className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-semibold text-foreground">
+                  <h3 className="font-semibold text-foreground">
                     {i + 1}. {step.title}
-                  </h4>
-                  <p className="text-sm text-muted-foreground">{step.desc}</p>
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">{step.desc}</p>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ol>
         </CardContent>
       </Card>
 
-      {/* Usage */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-foreground">Como Usar</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <AlertCircle className="h-5 w-5 text-primary" />
+            Boas práticas
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>1. Clique no ícone da extensão na barra do Chrome</p>
-          <p>2. Faça login com suas credenciais do Sales Coach</p>
-          <p>3. Preencha o título da agenda e dados do lead</p>
-          <p>4. Clique em <strong className="text-foreground">"Iniciar Gravação"</strong> e selecione a tela/aba</p>
-          <p>5. Realize sua reunião normalmente</p>
-          <p>6. Ao finalizar, clique em <strong className="text-foreground">"Parar e Enviar"</strong></p>
-          <p>7. A gravação será enviada e analisada automaticamente</p>
+        <CardContent>
+          <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+            {tips.map((t) => <li key={t}>{t}</li>)}
+          </ul>
         </CardContent>
       </Card>
     </div>

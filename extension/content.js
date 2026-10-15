@@ -603,7 +603,7 @@
     a.textContent = 'Baixar a gravação';
     const hint = document.createElement('div');
     hint.style.cssText = 'font-size:12px;opacity:.8;margin-top:8px;text-align:center';
-    hint.textContent = 'Depois, envie o arquivo em Agendas → Nova reunião.';
+    hint.textContent = 'Depois, envie o arquivo em Agendas → Nova Agenda.';
     const close = document.createElement('button');
     close.className = 'sc-btn';
     close.style.marginTop = '8px';
