@@ -32,6 +32,20 @@ function extraOrigins(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Páginas de reunião onde a extensão grava. O envio da gravação parte do
+ * content script, e o fetch de um content script carrega a origem da página
+ * (meet.google.com), não a da extensão. Sem estas origens, o navegador
+ * bloqueia o upload com "Failed to fetch". CORS não é autenticação: as
+ * funções continuam exigindo o token do usuário.
+ */
+const MEETING_ORIGINS = [
+  "https://meet.google.com",
+  "https://teams.microsoft.com",
+  "https://teams.live.com",
+  "https://teams.cloud.microsoft",
+];
+
 function isAllowedOrigin(origin: string, customDomains: string[] = []): boolean {
   if (!origin) return false;
 
@@ -53,6 +67,7 @@ function isAllowedOrigin(origin: string, customDomains: string[] = []): boolean 
   }
 
   if (host === "localhost" || host === "127.0.0.1") return true;
+  if (MEETING_ORIGINS.includes(origin.toLowerCase())) return true;
   if (extraOrigins().includes(origin.toLowerCase())) return true;
   if (customDomains.includes(host)) return true;
 
