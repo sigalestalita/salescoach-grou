@@ -13,7 +13,11 @@ import {
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye, Pencil, MoreHorizontal, Clock, KeyRound } from "lucide-react";
 import { enterSupport } from "@/lib/support";
 import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
@@ -24,6 +28,12 @@ import { CRM_NAME, type CrmProvider } from "@/lib/crm";
  * A lista mostra metadados e consumo. Para ver o conteúdo de uma empresa
  * (reuniões, análises, equipe), "Ver conta" abre o app no modo suporte: como
  * admin dela, só leitura, por até 8 horas e com registro no audit_log.
+ * "Configurar" abre do mesmo jeito, com escrita liberada, para preparar a
+ * conta antes de entregar (base de conhecimento, metodologia, tipos).
+ *
+ * Demonstração: a empresa pode ter um prazo (demo_ends_at). Depois dele a
+ * conta fica bloqueada para ela. O acesso do primeiro admin sai com senha
+ * gerada aqui, trocada pela pessoa no primeiro login.
  * Do CRM, vê a conexão e a contagem de envios de cada empresa.
  */
 
@@ -44,6 +54,7 @@ interface Org {
   custom_domain: string | null;
   status: string;
   created_at: string;
+  demo_ends_at: string | null;
   users: number | null;
   meetings: number | null;
   subscription: {
@@ -66,6 +77,24 @@ interface CrmOverview {
   jobs: { enviado: number; erro: number; aguardando_vinculo: number; pendente: number };
   last_sent_at: string | null;
   last_job_error: string | null;
+}
+
+/** Acesso gerado para o admin de uma empresa. A senha só aparece aqui. */
+interface CreatedAccess {
+  orgName: string;
+  email: string;
+  password: string;
+  created: boolean;
+}
+
+const DAY = 864e5;
+
+function demoLabel(endsAt: string | null): { text: string; tone: "muted" | "warn" | "over" } | null {
+  if (!endsAt) return null;
+  const left = Math.ceil((new Date(endsAt).getTime() - Date.now()) / DAY);
+  const date = new Date(endsAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  if (left <= 0) return { text: `Encerrada em ${date}`, tone: "over" };
+  return { text: `Até ${date} · ${left === 1 ? "1 dia" : `${left} dias`}`, tone: left <= 3 ? "warn" : "muted" };
 }
 
 interface CreatedInvite {
@@ -119,12 +148,24 @@ const Plataforma = () => {
   const [slugTouched, setSlugTouched] = useState(false);
   const [productName, setProductName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [adminName, setAdminName] = useState("");
+  const [accessMode, setAccessMode] = useState<"senha" | "convite">("senha");
+  const [demoDays, setDemoDays] = useState("14");
   const [planKey, setPlanKey] = useState<string>("");
   const [creating, setCreating] = useState(false);
 
-  // Convite recém-gerado.
+  // Convite ou acesso recém-gerado.
   const [invite, setInvite] = useState<CreatedInvite | null>(null);
+  const [access, setAccess] = useState<CreatedAccess | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Diálogos por empresa.
+  const [demoOrg, setDemoOrg] = useState<Org | null>(null);
+  const [demoInput, setDemoInput] = useState("14");
+  const [accessOrg, setAccessOrg] = useState<Org | null>(null);
+  const [accessEmail, setAccessEmail] = useState("");
+  const [accessName, setAccessName] = useState("");
+  const [suspendOrg, setSuspendOrg] = useState<Org | null>(null);
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("platform-orgs", { body });
@@ -187,11 +228,24 @@ const Plataforma = () => {
         product_name: productName.trim() || null,
         plan_key: planKey || null,
         admin_email: adminEmail.trim() || null,
+        admin_name: adminName.trim() || null,
+        access_mode: accessMode,
+        demo_days: Number(demoDays) > 0 ? Number(demoDays) : null,
       });
 
       setCreateOpen(false);
 
-      if (data.invite?.token && adminEmail.trim()) {
+      if (data.access) {
+        setInvite(null);
+        setAccess({ orgName: name.trim(), ...data.access });
+        setCopied(false);
+      } else if (data.access_error) {
+        toast({
+          title: "Empresa criada, mas o acesso do admin não foi gerado",
+          description: `${data.access_error} Gere de novo em "Acesso do admin".`,
+          variant: "destructive",
+        });
+      } else if (data.invite?.token && adminEmail.trim()) {
         setInvite({
           orgName: name.trim(),
           email: adminEmail.trim(),
@@ -204,7 +258,7 @@ const Plataforma = () => {
       }
 
       setName(""); setSlug(""); setSlugTouched(false);
-      setProductName(""); setAdminEmail(""); setPlanKey("");
+      setProductName(""); setAdminEmail(""); setAdminName(""); setPlanKey(""); setDemoDays("14"); setAccessMode("senha");
       await load();
     } catch (err: any) {
       toast({ title: "Erro ao criar empresa", description: err.message, variant: "destructive" });
@@ -239,15 +293,69 @@ const Plataforma = () => {
     }
   };
 
-  const viewOrg = async (org: Org) => {
+  const viewOrg = async (org: Org, edit = false) => {
     setBusy(org.id);
     try {
-      await enterSupport(org.id);
+      await enterSupport(org.id, edit);
       // Recarrega o app inteiro: sessão, marca e consultas passam a ser da empresa.
       window.location.assign("/agendas");
     } catch (err) {
       toast({ title: "Não foi possível abrir a conta", description: (err as Error).message, variant: "destructive" });
       setBusy(null);
+    }
+  };
+
+  const saveDemo = async (org: Org, opts: { days?: number | null; end_now?: boolean }) => {
+    setBusy(org.id);
+    try {
+      const { demo_ends_at } = await call({ action: "set_demo", org_id: org.id, ...opts });
+      toast({
+        title: opts.end_now
+          ? `Demonstração de ${org.name} encerrada`
+          : demo_ends_at
+            ? `Demonstração de ${org.name} até ${new Date(demo_ends_at).toLocaleDateString("pt-BR")}`
+            : `${org.name} sem prazo de demonstração`,
+      });
+      setDemoOrg(null);
+      await load();
+    } catch (err) {
+      toast({ title: "Não foi possível alterar a demonstração", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const generateAccess = async () => {
+    if (!accessOrg || !accessEmail.trim()) return;
+    setBusy(accessOrg.id);
+    try {
+      const data = await call({
+        action: "admin_access", org_id: accessOrg.id, email: accessEmail.trim(), full_name: accessName.trim() || null,
+      });
+      setInvite(null);
+      setAccess({ orgName: accessOrg.name, ...data.access });
+      setCopied(false);
+      setAccessOrg(null);
+      await load();
+    } catch (err) {
+      toast({ title: "Não foi possível gerar o acesso", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const loginUrl = `${window.location.origin}/auth`;
+  const accessText = access
+    ? `Acesso ao Sales Coach (${access.orgName})\nEndereço: ${loginUrl}\nE-mail: ${access.email}\nSenha provisória: ${access.password}\nNo primeiro acesso você cria a sua própria senha.`
+    : "";
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      toast({ title: "Não foi possível copiar", description: "Selecione o texto manualmente.", variant: "destructive" });
     }
   };
 
@@ -333,6 +441,35 @@ const Plataforma = () => {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+        {access && (
+          <Card className="border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <KeyRound className="h-5 w-5" />
+                {access.created ? "Acesso criado" : "Senha nova gerada"} para {access.orgName}
+              </CardTitle>
+              <CardDescription>
+                Envie estes dados para <strong>{access.email}</strong>. A senha é provisória: no primeiro acesso a pessoa
+                cria a própria. Ela só aparece agora; se perder, gere outra em "Acesso do admin".
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <dl className="grid gap-x-4 gap-y-1 rounded-md border border-border bg-muted/40 p-3 text-sm sm:grid-cols-[auto_1fr]">
+                <dt className="text-muted-foreground">Endereço</dt><dd className="break-all font-mono text-xs leading-5">{loginUrl}</dd>
+                <dt className="text-muted-foreground">E-mail</dt><dd className="break-all font-mono text-xs leading-5">{access.email}</dd>
+                <dt className="text-muted-foreground">Senha provisória</dt><dd className="font-mono text-sm font-semibold">{access.password}</dd>
+              </dl>
+              <div className="flex gap-2">
+                <Button onClick={() => copyText(accessText)} size="sm">
+                  {copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}
+                  {copied ? "Copiado" : "Copiar mensagem"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setAccess(null)}>Fechar</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {invite && (
           <Card className="border-primary/40">
             <CardHeader>
@@ -375,7 +512,7 @@ const Plataforma = () => {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nova empresa cliente</DialogTitle>
-                  <DialogDescription>Cria a organização e, se informar um email, gera o convite do primeiro administrador.</DialogDescription>
+                  <DialogDescription>Cria a organização e, se informar um e-mail, o acesso do primeiro administrador.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                   <div className="space-y-2">
@@ -411,9 +548,36 @@ const Plataforma = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="org-admin">Email do administrador</Label>
-                    <Input id="org-admin" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@empresa.com" />
+                    <Label htmlFor="org-demo">Demonstração (dias)</Label>
+                    <Input id="org-demo" type="number" min={0} max={365} value={demoDays} onChange={(e) => setDemoDays(e.target.value)} className="w-28" />
+                    <p className="text-xs text-muted-foreground">
+                      {Number(demoDays) > 0
+                        ? `A conta funciona até ${new Date(Date.now() + Number(demoDays) * DAY).toLocaleDateString("pt-BR")} e mostra quantos dias faltam. Depois, fica bloqueada até você liberar.`
+                        : "Deixe 0 para uma empresa cliente, sem prazo."}
+                    </p>
                   </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="org-admin-name">Nome do administrador</Label>
+                      <Input id="org-admin-name" value={adminName} onChange={(e) => setAdminName(e.target.value)} placeholder="Maria Souza" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="org-admin">E-mail do administrador</Label>
+                      <Input id="org-admin" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@empresa.com" />
+                    </div>
+                  </div>
+                  {adminEmail.trim() && (
+                    <RadioGroup value={accessMode} onValueChange={(v) => setAccessMode(v as "senha" | "convite")} className="gap-2">
+                      <label className="flex items-start gap-2 text-sm">
+                        <RadioGroupItem value="senha" id="acc-senha" className="mt-0.5" />
+                        <span><strong>Gerar senha agora.</strong> Você recebe e-mail e senha provisória para enviar. A pessoa troca a senha no primeiro acesso.</span>
+                      </label>
+                      <label className="flex items-start gap-2 text-sm">
+                        <RadioGroupItem value="convite" id="acc-convite" className="mt-0.5" />
+                        <span><strong>Enviar link de convite.</strong> A pessoa cria a conta e a senha pelo link.</span>
+                      </label>
+                    </RadioGroup>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button onClick={handleCreate} disabled={creating}>
@@ -435,6 +599,7 @@ const Plataforma = () => {
                     <TableRow>
                       <TableHead>Empresa</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Demonstração</TableHead>
                       <TableHead>Plano</TableHead>
                       <TableHead>CRM</TableHead>
                       <TableHead className="text-right">Usuários</TableHead>
@@ -448,6 +613,7 @@ const Plataforma = () => {
                       const st = STATUS_LABELS[org.status] ?? { label: org.status, variant: "outline" as const };
                       const isBusy = busy === org.id;
                       const suspended = org.status === "suspended" || org.status === "canceled";
+                      const demo = demoLabel(org.demo_ends_at);
                       return (
                         <TableRow key={org.id}>
                           <TableCell>
@@ -455,6 +621,18 @@ const Plataforma = () => {
                             <div className="font-mono text-xs text-muted-foreground">{org.custom_domain ?? org.slug}</div>
                           </TableCell>
                           <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
+                          <TableCell>
+                            {demo ? (
+                              <button type="button" onClick={() => { setDemoOrg(org); setDemoInput("7"); }}
+                                className={`whitespace-nowrap text-xs underline-offset-2 hover:underline ${
+                                  demo.tone === "over" ? "font-medium text-destructive" : demo.tone === "warn" ? "font-medium text-orange-600" : "text-muted-foreground"
+                                }`}>
+                                {demo.text}
+                              </button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Select
                               value={org.subscription?.plans?.key ?? ""}
@@ -480,25 +658,32 @@ const Plataforma = () => {
                               <Eye className="mr-1 h-3.5 w-3.5" />
                               Ver conta
                             </Button>
-                            {suspended ? (
-                              <Button variant="outline" size="sm" disabled={isBusy} onClick={() => setStatus(org, "active")}>
-                                Reativar
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive"
-                                disabled={isBusy}
-                                onClick={() => {
-                                  if (confirm(`Suspender ${org.name}? Os usuários dela perdem a escrita, mas continuam lendo os próprios dados.`)) {
-                                    setStatus(org, "suspended");
-                                  }
-                                }}
-                              >
-                                Suspender
-                              </Button>
-                            )}
+                            <Button variant="outline" size="sm" disabled={isBusy} onClick={() => viewOrg(org, true)}
+                              title="Entrar na conta com edição liberada, para configurar">
+                              <Pencil className="mr-1 h-3.5 w-3.5" />
+                              Configurar
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isBusy} aria-label={`Mais ações de ${org.name}`}>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setDemoOrg(org); setDemoInput(org.demo_ends_at ? "7" : "14"); }}>
+                                  <Clock className="mr-2 h-4 w-4" /> Prazo da demonstração
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setAccessOrg(org); setAccessEmail(""); setAccessName(""); }}>
+                                  <KeyRound className="mr-2 h-4 w-4" /> Acesso do admin
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {suspended ? (
+                                  <DropdownMenuItem onClick={() => setStatus(org, "active")}>Reativar</DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem className="text-destructive" onClick={() => setSuspendOrg(org)}>Suspender</DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
@@ -586,6 +771,88 @@ const Plataforma = () => {
             )}
           </CardContent>
         </Card>
+
+        <Dialog open={!!demoOrg} onOpenChange={(o) => !o && setDemoOrg(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Demonstração de {demoOrg?.name}</DialogTitle>
+              <DialogDescription>
+                {demoOrg?.demo_ends_at
+                  ? `Hoje o prazo vai até ${new Date(demoOrg.demo_ends_at).toLocaleDateString("pt-BR")}.`
+                  : "Hoje esta empresa não tem prazo."}{" "}
+                Durante a demonstração, a conta mostra quantos dias faltam. Depois do prazo, fica bloqueada para a empresa,
+                com os dados guardados.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="demo-days">Liberar por mais quantos dias, a partir de hoje?</Label>
+              <div className="flex items-center gap-2">
+                <Input id="demo-days" type="number" min={1} max={365} value={demoInput} onChange={(e) => setDemoInput(e.target.value)} className="w-28" />
+                <Button disabled={!demoOrg || !(Number(demoInput) > 0) || busy === demoOrg?.id}
+                  onClick={() => demoOrg && saveDemo(demoOrg, { days: Number(demoInput) })}>
+                  Definir prazo
+                </Button>
+              </div>
+              {Number(demoInput) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Termina em {new Date(Date.now() + Number(demoInput) * DAY).toLocaleDateString("pt-BR")}.
+                </p>
+              )}
+            </div>
+            <DialogFooter className="gap-2 sm:justify-between">
+              <Button variant="ghost" className="text-destructive" disabled={!demoOrg?.demo_ends_at || busy === demoOrg?.id}
+                onClick={() => demoOrg && saveDemo(demoOrg, { end_now: true })}>
+                Encerrar agora
+              </Button>
+              <Button variant="outline" disabled={!demoOrg?.demo_ends_at || busy === demoOrg?.id}
+                onClick={() => demoOrg && saveDemo(demoOrg, { days: null })}>
+                Tirar prazo (virou cliente)
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!accessOrg} onOpenChange={(o) => !o && setAccessOrg(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Acesso do admin de {accessOrg?.name}</DialogTitle>
+              <DialogDescription>
+                Cria a conta de administrador com uma senha provisória. Se o e-mail já for admin desta empresa, gera uma
+                senha nova. A pessoa troca a senha no primeiro acesso.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="acc-name">Nome</Label>
+                <Input id="acc-name" value={accessName} onChange={(e) => setAccessName(e.target.value)} placeholder="Maria Souza" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="acc-email">E-mail</Label>
+                <Input id="acc-email" type="email" value={accessEmail} onChange={(e) => setAccessEmail(e.target.value)} placeholder="admin@empresa.com" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button disabled={!accessEmail.trim() || busy === accessOrg?.id} onClick={generateAccess}>
+                {busy === accessOrg?.id ? "Gerando..." : "Gerar acesso"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!suspendOrg} onOpenChange={(o) => !o && setSuspendOrg(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Suspender {suspendOrg?.name}?</DialogTitle>
+              <DialogDescription>Os usuários dela perdem a escrita, mas continuam lendo os próprios dados.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setSuspendOrg(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={() => { if (suspendOrg) setStatus(suspendOrg, "suspended"); setSuspendOrg(null); }}>
+                Suspender
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <p className="text-xs text-muted-foreground">
           Este painel mostra metadados e consumo. Conteúdo de reunião, transcrição e base de conhecimento só é visível

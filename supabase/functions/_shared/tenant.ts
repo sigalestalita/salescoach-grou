@@ -84,14 +84,26 @@ export async function getCaller(req: Request): Promise<CallerContext> {
   const admin = adminClient();
   const [{ data: profile }, { data: support }] = await Promise.all([
     admin.from("profiles").select("org_id, team_id").eq("user_id", user.id).maybeSingle(),
-    admin.from("platform_admins").select("support_org_id").eq("user_id", user.id)
+    admin.from("platform_admins").select("support_org_id, support_can_edit").eq("user_id", user.id)
       .not("support_org_id", "is", null).gt("support_until", new Date().toISOString()).maybeSingle(),
   ]);
 
-  // Modo suporte é só leitura, e as funções gastam ou escrevem na conta. Sem
-  // este bloqueio, rodariam com a organização do próprio operador.
   if (support) {
-    throw new HttpError(403, "Indisponível no modo suporte (só leitura).", "SUPPORT_READ_ONLY");
+    // "Ver conta" é só leitura, e as funções gastam ou escrevem na conta. Sem
+    // este bloqueio, rodariam com a organização do próprio operador.
+    if (!support.support_can_edit) {
+      throw new HttpError(403, "Indisponível no modo suporte (só leitura).", "SUPPORT_READ_ONLY");
+    }
+    // "Configurar conta": o operador age como admin da empresa visitada, mesmo
+    // com a demonstração vencida (é justamente quando ele pode precisar entrar).
+    return {
+      userId: user.id,
+      email: user.email ?? null,
+      orgId: support.support_org_id,
+      role: "admin",
+      teamId: null,
+      admin,
+    };
   }
 
   if (!profile?.org_id) {
@@ -102,13 +114,17 @@ export async function getCaller(req: Request): Promise<CallerContext> {
   // idas ao banco na frente de toda chamada, e isso aparecia na fala do treino.
   const [{ data: roleRow }, { data: org }] = await Promise.all([
     admin.from("user_roles").select("role").eq("user_id", user.id).eq("org_id", profile.org_id).maybeSingle(),
-    // Organização suspensa ou cancelada não executa trabalho novo. A leitura
-    // continua pela RLS; aqui só passam as funções que gastam ou escrevem.
-    admin.from("organizations").select("status").eq("id", profile.org_id).maybeSingle(),
+    // Organização suspensa, cancelada ou com a demonstração vencida não executa
+    // trabalho novo. A leitura continua pela RLS; aqui só passam as funções que
+    // gastam ou escrevem.
+    admin.from("organizations").select("status, demo_ends_at").eq("id", profile.org_id).maybeSingle(),
   ]);
 
   if (!org || !["trial", "active", "past_due"].includes(org.status)) {
     throw new HttpError(402, "Conta suspensa. Fale com o administrador da plataforma.", "ORG_INACTIVE");
+  }
+  if (org.demo_ends_at && new Date(org.demo_ends_at) <= new Date()) {
+    throw new HttpError(402, "A demonstração terminou. Fale com a equipe do Sales Coach para continuar.", "DEMO_ENDED");
   }
 
   return {
@@ -131,12 +147,15 @@ export function requireRole(ctx: CallerContext, ...roles: AppRole[]): void {
 export async function assertOrgActive(ctx: CallerContext): Promise<void> {
   const { data: org } = await ctx.admin
     .from("organizations")
-    .select("status")
+    .select("status, demo_ends_at")
     .eq("id", ctx.orgId)
     .maybeSingle();
 
   if (!org || !["trial", "active", "past_due"].includes(org.status)) {
     throw new HttpError(402, "Assinatura inativa. Fale com o administrador da conta.");
+  }
+  if (org.demo_ends_at && new Date(org.demo_ends_at) <= new Date()) {
+    throw new HttpError(402, "A demonstração terminou. Fale com a equipe do Sales Coach para continuar.", "DEMO_ENDED");
   }
 }
 
