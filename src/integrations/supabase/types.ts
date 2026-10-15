@@ -1250,19 +1250,33 @@ export type Database = {
         Row: {
           created_at: string
           note: string | null
+          support_org_id: string | null
+          support_until: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           note?: string | null
+          support_org_id?: string | null
+          support_until?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           note?: string | null
+          support_org_id?: string | null
+          support_until?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "platform_admins_support_org_id_fkey"
+            columns: ["support_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1706,6 +1720,16 @@ export type Database = {
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }
+      platform_support_enter: { Args: { _org_id: string }; Returns: string }
+      platform_support_exit: { Args: never; Returns: undefined }
+      platform_support_session: {
+        Args: never
+        Returns: {
+          org_id: string
+          org_name: string
+          until: string
+        }[]
+      }
       provision_organization: {
         Args: {
           _name: string
@@ -1715,6 +1739,7 @@ export type Database = {
         }
         Returns: string
       }
+      support_org_id: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin" | "gestor" | "vendedor"
