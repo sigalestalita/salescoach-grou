@@ -1746,6 +1746,41 @@ export type Database = {
           },
         ]
       }
+      user_onboarding: {
+        Row: {
+          completed_steps: string[]
+          org_id: string
+          tour_done_at: string | null
+          updated_at: string
+          user_id: string
+          welcome_seen_at: string | null
+        }
+        Insert: {
+          completed_steps?: string[]
+          org_id?: string
+          tour_done_at?: string | null
+          updated_at?: string
+          user_id: string
+          welcome_seen_at?: string | null
+        }
+        Update: {
+          completed_steps?: string[]
+          org_id?: string
+          tour_done_at?: string | null
+          updated_at?: string
+          user_id?: string
+          welcome_seen_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_onboarding_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
