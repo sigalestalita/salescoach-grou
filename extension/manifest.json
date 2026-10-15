@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Sales Coach — Gravador e Coach ao Vivo",
-  "version": "1.6.2",
-  "description": "Grave reuniões no Meet e no Teams e receba orientação ao vivo, na tela, pela metodologia da sua empresa.",
+  "version": "1.7.0",
+  "description": "Grave reuniões no Meet e no Teams e receba orientação ao vivo, na tela, pela metodologia da sua empresa. Oferece a gravação ao entrar na chamada.",
   "permissions": [
     "storage",
     "activeTab",
@@ -12,7 +12,11 @@
     "https://xgpfuunmmjkgwjefofcd.supabase.co/*",
     "https://xgpfuunmmjkgwjefofcd.functions.supabase.co/*",
     "wss://xgpfuunmmjkgwjefofcd.functions.supabase.co/*",
-    "wss://xgpfuunmmjkgwjefofcd.supabase.co/*"
+    "wss://xgpfuunmmjkgwjefofcd.supabase.co/*",
+    "https://meet.google.com/*",
+    "https://teams.microsoft.com/*",
+    "https://teams.live.com/*",
+    "https://teams.cloud.microsoft/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -25,6 +29,25 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://meet.google.com/*",
+        "https://teams.microsoft.com/*",
+        "https://teams.live.com/*",
+        "https://teams.cloud.microsoft/*"
+      ],
+      "js": [
+        "autodetect.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://*.grougp.com.br/*"
+    ]
   },
   "icons": {
     "16": "icon16.png",

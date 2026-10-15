@@ -6,6 +6,8 @@ import { useBranding } from "@/contexts/BrandingContext";
 import { Button } from "@/components/ui/button";
 import { Eye } from "lucide-react";
 import { exitSupport } from "@/lib/support";
+import { useEffect } from "react";
+import { syncExtensionSession } from "@/lib/extensionBridge";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -22,8 +24,9 @@ const ROLE_LABELS: Record<string, string> = {
  * conteúdo sobre o cinza frio do sistema.
  */
 export function AppLayout({ children }: AppLayoutProps) {
-  const { profile, role, support } = useAuth();
+  const { user, profile, role, support } = useAuth();
   const { branding } = useBranding();
+  useExtensionLogin(support ? null : user?.id ?? null);
 
   return (
     <SidebarProvider>
@@ -76,4 +79,24 @@ function SupportBanner({ orgName, until }: { orgName: string; until: string }) {
       </Button>
     </div>
   );
+}
+
+/**
+ * Mantém a extensão do Chrome logada com o mesmo usuário do site. Roda ao abrir
+ * o app e quando a aba volta ao foco (a extensão pode ter sido instalada com o
+ * site aberto). No modo suporte não roda: a extensão gravaria como operador.
+ */
+function useExtensionLogin(userId: string | null) {
+  useEffect(() => {
+    if (!userId) return;
+    let last = 0;
+    const run = () => {
+      if (Date.now() - last < 30_000) return;
+      last = Date.now();
+      syncExtensionSession(userId).catch(() => {});
+    };
+    run();
+    window.addEventListener("focus", run);
+    return () => window.removeEventListener("focus", run);
+  }, [userId]);
 }

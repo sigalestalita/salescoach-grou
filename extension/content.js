@@ -105,6 +105,8 @@
     if (msg.action === 'stopRecording') stopRecording();
   });
   window.__salescoachStartRecording = startRecording;
+  // Usado pelo autodetect.js para parar quando a pessoa sai da chamada.
+  window.__salescoachStopRecording = stopRecording;
   startRecording();
 
   // ── Auth helper ──
@@ -219,6 +221,9 @@
       screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
         audio: true,
+        // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
+        // em "Compartilhar".
+        preferCurrentTab: true,
       });
       hasScreen = true;
       hasSystemAudio = screenStream.getAudioTracks().length > 0;

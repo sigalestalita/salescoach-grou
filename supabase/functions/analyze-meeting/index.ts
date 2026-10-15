@@ -422,6 +422,15 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       .eq("key", meeting.meeting_type ?? "")
       .maybeSingle();
 
+    // Gravação de um clique (extensão) chega sem os dados do lead: a análise
+    // os identifica pela conversa.
+    const missingLead = !meeting.lead_name?.trim() || !meeting.lead_company?.trim();
+    const leadInstruction = missingLead
+      ? `\n\nInclua também no JSON o campo "lead_identificado": {"lead_nome": string | null, "lead_empresa": string | null}, ` +
+        `com o nome da pessoa do lado do cliente e a empresa dela, como aparecem na conversa. ` +
+        `Use null para o que não for dito com clareza; não invente.`
+      : "";
+
     const analysisPrompt = buildAnalysisPrompt({
       template,
       transcript,
@@ -444,7 +453,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         model: ANALYSIS_MODEL,
         messages: [
           { role: "system", content: "Você é um analista de vendas B2B experiente. Responda APENAS com JSON válido, sem markdown." },
-          { role: "user", content: analysisPrompt },
+          { role: "user", content: analysisPrompt + leadInstruction },
         ],
       }),
     });
@@ -528,11 +537,19 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       if (rows.length > 0) await supabase.from("highlights").insert(rows);
     }
 
+    // Preenche só o que o vendedor deixou em branco.
+    const leadFound = missingLead ? analysisData.lead_identificado : null;
+    const cleanLead = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 120) : null);
+    const leadPatch: Record<string, string> = {};
+    if (leadFound && !meeting.lead_name?.trim() && cleanLead(leadFound.lead_nome)) leadPatch.lead_name = cleanLead(leadFound.lead_nome)!;
+    if (leadFound && !meeting.lead_company?.trim() && cleanLead(leadFound.lead_empresa)) leadPatch.lead_company = cleanLead(leadFound.lead_empresa)!;
+
     const { error: updateError } = await supabase.from("meetings").update({
       status: "completo",
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
       error_message: null,
+      ...leadPatch,
     }).eq("id", meetingId);
 
     if (updateError) {
