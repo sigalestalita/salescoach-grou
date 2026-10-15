@@ -82,6 +82,18 @@ interface PastSession {
   created_at: string;
 }
 
+/** Perfil de cliente da empresa (lead_profiles), para escolher no treino. */
+interface ProfileOption {
+  id: string;
+  name: string;
+  segment: string | null;
+  pains: string[];
+}
+
+// lead_profiles ainda não está nos tipos gerados do Supabase.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 interface PainOption {
   id: string;
   label: string;
@@ -155,6 +167,10 @@ const Roleplay = () => {
   const [difficulty, setDifficulty] = useState<string>("media");
   const [scenario, setScenario] = useState<string>("primeira_agenda");
   const [focusPain, setFocusPain] = useState<string>("aleatoria");
+  // Perfis de cliente da empresa (Configurações). Com perfil escolhido, as
+  // dores do seletor passam a ser as dele.
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [profileId, setProfileId] = useState<string>("aleatorio");
   const [mode, setMode] = useState<Mode>("texto");
   // Voz do lead. "auto" deixa o servidor escolher a voz neural que combina com
   // o gênero do lead; "el:<id>" fixa uma voz neural; qualquer outro valor é uma
@@ -201,6 +217,9 @@ const Roleplay = () => {
 
   useEffect(() => {
     supabase.from("pain_items").select("id, label").order("sort_order").then(({ data }) => setPains(data ?? []));
+    // lead_profiles ainda não está nos tipos gerados; sem a tabela, a lista fica vazia.
+    db.from("lead_profiles").select("id, name, segment, pains").eq("is_active", true).order("sort_order")
+      .then(({ data }: { data: ProfileOption[] | null }) => setProfiles(data ?? []));
     loadHistory();
     return () => {
       cancelSpeaking();
@@ -264,6 +283,7 @@ const Roleplay = () => {
             difficulty,
             scenario,
             focusPain: focusPain !== "aleatoria" ? focusPain : undefined,
+            profileId: profileId !== "aleatorio" ? profileId : undefined,
             // Guardado na sessão: é o que a revisão usa para dizer se o
             // treino foi por texto ou por chamada.
             mode,
@@ -670,10 +690,12 @@ const Roleplay = () => {
         <Card data-tour="treino-config">
           <CardHeader>
             <CardTitle className="text-base">Configure a simulação</CardTitle>
-            <CardDescription>A IA monta um lead com uma dor e objeções reais já vistas nas suas reuniões.</CardDescription>
+            <CardDescription>
+              A IA monta um lead a partir dos perfis de cliente da empresa, com uma dor e objeções reais já vistas nas suas reuniões.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Tipo de reunião</label>
                 <Select value={meetingType} onValueChange={setMeetingType}>
@@ -681,6 +703,18 @@ const Roleplay = () => {
                   <SelectContent>
                     {config.meetingTypes.map((t) => (
                       <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Perfil do lead</label>
+                <Select value={profileId} onValueChange={(v) => { setProfileId(v); setFocusPain("aleatoria"); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="aleatorio">{profiles.length ? "Sortear um perfil" : "Genérico"}</SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -702,7 +736,7 @@ const Roleplay = () => {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="aleatoria">Aleatória</SelectItem>
-                    {pains.map((p) => (
+                    {(profiles.find((p) => p.id === profileId)?.pains.map((label) => ({ id: label, label })) ?? pains).map((p) => (
                       <SelectItem key={p.id} value={p.label}>{p.label}</SelectItem>
                     ))}
                   </SelectContent>
