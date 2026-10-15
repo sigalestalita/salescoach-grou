@@ -329,6 +329,82 @@ export type Database = {
           },
         ]
       }
+      calendar_accounts: {
+        Row: {
+          connected_at: string
+          email: string | null
+          id: string
+          last_error: string | null
+          org_id: string
+          provider: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string
+          email?: string | null
+          id?: string
+          last_error?: string | null
+          org_id: string
+          provider: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connected_at?: string
+          email?: string | null
+          id?: string
+          last_error?: string | null
+          org_id?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_accounts_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_tokens: {
+        Row: {
+          access_token_enc: string | null
+          account_id: string
+          expires_at: string | null
+          refresh_token_enc: string
+          refreshed_at: string
+        }
+        Insert: {
+          access_token_enc?: string | null
+          account_id: string
+          expires_at?: string | null
+          refresh_token_enc: string
+          refreshed_at?: string
+        }
+        Update: {
+          access_token_enc?: string | null
+          account_id?: string
+          expires_at?: string | null
+          refresh_token_enc?: string
+          refreshed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_tokens_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "calendar_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_connections: {
         Row: {
           account_label: string | null
@@ -769,6 +845,8 @@ export type Database = {
       }
       meetings: {
         Row: {
+          attendees: Json | null
+          calendar_event_id: string | null
           created_at: string
           crm_deal_id: string | null
           crm_deal_name: string | null
@@ -785,6 +863,7 @@ export type Database = {
           lead_name: string | null
           meeting_date: string | null
           meeting_type: string | null
+          meeting_url: string | null
           org_id: string
           overall_score: number | null
           seller_id: string
@@ -801,6 +880,8 @@ export type Database = {
           youtube_url: string | null
         }
         Insert: {
+          attendees?: Json | null
+          calendar_event_id?: string | null
           created_at?: string
           crm_deal_id?: string | null
           crm_deal_name?: string | null
@@ -817,6 +898,7 @@ export type Database = {
           lead_name?: string | null
           meeting_date?: string | null
           meeting_type?: string | null
+          meeting_url?: string | null
           org_id?: string
           overall_score?: number | null
           seller_id: string
@@ -833,6 +915,8 @@ export type Database = {
           youtube_url?: string | null
         }
         Update: {
+          attendees?: Json | null
+          calendar_event_id?: string | null
           created_at?: string
           crm_deal_id?: string | null
           crm_deal_name?: string | null
@@ -849,6 +933,7 @@ export type Database = {
           lead_name?: string | null
           meeting_date?: string | null
           meeting_type?: string | null
+          meeting_url?: string | null
           org_id?: string
           overall_score?: number | null
           seller_id?: string
