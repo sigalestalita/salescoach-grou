@@ -31,6 +31,14 @@
   let timerInterval = null;
   let startTime = null;
   let meetingId = null;
+  // Pedido de gravação em andamento (seletor de tela aberto). O popup injeta
+  // este script, que já começa a gravar, e logo depois manda "startRecording":
+  // sem esta trava, eram dois seletores de tela e duas gravações disputando o
+  // mesmo estado, e a segunda atropelava a primeira.
+  let starting = false;
+  // Token capturado no início, para o envio não depender de chrome.storage
+  // caso a extensão seja recarregada no meio da reunião.
+  let lastToken = null;
 
   // ── Overlay DOM ──
   const overlay = document.createElement('div');
@@ -100,15 +108,29 @@
   startRecording();
 
   // ── Auth helper ──
+  /** fetch com prazo: rede ruim vira erro visível, não espera infinita. */
+  async function fetchWithTimeout(url, opts, ms) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await fetch(url, { ...opts, signal: ctrl.signal });
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new Error('O servidor demorou demais para responder.');
+      throw err;
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
   async function refreshAccessToken() {
     try {
       const data = await chrome.storage.local.get(['refreshToken']);
       if (!data.refreshToken) return null;
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      const res = await fetchWithTimeout(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
         body: JSON.stringify({ refresh_token: data.refreshToken }),
-      });
+      }, 20000);
       if (!res.ok) return null;
       const r = await res.json();
       chrome.storage.local.set({ accessToken: r.access_token, refreshToken: r.refresh_token });
@@ -117,14 +139,22 @@
   }
 
   async function getValidToken() {
-    const data = await chrome.storage.local.get(['accessToken']);
-    const fresh = await refreshAccessToken();
-    return fresh || data.accessToken;
+    try {
+      const data = await chrome.storage.local.get(['accessToken']);
+      const fresh = await refreshAccessToken();
+      lastToken = fresh || data.accessToken || lastToken;
+    } catch (err) {
+      // Extensão recarregada durante a reunião: chrome.storage deixa de
+      // responder nesta aba. Segue com o último token conhecido.
+      console.warn('Sales Coach: sem acesso ao armazenamento da extensão:', err?.message || err);
+    }
+    return lastToken;
   }
 
   // ── Pre-create meeting (status=ao_vivo) so live channel works ──
   async function preCreateMeeting(token, meta) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/meetings`, {
+    const userId = (await chrome.storage.local.get(['userId'])).userId;
+    const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/meetings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -140,25 +170,45 @@
         lead_email: meta.leadEmail || null,
         status: 'ao_vivo',
         meeting_date: new Date().toISOString(),
-        seller_id: (await chrome.storage.local.get(['userId'])).userId,
+        seller_id: userId,
       }]),
-    });
+    }, 20000);
     if (!res.ok) {
-      console.error('preCreateMeeting failed', await res.text());
-      return null;
+      const body = await res.text();
+      console.error('preCreateMeeting failed', res.status, body);
+      let msg = '';
+      try { msg = JSON.parse(body).message || ''; } catch {}
+      throw new Error(friendlyCreateError(res.status, msg));
     }
     const rows = await res.json();
     return rows?.[0]?.id || null;
+  }
+
+  function friendlyCreateError(status, msg) {
+    if (/row-level security/i.test(msg)) {
+      return 'sua conta não tem permissão para criar reuniões agora. Se você é operador da plataforma, saia do modo suporte no Sales Coach e tente de novo.';
+    }
+    if (status === 401) return 'sessão expirada. Saia e entre de novo na extensão.';
+    return `não foi possível criar a reunião (${status}${msg ? `: ${msg}` : ''}).`;
   }
 
   // ── Recording ──
   async function startRecording() {
     // Duas gravações ao mesmo tempo produzem um arquivo ilegível. Se já há uma
     // em curso, mantém a que está rodando.
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
+    if (starting || (mediaRecorder && mediaRecorder.state === 'recording')) {
       console.warn('Sales Coach: já existe uma gravação em curso; o pedido foi ignorado.');
       return;
     }
+    starting = true;
+    try {
+      await beginRecording();
+    } finally {
+      starting = false;
+    }
+  }
+
+  async function beginRecording() {
 
     let hasScreen = false, hasSystemAudio = false;
     initEl.style.display = '';
@@ -220,6 +270,17 @@
       if (e.data.size > 0 && mediaRecorder === meuRecorder) chunks.push(e.data);
     };
     mediaRecorder.onstop = async () => {
+      try {
+        await finishRecording();
+      } catch (err) {
+        // Qualquer falha aqui deixava o painel parado em "Enviando gravação…".
+        console.error('Sales Coach: falha ao finalizar a gravação:', err);
+        failWithDownload(chunks, mimeType, err?.message || String(err));
+        cleanup();
+      }
+    };
+
+    const finishRecording = async () => {
       showStatus('sending', 'Enviando gravação...');
       notifyBackground('uploadStarted');
       stopLive();
@@ -239,8 +300,8 @@
           cleanup(); autoRemove(9000); return;
         }
       }
-      await uploadRecording(blob);
       cleanup();
+      await uploadRecording(blob);
     };
     mediaRecorder.start(1000);
 
@@ -249,7 +310,7 @@
     recordingEl.style.display = '';
     modeEl.textContent = isVideo ? 'Tela + áudio' : 'Apenas áudio';
     startTimer();
-    chrome.storage.local.set({
+    safeStorageSet({
       recordingState: 'recording', recordingStartTime: startTime,
       recordingMode: mode, isScreenSharing: isVideo,
     });
@@ -267,9 +328,7 @@
         chrome.storage.local.set({ lastMeetingId: meetingId });
         await startLive(token, meetingId, mixedDest.stream);
       } else {
-        liveFlag.style.display = 'none';
-        setLiveText('Live indisponível: não foi possível criar a reunião.');
-        setTipsStatus('Coach indisponível.');
+        throw new Error('não foi possível criar a reunião.');
       }
     } catch (e) {
       console.warn('Live coach off:', e);
@@ -467,7 +526,7 @@
 
   // ── Upload ──
   async function uploadRecording(blob) {
-    chrome.storage.local.set({ recordingState: 'uploading' });
+    safeStorageSet({ recordingState: 'uploading' });
     try {
       const data = await chrome.storage.local.get(['meetingData']);
       const meta = data.meetingData || {};
@@ -483,23 +542,27 @@
       formData.append('lead_email', meta.leadEmail || '');
       if (meetingId) formData.append('meeting_id', meetingId);
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/upload-recording`, {
+      // Prazo generoso: uma reunião longa pode ter centenas de MB.
+      const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/upload-recording`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
         body: formData,
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || `Erro (status ${res.status})`);
+      }, 15 * 60 * 1000);
+      let result = {};
+      try { result = await res.json(); } catch {}
+      if (!res.ok) throw new Error(result.error || `Erro no envio (status ${res.status})`);
 
-      chrome.storage.local.set({ recordingState: 'done', lastMeetingId: result.meetingId });
-      chrome.storage.local.remove(['meetingData']);
+      safeStorageSet({ recordingState: 'done', lastMeetingId: result.meetingId });
+      try { chrome.storage.local.remove(['meetingData']); } catch {}
       showStatus('success', 'Gravação enviada! Análise em curso.');
       notifyBackground('uploadComplete', { meetingId: result.meetingId });
       autoRemove(5000);
     } catch (err) {
-      showStatus('error', err.message);
-      notifyBackground('uploadError', { error: err.message });
-      autoRemove(6000);
+      const msg = err?.message === 'Failed to fetch'
+        ? 'Sem conexão com o Sales Coach.'
+        : (err?.message || String(err));
+      notifyBackground('uploadError', { error: msg });
+      failWithDownload([blob], blob.type, msg);
     }
   }
 
@@ -512,13 +575,48 @@
     statusMsgEl.textContent = text;
   }
   function notifyBackground(action, extra = {}) {
-    chrome.runtime.sendMessage({ action, ...extra }).catch(() => {});
+    // Com a extensão recarregada, sendMessage lança na hora (não rejeita a
+    // promessa): o .catch sozinho não segurava e o envio parava no meio.
+    try { chrome.runtime.sendMessage({ action, ...extra }).catch(() => {}); } catch {}
+  }
+  function safeStorageSet(obj) {
+    try { chrome.storage.local.set(obj).catch?.(() => {}); } catch {}
+  }
+
+  /**
+   * O envio falhou: mostra o motivo e oferece o arquivo, para a reunião não se
+   * perder. O vendedor pode subir o arquivo depois em Agendas.
+   */
+  function failWithDownload(parts, type, message) {
+    const blob = new Blob(parts, { type: type || 'video/webm' });
+    showStatus('error', `❌ ${message}`);
+    if (blob.size < 100) { autoRemove(8000); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reuniao-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.webm`;
+    a.className = 'sc-btn';
+    a.style.display = 'block';
+    a.style.marginTop = '10px';
+    a.style.textAlign = 'center';
+    a.style.textDecoration = 'none';
+    a.textContent = 'Baixar a gravação';
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:12px;opacity:.8;margin-top:8px;text-align:center';
+    hint.textContent = 'Depois, envie o arquivo em Agendas → Nova reunião.';
+    const close = document.createElement('button');
+    close.className = 'sc-btn';
+    close.style.marginTop = '8px';
+    close.textContent = 'Fechar';
+    close.addEventListener('click', () => { URL.revokeObjectURL(url); autoRemove(0); });
+    statusMsgEl.after(a, hint, close);
+    safeStorageSet({ recordingState: 'idle' });
   }
   function autoRemove(delay) {
     setTimeout(() => {
       overlay.remove();
-      chrome.storage.local.set({ recordingState: 'idle' });
-      chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']);
+      safeStorageSet({ recordingState: 'idle' });
+      try { chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']); } catch {}
     }, delay);
   }
   function startTimer() {
