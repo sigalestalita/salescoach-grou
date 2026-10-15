@@ -5,7 +5,8 @@ import { useHub } from "@/components/hub/HubContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { Button } from "@/components/ui/button";
-import { Eye, CircleHelp } from "lucide-react";
+import { Eye, CircleHelp, Pencil } from "lucide-react";
+import { DemoBanner, DemoEndedScreen, FirstPasswordDialog, isDemoOver, useDemoEndsAt } from "@/components/AccountNotices";
 import { exitSupport } from "@/lib/support";
 import { useEffect } from "react";
 import { syncExtensionSession } from "@/lib/extensionBridge";
@@ -25,9 +26,14 @@ const ROLE_LABELS: Record<string, string> = {
  * conteúdo sobre o cinza frio do sistema.
  */
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, profile, role, support } = useAuth();
+  const { user, profile, role, support, signOut } = useAuth();
   const { branding } = useBranding();
+  const demoEndsAt = useDemoEndsAt();
   useExtensionLogin(support ? null : user?.id ?? null);
+
+  // Demonstração vencida: o operador da plataforma ainda entra para ver ou
+  // configurar; para a empresa, a conta fica bloqueada.
+  if (!support && isDemoOver(demoEndsAt)) return <DemoEndedScreen onSignOut={signOut} />;
 
   return (
     <SidebarProvider>
@@ -35,7 +41,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="flex min-h-screen w-full">
           <AppSidebar />
           <div className="flex min-w-0 flex-1 flex-col">
-            {support && <SupportBanner orgName={support.orgName} until={support.until} />}
+            {support && <SupportBanner orgName={support.orgName} until={support.until} canEdit={support.canEdit} />}
+            {demoEndsAt && <DemoBanner endsAt={demoEndsAt} />}
+            <FirstPasswordDialog />
             <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="rounded-xl text-muted-foreground hover:bg-card hover:text-foreground" />
@@ -66,19 +74,25 @@ export function AppLayout({ children }: AppLayoutProps) {
   );
 }
 
-/** Faixa fixa do modo suporte: deixa claro de quem é a conta e que é só leitura. */
-function SupportBanner({ orgName, until }: { orgName: string; until: string }) {
+/** Faixa fixa do modo suporte: deixa claro de quem é a conta e o modo. */
+function SupportBanner({ orgName, until, canEdit }: { orgName: string; until: string; canEdit: boolean }) {
   const sair = async () => {
     try { await exitSupport(); } finally { window.location.assign("/plataforma"); }
   };
+  const hora = new Date(until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-950 md:px-8">
+    <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm md:px-8 ${
+      canEdit ? "bg-violet-100 text-violet-950" : "bg-amber-100 text-amber-950"
+    }`}>
       <span className="flex items-center gap-2">
-        <Eye className="h-4 w-4" />
-        Modo suporte: você está vendo a conta de <strong>{orgName}</strong>. Só leitura, até{" "}
-        {new Date(until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+        {canEdit ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        {canEdit ? (
+          <>Configurando a conta de <strong>{orgName}</strong>. As alterações valem para a empresa. Até {hora}.</>
+        ) : (
+          <>Modo suporte: você está vendo a conta de <strong>{orgName}</strong>. Só leitura, até {hora}.</>
+        )}
       </span>
-      <Button size="sm" variant="outline" className="h-7 border-amber-900/30 bg-transparent" onClick={sair}>
+      <Button size="sm" variant="outline" className="h-7 border-current/30 bg-transparent" onClick={sair}>
         Voltar ao painel
       </Button>
     </div>
