@@ -13,6 +13,12 @@ import {
 export interface TourStep {
   /** Valor de data-tour do elemento destacado. Sem ele, balão no centro. */
   target?: string;
+  /**
+   * Elemento que pode não existir para esta empresa ou papel (ex.: agenda
+   * ainda não configurada, CRM não conectado). Sem ele, a etapa é pulada em
+   * vez de virar um balão no vazio.
+   */
+  optional?: boolean;
   /** Tela a abrir antes da etapa. */
   route?: string;
   title: string;
@@ -209,9 +215,9 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Agendas",
     steps: [
       { route: "/agendas", target: "agendas-titulo", title: "Agendas", body: "Cada reunião gravada ou enviada vira uma agenda: transcrição, análise e score. O vendedor vê as próprias; gestores e admins veem as do time." },
-      { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead." },
-      { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole um link do Drive ou do YouTube. Para vários links, use Importar em Lote." },
-      { route: "/agendas", target: "agendas-filtros", title: "Busca e filtros", body: "Ache uma agenda pelo nome, pelo tipo de reunião ou pelo executivo." },
+      { route: "/agendas", target: "agenda-conectar", optional: true, title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead." },
+      { route: "/agendas", target: "nova-agenda", optional: true, title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole um link do Drive ou do YouTube. Para vários links, use Importar em Lote." },
+      { route: "/agendas", target: "agendas-filtros", optional: true, title: "Busca e filtros", body: "Ache uma agenda pelo nome, pelo tipo de reunião ou pelo executivo." },
       { route: "/agendas", target: "agendas-lista", title: "Lista de agendas", body: "O status mostra em que ponto está: Enviado, Transcrevendo, Analisando, Completo ou Erro. Clique para abrir a análise. No menu ⋮ dá para editar, refazer a análise ou apagar." },
     ],
   },
@@ -219,11 +225,11 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Análise da reunião",
     steps: [
       { target: "reuniao-titulo", title: "A análise da reunião", body: "Tudo o que a IA tirou da conversa, pela metodologia da sua empresa." },
-      { target: "reuniao-compartilhar", title: "Compartilhar", body: "Gere um link para quem não tem conta ver a análise, a transcrição e a gravação. Você escolhe a validade e pode desligar a qualquer momento." },
-      { target: "reuniao-crm", title: "CRM", body: "Com o CRM conectado, a análise vai para o negócio certo: anotação com o resumo e tarefa do próximo passo." },
+      { target: "reuniao-compartilhar", optional: true, title: "Compartilhar", body: "Gere um link para quem não tem conta ver a análise, a transcrição e a gravação. Você escolhe a validade e pode desligar a qualquer momento." },
+      { target: "reuniao-crm", optional: true, title: "CRM", body: "Com o CRM conectado, a análise vai para o negócio certo: anotação com o resumo e tarefa do próximo passo." },
       { target: "reuniao-scores", title: "Score, temperatura e talk ratio", body: "Score geral de 0 a 100, temperatura do lead e quanto cada lado falou. Logo abaixo, a nota de cada critério da metodologia." },
       { target: "reuniao-coach", title: "Insights e Sales Coach", body: "O que foi bem, o que faltou, os próximos passos e sugestões para a próxima conversa." },
-      { target: "reuniao-transcricao", title: "Highlights e transcrição", body: "Objeções, sinais de compra e momentos-chave, e a transcrição completa." },
+      { target: "reuniao-transcricao", optional: true, title: "Highlights e transcrição", body: "Objeções, sinais de compra e momentos-chave, e a transcrição completa." },
     ],
   },
   "visao-geral": {
@@ -238,8 +244,8 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Base de conhecimento",
     steps: [
       { route: "/conhecimento", target: "kb-abas", title: "Documentos e Produtos & Serviços", body: "Documentos: materiais da empresa. Produtos & Serviços: o catálogo, com descrição e categoria." },
-      { route: "/conhecimento", target: "kb-adicionar", title: "Adicionar", body: "Envie PDF, Word, TXT, CSV ou planilha, cole um link (inclusive Google Sheets) ou escreva o texto." },
-      { route: "/conhecimento", target: "kb-treinar", title: "Treinar IA", body: "Depois de adicionar, clique em Treinar IA para processar os documentos. A análise das reuniões passa a usar esse conteúdo." },
+      { route: "/conhecimento", target: "kb-adicionar", optional: true, title: "Adicionar", body: "Envie PDF, Word, TXT, CSV ou planilha, cole um link (inclusive Google Sheets) ou escreva o texto." },
+      { route: "/conhecimento", target: "kb-treinar", optional: true, title: "Treinar IA", body: "Depois de adicionar, clique em Treinar IA para processar os documentos. A análise das reuniões passa a usar esse conteúdo." },
     ],
   },
   argumentos: {
