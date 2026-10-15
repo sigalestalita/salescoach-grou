@@ -78,7 +78,7 @@ a tarefa vence em 2 dias úteis.
      (só para o OAuth; o token de longa duração não precisa deles)
    - `CRM_TOKEN_KEY`: texto aleatório de 32 caracteres ou mais. Se mudar, todas
      as conexões precisam ser refeitas.
-   - `APP_URL`: endereço do app (ex.: `https://salescoach.groupp.com.br`), usado
+   - `APP_URL`: endereço do app (ex.: `https://salescoach.grougp.com.br`), usado
      no link da análise e na volta do OAuth
    - `INTERNAL_FUNCTION_SECRET`: o mesmo que as funções já usam
 3. **Banco**: aplicar a migração `20261014090000_crm_integration.sql`.
