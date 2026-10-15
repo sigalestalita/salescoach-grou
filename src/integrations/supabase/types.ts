@@ -758,6 +758,62 @@ export type Database = {
           },
         ]
       }
+      lead_profiles: {
+        Row: {
+          company_profile: string | null
+          context: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          objections: string[]
+          org_id: string
+          pains: string[]
+          role: string | null
+          segment: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          company_profile?: string | null
+          context?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          objections?: string[]
+          org_id: string
+          pains?: string[]
+          role?: string | null
+          segment?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          company_profile?: string | null
+          context?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          objections?: string[]
+          org_id?: string
+          pains?: string[]
+          role?: string | null
+          segment?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_profiles_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_tips: {
         Row: {
           acao: string | null
