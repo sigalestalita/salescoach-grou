@@ -26,7 +26,13 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("calendar", { body });
   if (error) {
     // A mensagem útil vem no corpo da resposta, não no erro genérico do cliente.
-    const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    const ctx = (error as { context?: Response }).context;
+    const detail = await ctx?.json?.().catch(() => null);
+    if (ctx?.status === 401) {
+      // Login expirado no servidor: sai e volta para a tela de login.
+      await supabase.auth.signOut().catch(() => {});
+      throw new Error("Sua sessão expirou. Entre novamente.");
+    }
     throw new Error(detail?.error ?? "Não foi possível falar com a agenda agora.");
   }
   return data as T;
