@@ -75,7 +75,8 @@
 
 #salescoach-overlay .sc-live-text {
   font-size: 11px; color: #A9B7CC; background: #050F20; padding: 8px;
-  border-radius: 6px; min-height: 32px; max-height: 60px; overflow-y: auto;
+  border-radius: 6px; min-height: 32px; max-height: 72px; overflow-y: auto;
+  white-space: pre-line;
 }
 
 #salescoach-overlay .sc-btn {

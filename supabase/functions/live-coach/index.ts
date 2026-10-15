@@ -116,7 +116,11 @@ Deno.serve(async (req) => {
     ]);
 
     const ordered = (segs || []).reverse();
-    const transcript = ordered.map((s) => `- ${s.text}`).join("\n");
+    // A extensão manda as falas em duas trilhas (microfone = vendedor, aba =
+    // cliente). Trechos antigos, de uma trilha só, ficam sem rótulo.
+    const who = (s: { speaker: string | null }) =>
+      s.speaker === "vendedor" ? "Vendedor: " : s.speaker === "cliente" ? "Cliente: " : "";
+    const transcript = ordered.map((s) => `- ${who(s)}${s.text}`).join("\n");
     const lastTurn = ordered.slice(-4).map((s) => s.text).join(" ");
     const recentStr = (recent || [])
       .map((t) => `- [${t.categoria}] ${t.titulo}${t.acao ? ` → "${t.acao}"` : ""}`)

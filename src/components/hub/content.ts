@@ -578,6 +578,7 @@ export const FAQ: { q: string; a: string }[] = [
   { q: "A reunião ficou com Erro. E agora?", a: "Abra a reunião e clique em Tentar novamente. Se persistir, confira se o arquivo tem áudio e menos de 20 MB, ou se o link do Drive está aberto para qualquer pessoa com o link." },
   { q: "O cliente percebe que estou gravando?", a: "Pela extensão, o Chrome mostra que a aba está sendo compartilhada só para você. Avise o cliente no início, como pede a LGPD." },
   { q: "A gravação veio sem o áudio do cliente.", a: "Na janela do Chrome, deixe ligado Compartilhar áudio da guia antes de clicar em Compartilhar." },
+  { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e o áudio da aba (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
   { q: "O título ou o lead da reunião vieram errados.", a: "Conecte sua agenda em Agendas para virem do convite. Dá para corrigir a qualquer momento no menu ⋮ → Editar da agenda." },
   { q: "Como mudar os critérios da análise?", a: "Admins: Configurações → Metodologia de análise. As próximas análises seguem os novos critérios; para uma antiga, use Refazer análise." },
   { q: "Quem vê as minhas reuniões?", a: "Você, os gestores e os admins da sua empresa. Fora dela, só quem receber um link de compartilhamento que você criar." },

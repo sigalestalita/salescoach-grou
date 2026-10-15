@@ -13,7 +13,6 @@
 
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
   const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
-  const SUPABASE_WS = 'wss://xgpfuunmmjkgwjefofcd.functions.supabase.co';
   const SUPABASE_REALTIME_WS = 'wss://xgpfuunmmjkgwjefofcd.supabase.co/realtime/v1/websocket';
 
   let mediaRecorder = null;
@@ -21,10 +20,10 @@
   let screenStream = null;
   let micStream = null;
   let audioContext = null;
-  let liveCtx = null;
-  let liveSource = null;
-  let liveProcessor = null;
-  let liveWS = null;
+  // Trilhas do live: { vendedor, cliente } → { ws, ctx, source, processor, ... }
+  let liveChannels = {};
+  let liveStartedAt = 0;
+  let liveStopping = false;
   let tipsWS = null;
   let tipsHeartbeatInterval = null;
   let realtimeRef = 1;
@@ -334,7 +333,12 @@
       meetingId = await preCreateMeeting(token, data.meetingData || {});
       if (meetingId) {
         chrome.storage.local.set({ lastMeetingId: meetingId });
-        await startLive(token, meetingId, mixedDest.stream);
+        // Microfone = vendedor; áudio da aba = cliente. Sem o áudio da aba,
+        // só a trilha do vendedor entra.
+        await startLive(token, meetingId, {
+          vendedor: micStream,
+          cliente: hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null,
+        });
       } else {
         throw new Error('não foi possível criar a reunião.');
       }
@@ -361,53 +365,156 @@
     recordedChunks = [];
   }
 
-  // ── Live: WebSocket + PCM streaming + tips realtime ──
-  async function startLive(token, mid, audioOnlyStream) {
-    // 1) Open WS to live-transcribe
-    const wsUrl = `${SUPABASE_WS}/live-transcribe?meetingId=${mid}&token=${encodeURIComponent(token)}&apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}`;
-    liveWS = new WebSocket(wsUrl);
-    liveWS.binaryType = 'arraybuffer';
-    liveWS.onopen = () => {
+  // ── Live: AssemblyAI direto, uma conexão por trilha, + dicas em tempo real ──
+  //
+  // Antes o áudio passava por um WebSocket aberto numa edge function, que tem
+  // tempo máximo de vida: o live parava sozinho no meio da reunião. Agora a
+  // extensão conecta direto na AssemblyAI com um token temporário emitido pela
+  // função live-session (a chave da AssemblyAI fica no servidor). Cada fala
+  // concluída vira um trecho em transcription_segments, com quem falou, e
+  // dispara o coach em chamadas curtas.
+
+  const AAI_WS = 'wss://streaming.assemblyai.com/v3/ws?speech_model=u3-rt-pro&encoding=pcm_s16le&sample_rate=16000&format_turns=true';
+  const COACH_EVERY_MS = 8000;
+  const LABEL = { vendedor: 'Você', cliente: 'Cliente' };
+  let lastCoachAt = 0;
+  let coachTimer = null;
+  const liveLines = [];
+
+  /** Chamada autenticada a uma função ou ao REST; renova a sessão uma vez se expirou. */
+  async function authed(path, init = {}, ms = 20000) {
+    const doFetch = (token) => fetchWithTimeout(`${SUPABASE_URL}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, ...(init.headers || {}) },
+    }, ms);
+    let res = await doFetch(lastToken);
+    if (res.status === 401) {
+      const fresh = await refreshAccessToken();
+      if (fresh) { lastToken = fresh; res = await doFetch(fresh); }
+    }
+    return res;
+  }
+
+  async function liveTokens(mid, channels) {
+    const res = await authed('/functions/v1/live-session', {
+      method: 'POST', body: JSON.stringify({ action: 'start', meetingId: mid, channels }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.tokens) throw new Error(data.error || `transcrição indisponível (${res.status})`);
+    return data.tokens;
+  }
+
+  function renderLive(partial) {
+    const lines = liveLines.slice(-3).map((l) => `${LABEL[l.who]}: ${l.text}`);
+    if (partial) lines.push(`${LABEL[partial.who]}: ${partial.text}…`);
+    setLiveText(lines.length ? lines.join('\n') : 'Conectado. Aguardando fala…');
+  }
+
+  async function saveSegment(mid, who, text) {
+    try {
+      // org_id é preenchido pelo banco a partir da reunião.
+      await authed('/rest/v1/transcription_segments', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ meeting_id: mid, text, is_final: true, speaker: who }),
+      });
+    } catch (e) {
+      console.warn('Sales Coach: trecho não salvo', e);
+    }
+    scheduleCoach(mid);
+  }
+
+  // No máximo uma dica a cada 8 s: abaixo disso elas se atropelam.
+  function scheduleCoach(mid) {
+    if (coachTimer) return;
+    const wait = Math.max(0, COACH_EVERY_MS - (Date.now() - lastCoachAt));
+    coachTimer = setTimeout(() => {
+      coachTimer = null;
+      if (liveStopping) return;
+      lastCoachAt = Date.now();
+      authed('/functions/v1/live-coach', { method: 'POST', body: JSON.stringify({ meetingId: mid }) }, 30000)
+        .catch(() => {});
+    }, wait);
+  }
+
+  function openChannel(mid, who, stream, token, attempt = 0) {
+    const ch = liveChannels[who] || (liveChannels[who] = { who, stream, attempts: 0 });
+    ch.attempts = attempt;
+
+    // Áudio: PCM16 16 kHz mono, só desta trilha.
+    if (!ch.ctx) {
+      ch.ctx = new AudioContext({ sampleRate: 16000 });
+      ch.source = ch.ctx.createMediaStreamSource(stream);
+      ch.processor = ch.ctx.createScriptProcessor(4096, 1, 1);
+      ch.source.connect(ch.processor);
+      ch.processor.connect(ch.ctx.destination);
+      ch.processor.onaudioprocess = (e) => {
+        if (!ch.ws || ch.ws.readyState !== 1) return;
+        const input = e.inputBuffer.getChannelData(0);
+        const pcm = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const v = Math.max(-1, Math.min(1, input[i]));
+          pcm[i] = v < 0 ? v * 0x8000 : v * 0x7FFF;
+        }
+        ch.ws.send(pcm.buffer);
+      };
+    }
+
+    const ws = new WebSocket(`${AAI_WS}&token=${encodeURIComponent(token)}`);
+    ws.binaryType = 'arraybuffer';
+    ch.ws = ws;
+    ws.onopen = () => {
+      ch.attempts = 0;
       liveFlag.classList.add('on');
-      setLiveText('Conectado. Aguardando fala…');
+      if (!liveLines.length) renderLive(null);
     };
-    liveWS.onerror = (event) => {
-      console.error('Sales Coach live transcription WS error:', event);
-      liveFlag.classList.remove('on');
-      setLiveText('Erro no WebSocket de transcrição.');
-    };
-    liveWS.onclose = (event) => {
-      console.error('Sales Coach live transcription WS closed:', event.code, event.reason);
-      liveFlag.classList.remove('on');
-      setLiveText(`Transcrição encerrada (${event.code}${event.reason ? ': ' + event.reason : ''}).`);
-    };
-    liveWS.onmessage = (ev) => {
+    ws.onmessage = (ev) => {
       try {
         const m = JSON.parse(ev.data);
-        if (m.kind === 'turn') setLiveText(m.text || '…');
-        else if (m.kind === 'status') setLiveText('Transcrição ativa…');
-        else if (m.kind === 'error') setLiveText('Erro de transcrição: ' + m.message);
+        if (m.type !== 'Turn') return;
+        const text = (m.transcript || '').trim();
+        if (!text) return;
+        if (m.end_of_turn) {
+          liveLines.push({ who, text });
+          if (liveLines.length > 20) liveLines.shift();
+          renderLive(null);
+          if (text.length > 2) saveSegment(mid, who, text);
+        } else {
+          renderLive({ who, text });
+        }
       } catch {}
     };
-
-    // 2) Capture PCM16 16k mono from mixed audio
-    liveCtx = new AudioContext({ sampleRate: 16000 });
-    liveSource = liveCtx.createMediaStreamSource(audioOnlyStream);
-    liveProcessor = liveCtx.createScriptProcessor(4096, 1, 1);
-    liveSource.connect(liveProcessor);
-    liveProcessor.connect(liveCtx.destination);
-    liveProcessor.onaudioprocess = (e) => {
-      if (!liveWS || liveWS.readyState !== 1) return;
-      const input = e.inputBuffer.getChannelData(0);
-      const pcm = new Int16Array(input.length);
-      for (let i = 0; i < input.length; i++) {
-        const s = Math.max(-1, Math.min(1, input[i]));
-        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-      liveWS.send(pcm.buffer);
+    ws.onclose = (ev) => {
+      if (liveStopping || ch.ws !== ws) return;
+      console.warn(`Sales Coach: trilha ${who} caiu (${ev.code} ${ev.reason || ''}); reconectando`);
+      liveFlag.classList.remove('on');
+      // Reconecta com um token novo, com espera crescente (1, 2, 4... até 30 s).
+      const delay = Math.min(30000, 1000 * 2 ** ch.attempts);
+      setTimeout(async () => {
+        if (liveStopping) return;
+        try {
+          const tokens = await liveTokens(mid, [who]);
+          openChannel(mid, who, stream, tokens[who], ch.attempts + 1);
+        } catch (e) {
+          setLiveText(`Reconectando a transcrição… (${e.message})`);
+          ch.attempts += 1;
+          ws.onclose({ code: 0, reason: 'retry' });
+        }
+      }, delay);
     };
+  }
 
-    // 3) Subscribe to live_tips with raw Supabase Realtime WS.
+  async function startLive(token, mid, streams) {
+    lastToken = token;
+    liveStopping = false;
+    liveStartedAt = Date.now();
+    const channels = Object.keys(streams).filter((k) => streams[k] && streams[k].getAudioTracks().length);
+    if (!channels.length) throw new Error('sem áudio para transcrever');
+    const tokens = await liveTokens(mid, channels);
+    for (const who of channels) openChannel(mid, who, streams[who], tokens[who]);
+    if (!channels.includes('cliente')) {
+      setLiveText('Só a sua voz entra no live: compartilhe a aba com o áudio para o coach ouvir o cliente.');
+    }
     startTipsRealtime(token, mid);
   }
 
@@ -504,15 +611,29 @@
   }
 
   function stopLive() {
-    try { liveWS && liveWS.send(JSON.stringify({ action: 'terminate' })); } catch {}
-    try { liveWS && liveWS.close(); } catch {}
+    liveStopping = true;
+    if (coachTimer) { clearTimeout(coachTimer); coachTimer = null; }
+    const channels = Object.keys(liveChannels);
+    for (const ch of Object.values(liveChannels)) {
+      try { ch.ws && ch.ws.readyState === 1 && ch.ws.send(JSON.stringify({ type: 'Terminate' })); } catch {}
+      try { ch.ws && ch.ws.close(); } catch {}
+      try { ch.processor && ch.processor.disconnect(); } catch {}
+      try { ch.source && ch.source.disconnect(); } catch {}
+      try { ch.ctx && ch.ctx.close(); } catch {}
+    }
+    liveChannels = {};
     try { tipsWS && tipsWS.close(); } catch {}
     try { tipsHeartbeatInterval && clearInterval(tipsHeartbeatInterval); } catch {}
-    try { liveProcessor && liveProcessor.disconnect(); } catch {}
-    try { liveSource && liveSource.disconnect(); } catch {}
-    try { liveCtx && liveCtx.close(); } catch {}
-    liveWS = liveProcessor = liveSource = liveCtx = tipsWS = null;
+    tipsWS = null;
     tipsHeartbeatInterval = null;
+    // Registra os minutos de transcrição ao vivo (consumo da empresa).
+    if (meetingId && channels.length && liveStartedAt) {
+      const seconds = Math.round((Date.now() - liveStartedAt) / 1000);
+      authed('/functions/v1/live-session', {
+        method: 'POST', body: JSON.stringify({ action: 'finish', meetingId, seconds, channels }),
+      }).catch(() => {});
+      liveStartedAt = 0;
+    }
   }
 
   function addTip(tip) {
