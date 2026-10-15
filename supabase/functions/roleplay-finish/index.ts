@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       .join("\n");
 
     const [template, meetingTypeContext, knowledgeContext, meetingTypeLabelRes] = await Promise.all([
-      loadTemplate(ctx.admin, ctx.orgId),
+      loadTemplate(ctx.admin, ctx.orgId, session.meeting_type),
       loadMeetingTypeContext(ctx.admin, ctx.orgId, session.meeting_type),
       fetchKnowledgeContext(ctx.admin, ctx.orgId),
       session.meeting_type

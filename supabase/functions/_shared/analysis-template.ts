@@ -57,16 +57,41 @@ export const DEFAULT_TEMPLATE: AnalysisTemplate = {
   output_language: "pt-BR",
 };
 
+/**
+ * Metodologia da organização. Com `meetingTypeKey`, usa a metodologia ligada
+ * àquele tipo de reunião (meeting_types.analysis_template_id); sem ligação,
+ * ou sem tipo, a padrão da organização; sem nada configurado, o BANT neutro.
+ */
 export async function loadTemplate(
   admin: SupabaseClient,
   orgId: string,
+  meetingTypeKey: string | null = null,
 ): Promise<AnalysisTemplate> {
-  const { data } = await admin
-    .from("analysis_templates")
-    .select("*")
-    .eq("org_id", orgId)
-    .eq("is_default", true)
-    .maybeSingle();
+  let data = null;
+  if (meetingTypeKey) {
+    const { data: type } = await admin
+      .from("meeting_types")
+      .select("analysis_template_id")
+      .eq("org_id", orgId)
+      .eq("key", meetingTypeKey)
+      .maybeSingle();
+    if (type?.analysis_template_id) {
+      ({ data } = await admin
+        .from("analysis_templates")
+        .select("*")
+        .eq("org_id", orgId)
+        .eq("id", type.analysis_template_id)
+        .maybeSingle());
+    }
+  }
+  if (!data) {
+    ({ data } = await admin
+      .from("analysis_templates")
+      .select("*")
+      .eq("org_id", orgId)
+      .eq("is_default", true)
+      .maybeSingle());
+  }
 
   if (!data) return DEFAULT_TEMPLATE;
 
@@ -84,6 +109,25 @@ export async function loadTemplate(
     frameworks: data.frameworks ?? DEFAULT_TEMPLATE.frameworks,
     extra_instructions: data.extra_instructions ?? null,
     output_language: data.output_language || "pt-BR",
+  };
+}
+
+/**
+ * Resumo da metodologia guardado em analysis_results.methodology: as telas
+ * mostram os critérios com que a reunião foi avaliada, mesmo que a empresa
+ * mude de metodologia depois.
+ */
+export function methodologySnapshot(t: AnalysisTemplate) {
+  return {
+    id: t.id,
+    key: t.methodology_key,
+    label: t.methodology_label,
+    criteria: t.qualification_criteria.map((c) => ({ key: c.key, label: c.label, max_score: c.max_score ?? 25 })),
+    frameworks: {
+      meddic: t.frameworks.meddic !== false,
+      spin: t.frameworks.spin !== false,
+      talk_ratio: t.frameworks.talk_ratio !== false,
+    },
   };
 }
 

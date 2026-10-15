@@ -185,7 +185,8 @@ export interface UsageRecord {
     | "extracao_documento"
     | "storage"
     | "roleplay"
-    | "assistant_chat";
+    | "assistant_chat"
+    | "sugestao_metodologia";
   model?: string | null;
   provider?: string | null;
   inputTokens?: number;

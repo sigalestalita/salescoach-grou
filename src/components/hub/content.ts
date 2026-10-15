@@ -262,7 +262,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     steps: [
       { route: "/configuracoes", target: "cfg-marca", title: "Identidade visual", body: "Nome do produto, logo, cores, e-mail de suporte e textos da tela de login." },
       { route: "/configuracoes", target: "cfg-tipos", title: "Tipos de reunião", body: "Diagnóstico, proposta, follow-up... Crie, ordene, desative e escreva instruções para a análise de cada tipo." },
-      { route: "/configuracoes", target: "cfg-metodologia", title: "Metodologia de análise", body: "Nome da metodologia, persona da IA, critérios de qualificação, faixas de temperatura e regras da operação." },
+      { route: "/configuracoes", target: "cfg-metodologia", title: "Metodologias de análise", body: "Crie metodologias a partir de modelos prontos (BANT, SPICED, MEDDIC...), escolha a padrão e ligue ou desligue MEDDIC e SPIN. Cada tipo de reunião pode usar uma diferente." },
       { route: "/configuracoes", target: "cfg-crm", title: "Integração com CRM", body: "Conecte RD Station CRM, HubSpot, Pipedrive ou Kommo e escolha o que enviar ao fim de cada análise." },
     ],
   },
@@ -522,11 +522,13 @@ export const ARTICLES: HelpArticle[] = [
         ],
       },
       {
-        title: "Metodologia de análise",
+        title: "Metodologias de análise",
         items: [
-          "Nome da metodologia e persona da IA.",
-          "Critérios de qualificação (ex.: Budget, Authority, Need, Timeline), com o peso de cada um.",
-          "Faixas de temperatura e regras específicas da operação.",
+          "Configurações → Metodologias de análise: crie quantas quiser, a partir de modelos prontos (BANT, SPICED, GPCTBA/C&I, ANUM, CHAMP, MEDDIC, MEDDPICC, Sandler) ou do zero.",
+          "Uma é a padrão (estrela). Em Tipos de reunião, cada tipo pode usar outra: por exemplo, BANT na primeira reunião e SPICED na proposta.",
+          "Em cada metodologia: nome, persona da IA, critérios com peso (o ideal é somar 100), faixas de temperatura e regras da operação.",
+          "Análises extras: ligue ou desligue MEDDIC e SPIN, que aparecem além da metodologia principal.",
+          "Cada análise guarda a metodologia com que foi feita; mudar depois não altera as reuniões já analisadas (use Refazer análise para isso).",
         ],
       },
       {

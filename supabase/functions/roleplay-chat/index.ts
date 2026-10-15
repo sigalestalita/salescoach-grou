@@ -268,7 +268,7 @@ Deno.serve(async (req) => {
 
     const [{ data: history }, template, meetingTypeContext, orgRes, tipoRes] = await Promise.all([
       ctx.admin.from("roleplay_messages").select("role, content").eq("session_id", sessionId).order("created_at"),
-      loadTemplate(ctx.admin, ctx.orgId),
+      loadTemplate(ctx.admin, ctx.orgId, session.meeting_type),
       loadMeetingTypeContext(ctx.admin, ctx.orgId, session.meeting_type),
       ctx.admin.from("organizations").select("name").eq("id", ctx.orgId).maybeSingle(),
       session.meeting_type

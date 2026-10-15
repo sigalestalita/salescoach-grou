@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowDown, ArrowUp, ChevronDown, ListOrdered, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,12 @@ interface MeetingTypeRow {
   prompt_context: string | null;
   sort_order: number;
   is_active: boolean;
+  analysis_template_id: string | null;
 }
+
+interface TemplateOption { id: string; methodology_label: string; is_default: boolean }
+
+const DEFAULT_METHOD = "padrao";
 
 const slugify = (value: string) =>
   value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -46,14 +52,19 @@ export function MeetingTypesSettings() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, { label: string; prompt_context: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { label: string; prompt_context: string; template: string }>>({});
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [newLabel, setNewLabel] = useState("");
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from("meeting_types")
-      .select("id, key, label, prompt_context, sort_order, is_active").order("sort_order").order("label");
+    const [{ data, error }, { data: tpls }] = await Promise.all([
+      supabase.from("meeting_types")
+        .select("id, key, label, prompt_context, sort_order, is_active, analysis_template_id").order("sort_order").order("label"),
+      supabase.from("analysis_templates").select("id, methodology_label, is_default").order("is_default", { ascending: false }).order("created_at"),
+    ]);
     if (error) toast({ title: "Não foi possível carregar os tipos", description: error.message, variant: "destructive" });
     setRows(data ?? []);
+    setTemplates(tpls ?? []);
     setLoading(false);
   }, [toast]);
 
@@ -90,7 +101,11 @@ export function MeetingTypesSettings() {
     const d = draft[r.id];
     if (!d) return;
     const { error } = await supabase.from("meeting_types")
-      .update({ label: d.label.trim() || r.label, prompt_context: d.prompt_context.trim() || null }).eq("id", r.id);
+      .update({
+        label: d.label.trim() || r.label,
+        prompt_context: d.prompt_context.trim() || null,
+        analysis_template_id: d.template === DEFAULT_METHOD ? null : d.template,
+      }).eq("id", r.id);
     if (error) throw error;
     setOpenId(null);
   }, "Tipo atualizado");
@@ -125,7 +140,7 @@ export function MeetingTypesSettings() {
 
   const openRow = (r: MeetingTypeRow) => {
     setOpenId(openId === r.id ? null : r.id);
-    setDraft((d) => ({ ...d, [r.id]: d[r.id] ?? { label: r.label, prompt_context: r.prompt_context ?? "" } }));
+    setDraft((d) => ({ ...d, [r.id]: d[r.id] ?? { label: r.label, prompt_context: r.prompt_context ?? "", template: r.analysis_template_id ?? DEFAULT_METHOD } }));
   };
 
   return (
@@ -153,6 +168,9 @@ export function MeetingTypesSettings() {
                     </div>
                     <button type="button" onClick={() => openRow(r)} className="flex flex-1 items-center gap-2 text-left" aria-expanded={isOpen}>
                       <span className="font-medium">{r.label}</span>
+                      {r.analysis_template_id && templates.find((t) => t.id === r.analysis_template_id) && (
+                        <Badge variant="outline" className="text-[10px]">{templates.find((t) => t.id === r.analysis_template_id)!.methodology_label}</Badge>
+                      )}
                       {r.prompt_context && <Badge variant="secondary" className="text-[10px]">com instruções</Badge>}
                       {!r.is_active && <Badge variant="outline" className="text-[10px]">inativo</Badge>}
                       <ChevronDown className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
@@ -164,6 +182,22 @@ export function MeetingTypesSettings() {
                       <div className="space-y-1.5">
                         <Label>Nome</Label>
                         <Input value={d.label} onChange={(e) => setDraft({ ...draft, [r.id]: { ...d, label: e.target.value } })} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Metodologia de análise</Label>
+                        <Select value={d.template} onValueChange={(v) => setDraft({ ...draft, [r.id]: { ...d, template: v } })}
+                          onOpenChange={(o) => { if (o) load(); }}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={DEFAULT_METHOD}>
+                              Padrão da empresa{templates.find((t) => t.is_default) ? ` (${templates.find((t) => t.is_default)!.methodology_label})` : ""}
+                            </SelectItem>
+                            {templates.filter((t) => !t.is_default).map((t) => (
+                              <SelectItem key={t.id} value={t.id}>{t.methodology_label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Crie outras metodologias em Metodologias de análise, logo abaixo.</p>
                       </div>
                       <div className="space-y-1.5">
                         <Label>Instruções para a análise (opcional)</Label>

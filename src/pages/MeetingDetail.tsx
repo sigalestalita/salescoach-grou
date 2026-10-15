@@ -15,6 +15,7 @@ import { LiveMeetingPanel } from "@/components/LiveMeetingPanel";
 import { ShareControls } from "@/components/ShareControls";
 import { CrmMeetingCard } from "@/components/CrmMeetingCard";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
+import { FRAMEWORK_GRID, methodologyOf } from "@/lib/methodology";
 import type { Attendee } from "@/lib/calendar";
 
 const MetricTooltip = ({ text }: { text: string }) => (
@@ -181,6 +182,11 @@ const MeetingDetail = () => {
   const bant = analysis?.bant_score as any;
   const meddic = analysis?.meddic_score as any;
   const spin = analysis?.spin_score as any;
+  // Critérios da metodologia com que esta reunião foi analisada (pode ser
+  // outra que a padrão atual: cada tipo de reunião pode ter a sua).
+  const method = methodologyOf(analysis, config);
+  // MEDDIC e SPIN são opcionais por metodologia: sem dados, o card some.
+  const frameworkGrid = FRAMEWORK_GRID[1 + (meddic ? 1 : 0) + (spin ? 1 : 0)];
   const insights = analysis?.insights as any;
   const salesCoach = analysis?.sales_coach as any;
   const talkRatio = analysis?.talk_ratio as any;
@@ -621,14 +627,14 @@ const MeetingDetail = () => {
           </div>
 
           {/* Framework Scores */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className={frameworkGrid}>
             {/* BAN */}
             <Card>
               <CardHeader>
                <CardTitle className="text-sm flex items-center gap-2">
-                  {config.methodologyLabel} Score
+                  {method.label} Score
                   <MetricTooltip
-                    text={`Critérios de qualificação desta operação: ${config.criteria
+                    text={`Critérios de qualificação desta operação: ${method.criteria
                       .map((c) => `${c.label}${c.description ? ` (${c.description})` : ""}`)
                       .join(", ")}. Configuráveis em Configurações › Metodologia de análise.`}
                   />
@@ -636,9 +642,9 @@ const MeetingDetail = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 {bant ? (
-                  config.criteria.map((criterion) => {
+                  method.criteria.map((criterion) => {
                     const { score, reason } = getMetricValue(bant[criterion.key]);
-                    const max = criterion.max_score ?? config.maxCriterionScore;
+                    const max = criterion.max_score ?? method.maxCriterionScore;
                     return (
                       <div key={criterion.key} className="space-y-1">
                         <div className="flex justify-between text-xs">
@@ -658,6 +664,7 @@ const MeetingDetail = () => {
 
 
             {/* MEDDIC */}
+            {meddic && (
             <Card>
               <CardHeader>
                <CardTitle className="text-sm flex items-center gap-2">
@@ -686,7 +693,10 @@ const MeetingDetail = () => {
               </CardContent>
             </Card>
 
+            )}
+
             {/* SPIN */}
+            {spin && (
             <Card>
               <CardHeader>
                <CardTitle className="text-sm flex items-center gap-2">
@@ -714,6 +724,7 @@ const MeetingDetail = () => {
                 )}
               </CardContent>
             </Card>
+            )}
           </div>
 
           {/* Insights & Sales Coach */}

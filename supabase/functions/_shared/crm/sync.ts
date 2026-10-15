@@ -146,7 +146,7 @@ export async function processJob(admin: SupabaseClient, job: JobRow): Promise<Jo
     if (!analysis) throw new CrmError("A reunião ainda não tem análise.", "invalid");
 
     const [template, { data: mappings }] = await Promise.all([
-      loadTemplate(admin, job.org_id),
+      loadTemplate(admin, job.org_id, meeting.meeting_type ?? null),
       admin.from("crm_field_mappings").select("*").eq("org_id", job.org_id).eq("provider", job.provider),
     ]);
 
