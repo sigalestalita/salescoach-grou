@@ -29,6 +29,13 @@
       "when": 1792034859391,
       "tag": "0003_user_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792038038206,
+      "tag": "0004_migration",
+      "breakpoints": true
     }
   ]
 }

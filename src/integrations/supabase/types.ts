@@ -23,6 +23,7 @@ export type Database = {
           insights: Json | null
           meddic_score: Json | null
           meeting_id: string
+          methodology: Json | null
           model_used: string | null
           org_id: string
           overall_score: number | null
@@ -41,6 +42,7 @@ export type Database = {
           insights?: Json | null
           meddic_score?: Json | null
           meeting_id: string
+          methodology?: Json | null
           model_used?: string | null
           org_id: string
           overall_score?: number | null
@@ -59,6 +61,7 @@ export type Database = {
           insights?: Json | null
           meddic_score?: Json | null
           meeting_id?: string
+          methodology?: Json | null
           model_used?: string | null
           org_id?: string
           overall_score?: number | null
@@ -801,6 +804,7 @@ export type Database = {
       }
       meeting_types: {
         Row: {
+          analysis_template_id: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -812,6 +816,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          analysis_template_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -823,6 +828,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          analysis_template_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -834,6 +840,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "meeting_types_analysis_template_id_fkey"
+            columns: ["analysis_template_id"]
+            isOneToOne: false
+            referencedRelation: "analysis_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meeting_types_org_id_fkey"
             columns: ["org_id"]
