@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+const db = supabase as any;
 import { useAuth } from "@/contexts/AuthContext";
 import { extensionStatus } from "@/lib/extensionBridge";
 import { JOURNEY, JourneyDef } from "./content";
@@ -29,7 +30,7 @@ async function loadSignals(userId: string): Promise<Signals> {
     count(supabase.from("knowledge_documents").select("id", head)),
     count(supabase.from("user_roles").select("user_id", head)),
     count(supabase.from("crm_connections").select("id", head).eq("status", "ativo")),
-    count(supabase.from("calendar_accounts").select("id", head).eq("user_id", userId).eq("status", "conectado")),
+    count(db.from("calendar_accounts").select("id", head).eq("user_id", userId).eq("status", "conectado")),
     count(supabase.from("meetings").select("id", head).eq("seller_id", userId)),
     count(supabase.from("meetings").select("id", head).eq("status", "completo")),
     count(supabase.from("roleplay_sessions").select("id", head).eq("user_id", userId).eq("status", "concluida")),
@@ -56,7 +57,7 @@ export function useOnboarding() {
   useEffect(() => {
     if (!userId || !orgId) return;
     let alive = true;
-    supabase.from("user_onboarding").select("completed_steps, welcome_seen_at, tour_done_at").eq("user_id", userId).maybeSingle()
+    db.from("user_onboarding").select("completed_steps, welcome_seen_at, tour_done_at").eq("user_id", userId).maybeSingle()
       .then(({ data }) => {
         if (!alive) return;
         setRow(data ?? { completed_steps: [], welcome_seen_at: null, tour_done_at: null });
@@ -77,7 +78,7 @@ export function useOnboarding() {
   const save = useCallback(async (patch: Partial<NonNullable<typeof row>>) => {
     setRow((r) => ({ ...(r ?? { completed_steps: [], welcome_seen_at: null, tour_done_at: null }), ...patch }));
     if (!userId || support) return;
-    await supabase.from("user_onboarding").upsert({ user_id: userId, ...patch }, { onConflict: "user_id" });
+    await db.from("user_onboarding").upsert({ user_id: userId, ...patch }, { onConflict: "user_id" });
   }, [userId, support]);
 
   const markWelcomeSeen = useCallback(() => save({ welcome_seen_at: new Date().toISOString() }), [save]);
