@@ -37,6 +37,21 @@ Deno.serve(async (req) => {
     const leadCompany = (formData.get("lead_company") as string) || null;
     const leadEmail = (formData.get("lead_email") as string) || null;
     const existingMeetingId = (formData.get("meeting_id") as string) || null;
+    // Vindos da agenda do vendedor, quando conectada (extensão).
+    const meetingUrl = ((formData.get("meeting_url") as string) || "").slice(0, 2000) || null;
+    const calendarEventId = ((formData.get("calendar_event_id") as string) || "").slice(0, 300) || null;
+    let attendees: unknown = null;
+    try {
+      const raw = formData.get("attendees") as string | null;
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) {
+        attendees = parsed.slice(0, 30).filter((a) => a && typeof a.email === "string").map((a) => ({
+          name: typeof a.name === "string" ? a.name.slice(0, 200) : null,
+          email: a.email.slice(0, 320),
+          externo: !!a.externo,
+        }));
+      }
+    } catch { /* participantes são opcionais */ }
 
     if (!file) {
       return json(req, { error: "No file provided" }, 400);
@@ -92,6 +107,9 @@ Deno.serve(async (req) => {
           lead_name: leadName,
           lead_company: leadCompany,
           lead_email: leadEmail,
+          meeting_url: meetingUrl,
+          calendar_event_id: calendarEventId,
+          attendees,
           file_url: fileName,
           file_type: "webm",
           status: "enviado",

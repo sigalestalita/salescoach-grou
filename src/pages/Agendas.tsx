@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
+import { CalendarConnect } from "@/components/CalendarConnect";
 
 type Meeting = Tables<"meetings">;
 type Profile = Tables<"profiles">;
@@ -578,6 +579,8 @@ const Agendas = () => {
           </div>
         )}
       </div>
+
+      <CalendarConnect />
 
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

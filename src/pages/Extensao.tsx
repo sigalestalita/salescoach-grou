@@ -27,27 +27,33 @@ const steps = [
   },
   {
     icon: LogIn,
-    title: "Entre com a sua conta",
-    desc: "Clique no ícone do Sales Coach e entre com o mesmo e-mail e senha que você usa aqui. Só precisa fazer isso uma vez.",
+    title: "A extensão entra sozinha",
+    desc: (
+      <>
+        Com o Sales Coach aberto e logado neste navegador, a extensão se conecta à sua conta automaticamente. Se ela pedir
+        login, clique no ícone e em <strong className="text-foreground">Entrar pelo Sales Coach</strong>.
+      </>
+    ),
   },
   {
     icon: MonitorPlay,
-    title: "Na reunião, inicie a gravação",
+    title: "Entre na reunião e clique em Gravar",
     desc: (
       <>
-        Com a reunião aberta no Google Meet ou no Teams, clique no ícone, preencha o título e os dados do lead e clique em{" "}
-        <strong className="text-foreground">Iniciar gravação</strong>.
+        Ao entrar numa chamada do Google Meet ou do Teams, aparece o cartão{" "}
+        <strong className="text-foreground">Gravar esta reunião?</strong>. Não precisa preencher nada: com a agenda
+        conectada, o título e o lead vêm do convite. Se clicar em Agora não, ele lembra de novo em 2 minutos.
       </>
     ),
   },
   {
     icon: Volume2,
-    title: "Escolha a aba da reunião, com áudio",
+    title: "Confirme no Chrome",
     desc: (
       <>
-        O Chrome pergunta o que compartilhar. Escolha <strong className="text-foreground">Guia do Chrome</strong>, selecione a
-        aba da reunião e deixe ligado <strong className="text-foreground">Compartilhar áudio da guia</strong>. Sem o áudio,
-        só a sua voz é gravada. Se pedir o microfone, clique em Permitir.
+        O Chrome pede para compartilhar a aba da reunião. Deixe ligado{" "}
+        <strong className="text-foreground">Compartilhar áudio da guia</strong> e clique em{" "}
+        <strong className="text-foreground">Compartilhar</strong>. Na primeira vez, permita também o microfone.
       </>
     ),
   },
@@ -58,16 +64,18 @@ const steps = [
   },
   {
     icon: Send,
-    title: "Ao terminar, clique em Parar e enviar",
-    desc: "A gravação vai para o Sales Coach e a análise fica pronta em alguns minutos na página Agendas.",
+    title: "Saia da chamada: a gravação é enviada sozinha",
+    desc: "A análise fica pronta em alguns minutos na página Agendas, com o nome e a empresa do lead identificados pela conversa. Confira e corrija ali, se precisar.",
   },
 ];
 
 const tips = [
+  "Conecte sua agenda (Google ou Outlook) na página Agendas: as gravações já vêm com o título, os participantes e o lead.",
   "Avise o cliente no início da reunião que ela está sendo gravada.",
   "Não feche a aba da reunião antes de o painel mostrar \"Gravação enviada\".",
+  "Quer preencher os dados do lead antes? Clique no ícone da extensão e use Iniciar gravação.",
   "Se o envio falhar, o painel oferece o botão \"Baixar a gravação\". Guarde o arquivo e envie depois em Agendas, no botão Nova Agenda.",
-  "Se o painel disser que a sessão expirou, clique no ícone, em Sair da conta, e entre de novo.",
+  "Para não ver mais o cartão nas reuniões, clique no ícone da extensão e desmarque a opção de oferecer gravação.",
 ];
 
 export default function Extensao() {

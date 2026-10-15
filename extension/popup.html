@@ -39,6 +39,11 @@
     .separator { height: 1px; background: var(--line); margin: 10px 0; }
     .logout-link { font-size: 11px; color: var(--ink-faint); text-align: center; cursor: pointer; }
     .logout-link:hover { color: var(--ink-soft); }
+    .or { font-size: 11px; color: var(--ink-faint); text-align: center; margin: 10px 0 12px; }
+    .btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+    .btn-ghost:hover { color: #fff; }
+    .auto-detect { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--ink-soft); margin: 0 0 10px; cursor: pointer; }
+    .auto-detect input { margin-top: 2px; width: auto; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -51,7 +56,9 @@
 
     <!-- Login -->
     <div id="login-section">
-      <h2 style="font-size:13px;font-weight:500;color:#A9B7CC;margin-bottom:12px;">Entre com a sua conta do Sales Coach</h2>
+      <h2 style="font-size:13px;font-weight:500;color:#A9B7CC;margin-bottom:12px;">Já está logado no Sales Coach neste navegador? A extensão entra sozinha.</h2>
+      <button class="btn btn-primary" id="btn-open-app">Entrar pelo Sales Coach</button>
+      <div class="or">ou entre com e-mail e senha</div>
       <div class="field">
         <label>Email</label>
         <input type="email" id="login-email" placeholder="seu@email.com">
@@ -60,7 +67,7 @@
         <label>Senha</label>
         <input type="password" id="login-password" placeholder="Sua senha">
       </div>
-      <button class="btn btn-primary" id="btn-login">Entrar</button>
+      <button class="btn btn-ghost" id="btn-login">Entrar</button>
       <div id="login-error" class="status error hidden"></div>
     </div>
 
@@ -106,6 +113,7 @@
       <div id="upload-status" class="hidden"></div>
 
       <div class="separator"></div>
+      <label class="auto-detect"><input type="checkbox" id="auto-detect"> Oferecer gravação ao entrar numa reunião do Meet ou do Teams</label>
       <div class="logout-link" id="btn-logout">Sair da conta</div>
     </div>
   </div>

@@ -88,6 +88,51 @@ document.getElementById('btn-login').addEventListener('click', async () => {
   }
 });
 
+// Abre o Sales Coach: logado lá, o site entrega a sessão para a extensão.
+document.getElementById('btn-open-app').addEventListener('click', () => {
+  chrome.runtime.sendMessage({ action: 'openApp' });
+  window.close();
+});
+
+// Se a sessão chegar pelo site com o popup aberto, troca de tela.
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.userId?.newValue && !loginSection.classList.contains('hidden')) showRecordingUI();
+});
+
+// ── Agenda ──
+// Aberto numa reunião do Meet ou do Teams, o popup traz da agenda conectada o
+// título e o lead. Só preenche campo vazio: o que o vendedor digitou fica.
+let calendarEvent = null;
+const MEETING_HOSTS = ['meet.google.com', 'teams.microsoft.com', 'teams.live.com', 'teams.cloud.microsoft'];
+async function prefillFromCalendar() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url || !MEETING_HOSTS.includes(new URL(tab.url).hostname)) return;
+    const res = await chrome.runtime.sendMessage({ action: 'calendarLookup', meetingUrl: tab.url, title: tab.title });
+    if (!res?.event) return;
+    calendarEvent = { ...res.event, meetingUrl: tab.url };
+    const fill = (id, value) => {
+      const el = document.getElementById(id);
+      if (el && !el.value.trim() && value) el.value = value;
+    };
+    fill('meeting-title', res.event.title);
+    fill('lead-name', res.event.lead?.name);
+    fill('lead-email', res.event.lead?.email);
+  } catch (err) {
+    console.warn('Sales Coach: agenda indisponível', err);
+  }
+}
+
+// ── Sugestão automática ao entrar numa reunião ──
+const autoDetectEl = document.getElementById('auto-detect');
+async function loadAutoDetect() {
+  const { autoDetect } = await chrome.storage.local.get(['autoDetect']);
+  autoDetectEl.checked = autoDetect !== false;
+}
+autoDetectEl.addEventListener('change', () => {
+  chrome.storage.local.set({ autoDetect: autoDetectEl.checked });
+});
+
 document.getElementById('btn-logout').addEventListener('click', async () => {
   await chrome.storage.local.remove(['accessToken', 'refreshToken', 'userId', 'userEmail']);
   showLoginUI();
@@ -101,6 +146,8 @@ function showLoginUI() {
 }
 
 function showRecordingUI() {
+  loadAutoDetect();
+  prefillFromCalendar();
   loginSection.classList.add('hidden');
   recordingSection.classList.remove('hidden');
   statusDot.classList.remove('offline');
@@ -133,6 +180,8 @@ async function loadMeetingTypes() {
 
     const types = await res.json();
     select.innerHTML = '';
+    // O cartão que aparece ao entrar numa reunião usa a mesma lista.
+    if (Array.isArray(types)) chrome.storage.local.set({ meetingTypesCache: types });
 
     if (!Array.isArray(types) || types.length === 0) {
       select.innerHTML = '<option value="">Sem tipos configurados</option>';
@@ -207,6 +256,9 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     leadName: document.getElementById('lead-name').value.trim(),
     leadCompany: document.getElementById('lead-company').value.trim(),
     leadEmail: document.getElementById('lead-email').value.trim(),
+    meetingUrl: calendarEvent?.meetingUrl || null,
+    calendarEventId: calendarEvent?.eventId || null,
+    attendees: calendarEvent?.attendees || [],
   };
   await chrome.storage.local.set({ meetingData });
 
