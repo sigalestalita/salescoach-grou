@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { supportSession, type SupportSession } from "@/lib/support";
 
 type AppRole = Database["public"]["Enums"]["app_role"];
 
@@ -12,6 +13,8 @@ interface AuthContextType {
   role: AppRole | null;
   /** Organização do usuário. Null enquanto ele não aceitou um convite. */
   orgId: string | null;
+  /** Operador da plataforma vendo a conta de um cliente (só leitura). */
+  support: SupportSession | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -22,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   role: null,
   orgId: null,
+  support: null,
   loading: true,
   signOut: async () => {},
 });
@@ -33,6 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [support, setSupport] = useState<SupportSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Id do usuário cujo perfil/papel já estão carregados. O Supabase dispara
@@ -48,12 +53,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // protegida enxergaria "usuário sem organização" a cada abertura.
   const fetchUserData = async (userId: string) => {
     try {
-      const [profileRes, roleRes] = await Promise.all([
+      const [profileRes, roleRes, supportRes] = await Promise.all([
         supabase.from("profiles").select("full_name, avatar_url, team_id, org_id").eq("user_id", userId).maybeSingle(),
         supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+        supportSession(),
       ]);
       setProfile(profileRes.data ?? null);
-      setRole((roleRes.data?.role as AppRole) ?? null);
+      // No modo suporte o banco trata o operador como admin da empresa visitada.
+      setSupport(supportRes);
+      setRole(supportRes ? "admin" : (roleRes.data?.role as AppRole) ?? null);
       loadedForUserId.current = userId;
     } finally {
       setLoading(false);
@@ -75,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadedForUserId.current = null;
         setProfile(null);
         setRole(null);
+        setSupport(null);
         setLoading(false);
       }
     });
@@ -97,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, role, orgId: profile?.org_id ?? null, loading, signOut }}>
+    <AuthContext.Provider value={{ session, user, profile, role, orgId: support?.orgId ?? profile?.org_id ?? null, support, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

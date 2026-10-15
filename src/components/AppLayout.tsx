@@ -3,6 +3,9 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { SalesAssistant } from "@/components/SalesAssistant";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
+import { Button } from "@/components/ui/button";
+import { Eye } from "lucide-react";
+import { exitSupport } from "@/lib/support";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -19,7 +22,7 @@ const ROLE_LABELS: Record<string, string> = {
  * conteúdo sobre o cinza frio do sistema.
  */
 export function AppLayout({ children }: AppLayoutProps) {
-  const { profile, role } = useAuth();
+  const { profile, role, support } = useAuth();
   const { branding } = useBranding();
 
   return (
@@ -27,6 +30,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
+          {support && <SupportBanner orgName={support.orgName} until={support.until} />}
           <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="rounded-xl text-muted-foreground hover:bg-card hover:text-foreground" />
@@ -52,5 +56,24 @@ export function AppLayout({ children }: AppLayoutProps) {
       </div>
       <SalesAssistant />
     </SidebarProvider>
+  );
+}
+
+/** Faixa fixa do modo suporte: deixa claro de quem é a conta e que é só leitura. */
+function SupportBanner({ orgName, until }: { orgName: string; until: string }) {
+  const sair = async () => {
+    try { await exitSupport(); } finally { window.location.assign("/plataforma"); }
+  };
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-950 md:px-8">
+      <span className="flex items-center gap-2">
+        <Eye className="h-4 w-4" />
+        Modo suporte: você está vendo a conta de <strong>{orgName}</strong>. Só leitura, até{" "}
+        {new Date(until).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+      </span>
+      <Button size="sm" variant="outline" className="h-7 border-amber-900/30 bg-transparent" onClick={sair}>
+        Voltar ao painel
+      </Button>
+    </div>
   );
 }

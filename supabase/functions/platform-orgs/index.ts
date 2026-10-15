@@ -1,9 +1,9 @@
 // Painel do provedor: criar, listar, suspender e reativar organizações, e ver
 // o consumo de cada uma.
 //
-// Acesso restrito a quem está em platform_admins. Deliberadamente NÃO expõe
-// conteúdo de reunião, transcrição ou base de conhecimento de nenhum cliente —
-// o operador do SaaS vê metadados e consumo, não as conversas.
+// Acesso restrito a quem está em platform_admins. Esta função só expõe
+// metadados e consumo. O conteúdo de um cliente é visto pelo modo suporte
+// (platform_support_enter), só leitura e com registro no audit_log.
 
 import { json, preflight } from "../_shared/cors.ts";
 import { adminClient, ANON_KEY, SUPABASE_URL, writeAudit } from "../_shared/tenant.ts";

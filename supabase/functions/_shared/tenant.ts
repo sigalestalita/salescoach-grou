@@ -82,11 +82,17 @@ export async function getCaller(req: Request): Promise<CallerContext> {
   if (error || !user) throw new HttpError(401, "Sessão inválida");
 
   const admin = adminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("org_id, team_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: support }] = await Promise.all([
+    admin.from("profiles").select("org_id, team_id").eq("user_id", user.id).maybeSingle(),
+    admin.from("platform_admins").select("support_org_id").eq("user_id", user.id)
+      .not("support_org_id", "is", null).gt("support_until", new Date().toISOString()).maybeSingle(),
+  ]);
+
+  // Modo suporte é só leitura, e as funções gastam ou escrevem na conta. Sem
+  // este bloqueio, rodariam com a organização do próprio operador.
+  if (support) {
+    throw new HttpError(403, "Indisponível no modo suporte (só leitura).", "SUPPORT_READ_ONLY");
+  }
 
   if (!profile?.org_id) {
     throw new HttpError(403, "Usuário sem organização. Solicite um convite ao administrador.");
