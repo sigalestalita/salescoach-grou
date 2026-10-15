@@ -1187,6 +1187,7 @@ export type Database = {
         Row: {
           created_at: string
           custom_domain: string | null
+          demo_ends_at: string | null
           id: string
           locale: string
           name: string
@@ -1197,6 +1198,7 @@ export type Database = {
         Insert: {
           created_at?: string
           custom_domain?: string | null
+          demo_ends_at?: string | null
           id?: string
           locale?: string
           name: string
@@ -1207,6 +1209,7 @@ export type Database = {
         Update: {
           created_at?: string
           custom_domain?: string | null
+          demo_ends_at?: string | null
           id?: string
           locale?: string
           name?: string
@@ -1348,6 +1351,7 @@ export type Database = {
         Row: {
           created_at: string
           note: string | null
+          support_can_edit: boolean
           support_org_id: string | null
           support_until: string | null
           user_id: string
@@ -1355,6 +1359,7 @@ export type Database = {
         Insert: {
           created_at?: string
           note?: string | null
+          support_can_edit?: boolean
           support_org_id?: string | null
           support_until?: string | null
           user_id: string
@@ -1362,6 +1367,7 @@ export type Database = {
         Update: {
           created_at?: string
           note?: string | null
+          support_can_edit?: boolean
           support_org_id?: string | null
           support_until?: string | null
           user_id?: string
@@ -1853,16 +1859,21 @@ export type Database = {
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }
-      platform_support_enter: { Args: { _org_id: string }; Returns: string }
+      platform_support_enter: {
+        Args: { _edit?: boolean; _org_id: string }
+        Returns: string
+      }
       platform_support_exit: { Args: never; Returns: undefined }
       platform_support_session: {
         Args: never
         Returns: {
+          can_edit: boolean
           org_id: string
           org_name: string
           until: string
         }[]
       }
+      platform_user_id_by_email: { Args: { _email: string }; Returns: string }
       provision_organization: {
         Args: {
           _name: string
@@ -1873,6 +1884,7 @@ export type Database = {
         Returns: string
       }
       support_org_id: { Args: never; Returns: string }
+      support_read_only: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "gestor" | "vendedor"
