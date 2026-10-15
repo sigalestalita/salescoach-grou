@@ -57,7 +57,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </span>
               </div>
             </header>
-            <main className="flex-1 overflow-auto px-4 pb-6 pt-2 md:px-8 md:pb-8 md:pt-3">{children}</main>
+            {/* Folga embaixo: o botão da central fica fixo no canto e não pode cobrir o fim da página. */}
+            <main className="flex-1 overflow-auto px-4 pb-24 pt-2 md:px-8 md:pb-24 md:pt-3">{children}</main>
           </div>
         </div>
       </HelpHub>

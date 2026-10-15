@@ -52,9 +52,9 @@ const MGMT = ["admin", "gestor"];
 export const JOURNEY: JourneyDef[] = [
   {
     id: "metodologia",
-    title: "Configure a metodologia e a marca",
+    title: "Configure a metodologia, os tipos de reunião e a marca",
     description:
-      "Em Configurações, ajuste a metodologia de análise (critérios de qualificação, faixas de temperatura e regras da operação) e a identidade visual: logo, cores e e-mail de suporte. É o que faz a análise falar a língua da sua empresa.",
+      "Em Configurações, ajuste os tipos de reunião (com instruções para a análise de cada um), a metodologia (critérios de qualificação, faixas de temperatura e regras da operação) e a identidade visual: logo, cores e e-mail de suporte. É o que faz a análise falar a língua da sua empresa.",
     cta: "Abrir Configurações",
     route: "/configuracoes",
     tour: "configuracoes",
@@ -76,12 +76,12 @@ export const JOURNEY: JourneyDef[] = [
   },
   {
     id: "equipe",
-    title: "Cadastre o seu time",
+    title: "Traga o seu time",
     description:
-      "Em Configurações → Gerenciamento de Usuários, clique em Novo Usuário e informe nome, e-mail, senha inicial, papel (Admin, Gestor ou Executivo) e equipe.",
-    cta: "Cadastrar usuários",
-    route: "/configuracoes",
-    tour: "configuracoes",
+      "Em Equipe, clique em Adicionar pessoa: gere um convite por link (a pessoa cria a própria senha) ou crie o acesso com uma senha inicial. Escolha o papel (Admin, Gestor ou Executivo) e, se quiser, a equipe.",
+    cta: "Abrir Equipe",
+    route: "/equipe",
+    tour: "equipe",
     roles: ["admin"],
     minutes: 5,
     auto: true,
@@ -260,10 +260,18 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
   configuracoes: {
     title: "Configurações",
     steps: [
-      { route: "/configuracoes", target: "cfg-usuarios", title: "Usuários", body: "Cadastre o time: nome, e-mail, senha inicial, papel e equipe. Também dá para mudar o papel, redefinir a senha ou excluir." },
       { route: "/configuracoes", target: "cfg-marca", title: "Identidade visual", body: "Nome do produto, logo, cores, e-mail de suporte e textos da tela de login." },
+      { route: "/configuracoes", target: "cfg-tipos", title: "Tipos de reunião", body: "Diagnóstico, proposta, follow-up... Crie, ordene, desative e escreva instruções para a análise de cada tipo." },
       { route: "/configuracoes", target: "cfg-metodologia", title: "Metodologia de análise", body: "Nome da metodologia, persona da IA, critérios de qualificação, faixas de temperatura e regras da operação." },
       { route: "/configuracoes", target: "cfg-crm", title: "Integração com CRM", body: "Conecte RD Station CRM, HubSpot, Pipedrive ou Kommo e escolha o que enviar ao fim de cada análise." },
+    ],
+  },
+  equipe: {
+    title: "Equipe",
+    steps: [
+      { route: "/equipe", target: "equipe-adicionar", title: "Adicionar pessoa", body: "Convide por link (a pessoa cria a própria senha) ou crie o acesso com uma senha inicial. Escolha o papel e a equipe." },
+      { route: "/equipe", target: "equipe-equipes", title: "Equipes", body: "Crie grupos como SDRs, Closers ou Regional Sul para organizar o time." },
+      { route: "/equipe", target: "equipe-lista", title: "O time", body: "Edite nome, papel e equipe, redefina a senha ou remova o acesso. Convites ainda não aceitos aparecem acima, com o link para copiar." },
     ],
   },
   extensao: {
@@ -463,11 +471,11 @@ export const ARTICLES: HelpArticle[] = [
   },
   {
     id: "usuarios",
-    title: "Cadastrar e gerenciar usuários",
+    title: "Equipe: acessos, papéis e equipes",
     icon: Users,
-    summary: "Papéis, equipes e acesso do time.",
-    route: "/configuracoes",
-    tour: "configuracoes",
+    summary: "Convidar pessoas, mudar papel, redefinir senha e organizar equipes.",
+    route: "/equipe",
+    tour: "equipe",
     roles: ["admin"],
     sections: [
       {
@@ -479,23 +487,40 @@ export const ARTICLES: HelpArticle[] = [
         ],
       },
       {
-        title: "Como cadastrar",
+        title: "Como trazer alguém",
         items: [
-          "Configurações → Gerenciamento de Usuários → Novo Usuário: nome, e-mail, senha inicial, papel e equipe.",
-          "Na lista, dá para alterar o papel, redefinir a senha ou excluir o usuário.",
+          "Equipe → Adicionar pessoa → Convidar por link: informe o e-mail, o papel e a equipe e envie o link. A pessoa cria a própria senha.",
+          "Ou Criar com senha: você define nome, e-mail e senha inicial e passa para a pessoa.",
+          "Convites pendentes ficam no topo da tela, com o link para copiar de novo ou cancelar.",
+        ],
+      },
+      {
+        title: "Depois",
+        items: [
+          "Editar: nome, papel e equipe. Redefinir senha. Remover: a pessoa perde o acesso; as reuniões dela ficam na empresa.",
+          "Equipes: crie grupos (SDRs, Closers, Regional) no botão Equipes.",
+          "\"Sem acesso\" marca cadastros antigos sem login: aparecem nos relatórios, mas não entram no sistema.",
         ],
       },
     ],
   },
   {
     id: "configuracoes",
-    title: "Metodologia e identidade visual",
+    title: "Tipos de reunião, metodologia e marca",
     icon: Settings,
-    summary: "Critérios de qualificação, temperatura, persona da IA, logo e cores.",
+    summary: "Tipos de reunião, critérios de qualificação, temperatura, persona da IA, logo e cores.",
     route: "/configuracoes",
     tour: "configuracoes",
     roles: ["admin"],
     sections: [
+      {
+        title: "Tipos de reunião",
+        items: [
+          "Configurações → Tipos de reunião: crie (ex.: Diagnóstico, Proposta, Follow-up), mude a ordem e ative ou desative.",
+          "Cada tipo pode ter instruções para a análise, como o que o vendedor deve cobrir naquela etapa.",
+          "Tipo já usado em reuniões não é apagado, só desativado: as reuniões antigas continuam com ele.",
+        ],
+      },
       {
         title: "Metodologia de análise",
         items: [
