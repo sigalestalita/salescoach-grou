@@ -49,3 +49,8 @@ verify_jwt = false
 # Login automático da extensão: exige o token do usuário logado no site.
 [functions.extension-session]
 verify_jwt = true
+
+# Cópia do áudio em partes durante a reunião (extensão). Exige o token do
+# vendedor dono da reunião.
+[functions.recording-parts]
+verify_jwt = true

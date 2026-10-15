@@ -1,104 +1,185 @@
-/* Sales Coach - overlay na reunião */
+/* Sales Coach - overlay na reunião (visual claro, destaque azul) */
 #salescoach-overlay {
+  --sc-bg: #FFFFFF;
+  --sc-bg2: #F3F6FA;
+  --sc-hero: #EAF1FC;
+  --sc-strong: #0B1B33;
+  --sc-text: #1E2C40;
+  --sc-soft: #4E5D73;
+  --sc-faint: #7C8798;
+  --sc-line: rgba(20,40,80,.12);
+  --sc-track: rgba(20,40,80,.1);
+  --sc-accent: #15498D;
+  --sc-accent-soft: rgba(21,73,141,.1);
+  --sc-ok: #2FA36B;
+  --sc-warn: #F2B544;
+  --sc-warn-fg: #8A5A00;
+  --sc-danger: #D63A2B;
+  --sc-danger-soft: rgba(214,58,43,.1);
+
   position: fixed;
   top: 16px;
   right: 16px;
   width: 320px;
-  max-height: 80vh;
+  max-height: 85vh;
   overflow-y: auto;
-  background: #071a34;
-  border: 1px solid rgba(143,193,255,.22);
-  border-radius: 14px;
-  box-shadow: 0 20px 50px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.03) inset;
-  color: #E6EEF9;
-  font-family: Poppins, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  z-index: 2147483647;
-  padding: 16px;
+  background: var(--sc-bg);
+  border: 1px solid var(--sc-line);
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(0,0,0,.35);
+  color: var(--sc-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
+  line-height: 1.45;
+  z-index: 2147483647;
+  text-align: left;
 }
-#salescoach-overlay .sc-header {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
-}
-#salescoach-overlay .sc-header h2 {
-  font-size: 13.5px; font-weight: 700; color: #ffffff; margin: 0; letter-spacing: -.01em;
-}
-#salescoach-overlay .sc-mark { width: 22px; height: 22px; border-radius: 6px; }
-#salescoach-overlay .sc-header .sc-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #4FCB8A; box-shadow: 0 0 8px #4FCB8A;
-}
-#salescoach-overlay .sc-recording-indicator {
-  display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 4px;
-}
-#salescoach-overlay .sc-pulse {
-  width: 10px; height: 10px; border-radius: 50%; background: #ef4444;
-  animation: sc-pulse 1.5s infinite;
-}
-#salescoach-overlay .sc-live-flag {
-  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
-  background: rgba(255,255,255,.08); color: #A9B7CC; letter-spacing: 0.5px;
-}
-#salescoach-overlay .sc-live-flag.on { background: #15498d; color: #ffffff; }
-@keyframes sc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+#salescoach-overlay *, #salescoach-overlay *::before, #salescoach-overlay *::after { box-sizing: border-box; }
+#salescoach-overlay button { font-family: inherit; }
+#salescoach-overlay [hidden] { display: none !important; }
 
-#salescoach-overlay .sc-timer {
-  text-align: center; font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -.02em;
-  margin: 6px 0; font-variant-numeric: tabular-nums;
+/* Cabeçalho: arrasta o painel */
+#salescoach-overlay .sc-head {
+  display: flex; align-items: center; gap: 8px; padding: 9px 8px 9px 10px;
+  border-bottom: 1px solid var(--sc-line); cursor: grab; user-select: none;
+  position: sticky; top: 0; background: var(--sc-bg); z-index: 1;
 }
-#salescoach-overlay .sc-mode {
-  text-align: center; font-size: 11px; color: #4FCB8A; margin-bottom: 10px;
+#salescoach-overlay.dragging .sc-head { cursor: grabbing; }
+#salescoach-overlay .sc-grip { display: grid; grid-template-columns: repeat(2, 3px); gap: 2px; flex: none; }
+#salescoach-overlay .sc-grip i { width: 3px; height: 3px; border-radius: 50%; background: var(--sc-faint); }
+#salescoach-overlay .sc-mark { width: 20px; height: 20px; border-radius: 5px; flex: none; }
+#salescoach-overlay .sc-name { font-size: 13px; font-weight: 700; color: var(--sc-strong); margin: 0; white-space: nowrap; }
+#salescoach-overlay .sc-spacer { margin-left: auto; }
+#salescoach-overlay .sc-rec {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 8px; border-radius: 99px;
+  background: var(--sc-danger-soft); color: var(--sc-danger); font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-#salescoach-overlay .sc-section-title {
-  font-size: 10px; font-weight: 700; color: #6F82A0; text-transform: uppercase;
-  letter-spacing: 1px; margin: 12px 0 6px;
+#salescoach-overlay .sc-rec i, #salescoach-overlay .sc-pill-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--sc-danger); animation: sc-pulse 1.6s ease-in-out infinite;
+}
+@keyframes sc-pulse { 50% { opacity: .35; } }
+#salescoach-overlay .sc-ibtn {
+  width: 28px; height: 28px; display: grid; place-items: center; flex: none; border-radius: 8px; border: 0;
+  background: transparent; color: var(--sc-soft); cursor: pointer; padding: 0;
+}
+#salescoach-overlay .sc-ibtn:hover { background: var(--sc-track); color: var(--sc-strong); }
+#salescoach-overlay .sc-ibtn.sc-stop { color: var(--sc-danger); }
+#salescoach-overlay .sc-ibtn.sc-stop span { width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
+#salescoach-overlay .sc-ibtn svg { width: 14px; height: 14px; }
+#salescoach-overlay button:focus-visible, #salescoach-overlay a:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+
+#salescoach-overlay .sc-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+#salescoach-overlay .sc-section { display: flex; flex-direction: column; gap: 12px; }
+
+/* Confirmação de parar */
+#salescoach-overlay .sc-confirm {
+  display: flex; flex-direction: column; gap: 8px; background: var(--sc-danger-soft);
+  border: 1px solid rgba(214,58,43,.35); border-radius: 12px; padding: 12px;
+}
+#salescoach-overlay .sc-confirm b { color: var(--sc-strong); font-size: 14px; }
+#salescoach-overlay .sc-confirm span { color: var(--sc-soft); font-size: 12.5px; }
+#salescoach-overlay .sc-row { display: flex; gap: 8px; }
+#salescoach-overlay .sc-row > button { flex: 1; }
+
+/* Dica em destaque */
+#salescoach-overlay .sc-hero {
+  background: linear-gradient(180deg, var(--sc-hero), var(--sc-bg2));
+  border: 1px solid rgba(21,73,141,.4); border-radius: 12px; padding: 12px;
+  display: flex; flex-direction: column; gap: 6px; animation: sc-in .3s ease;
+}
+@keyframes sc-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+#salescoach-overlay .sc-hero.alta { border-color: rgba(242,181,68,.7); background: linear-gradient(180deg, #FFF6E3, var(--sc-bg2)); }
+#salescoach-overlay .sc-hero-top { display: flex; align-items: center; gap: 8px; }
+#salescoach-overlay .sc-chip {
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--sc-accent-soft);
+  color: var(--sc-accent); letter-spacing: .02em; text-transform: capitalize;
+}
+#salescoach-overlay .sc-hero.alta .sc-chip { background: rgba(242,181,68,.22); color: var(--sc-warn-fg); }
+#salescoach-overlay .sc-age { margin-left: auto; font-size: 11px; color: var(--sc-faint); }
+#salescoach-overlay .sc-say { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--sc-accent); }
+#salescoach-overlay .sc-hero.alta .sc-say { color: var(--sc-warn-fg); }
+#salescoach-overlay .sc-hero-text { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 600; color: var(--sc-strong); }
+#salescoach-overlay .sc-why { font-size: 12px; color: var(--sc-soft); }
+#salescoach-overlay .sc-empty {
+  font-size: 12.5px; color: var(--sc-soft); text-align: center; padding: 12px;
+  border: 1px dashed var(--sc-line); border-radius: 12px;
 }
 
-#salescoach-overlay .sc-tips { display: flex; flex-direction: column; gap: 6px; }
-#salescoach-overlay .sc-tips-empty {
-  font-size: 12px; color: #6F82A0; text-align: center; padding: 8px;
-  border: 1px dashed rgba(143,193,255,.25); border-radius: 8px;
+#salescoach-overlay .sc-link {
+  background: none; border: 0; padding: 0; color: var(--sc-soft); font-size: 12px; cursor: pointer; text-align: left;
 }
-#salescoach-overlay .sc-tip {
-  background: #0e2b4c; border-left: 3px solid #15498d; border-radius: 6px;
-  padding: 8px 10px; animation: sc-slidein 0.3s ease;
-}
-@keyframes sc-slidein { from { opacity: 0; transform: translateY(-4px);} to { opacity:1; transform:none;} }
-#salescoach-overlay .sc-tip-alta { border-left-color: #F06B5E; background: #2A1A22; }
-#salescoach-overlay .sc-tip-baixa { border-left-color: #64748b; }
-#salescoach-overlay .sc-tip-head {
-  display: flex; justify-content: space-between; font-size: 9px;
-  text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 4px;
-}
-#salescoach-overlay .sc-tip-cat { color: #7fb3ff; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-#salescoach-overlay .sc-tip-title { font-size: 11.5px; color: #a9b7cc; margin-top: 5px; }
-#salescoach-overlay .sc-tip-action { font-size: 13.5px; line-height: 1.4; font-weight: 600; color: #ffffff; }
-#salescoach-overlay .sc-tip-say { display: block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7fb3ff; margin-bottom: 3px; }
+#salescoach-overlay .sc-link:hover { color: var(--sc-accent); }
+#salescoach-overlay .sc-older-list { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+#salescoach-overlay .sc-older-list li { font-size: 12px; color: var(--sc-soft); padding-left: 10px; border-left: 2px solid var(--sc-line); }
 
-#salescoach-overlay .sc-live-text {
-  font-size: 11px; color: #A9B7CC; background: #050F20; padding: 8px;
-  border-radius: 6px; min-height: 32px; max-height: 72px; overflow-y: auto;
-  white-space: pre-line;
+/* Medidores de áudio */
+#salescoach-overlay .sc-meters {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 12px; color: var(--sc-soft);
+}
+#salescoach-overlay .sc-bar { height: 6px; border-radius: 3px; background: var(--sc-track); overflow: hidden; }
+#salescoach-overlay .sc-bar i {
+  display: block; height: 100%; width: 100%; border-radius: 3px; background: var(--sc-ok);
+  transform: scaleX(0); transform-origin: left; transition: transform .1s linear;
 }
 
+/* Avisos */
+#salescoach-overlay .sc-alert {
+  display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; border-radius: 10px; padding: 9px 10px; font-size: 12.5px;
+}
+#salescoach-overlay .sc-alert b { display: block; color: var(--sc-strong); font-weight: 600; }
+#salescoach-overlay .sc-alert span { color: var(--sc-soft); }
+#salescoach-overlay .sc-alert-ic {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; margin-top: 1px; color: #fff;
+}
+#salescoach-overlay .sc-alert.warn { background: rgba(242,181,68,.12); border: 1px solid rgba(242,181,68,.5); }
+#salescoach-overlay .sc-alert.warn .sc-alert-ic { background: var(--sc-warn); color: #3A2800; }
+#salescoach-overlay .sc-alert.info { background: var(--sc-accent-soft); border: 1px solid rgba(21,73,141,.3); }
+#salescoach-overlay .sc-alert.info .sc-alert-ic { background: var(--sc-accent); }
+#salescoach-overlay .sc-spin {
+  width: 11px; height: 11px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%;
+  animation: sc-rot 1s linear infinite;
+}
+@keyframes sc-rot { to { transform: rotate(360deg); } }
+
+/* Transcrição recolhida */
+#salescoach-overlay .sc-tx { border-top: 1px solid var(--sc-line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+#salescoach-overlay .sc-tx-head { display: flex; align-items: center; justify-content: space-between; }
+#salescoach-overlay .sc-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--sc-faint); }
+#salescoach-overlay .sc-tx-last, #salescoach-overlay .sc-tx-full { font-size: 12.5px; color: var(--sc-soft); }
+#salescoach-overlay .sc-tx-full { max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+#salescoach-overlay .sc-tx b { color: var(--sc-strong); font-weight: 600; }
+
+/* Botões e mensagens de estado */
 #salescoach-overlay .sc-btn {
-  width: 100%; padding: 10px; border: none; border-radius: 8px;
-  font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 12px;
+  display: block; width: 100%; padding: 9px 10px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  cursor: pointer; text-align: center; text-decoration: none; border: 1px solid var(--sc-line);
+  background: var(--sc-bg); color: var(--sc-text);
 }
-#salescoach-overlay .sc-btn { font-family: inherit; }
-#salescoach-overlay .sc-btn-danger { background: #F06B5E; color: white; }
-#salescoach-overlay .sc-btn-danger:hover { background: #E25A4D; }
+#salescoach-overlay .sc-btn:hover { background: var(--sc-bg2); }
+#salescoach-overlay .sc-btn-primary { background: var(--sc-accent); border-color: var(--sc-accent); color: #fff; }
+#salescoach-overlay .sc-btn-primary:hover { background: #103a72; }
+#salescoach-overlay .sc-btn-danger { background: var(--sc-danger); border-color: var(--sc-danger); color: #fff; }
+#salescoach-overlay .sc-btn-danger:hover { background: #BC2F21; }
+#salescoach-overlay .sc-status { text-align: center; padding: 10px; border-radius: 10px; font-size: 13px; }
+#salescoach-overlay .sc-status.sending { background: var(--sc-accent-soft); color: var(--sc-accent); }
+#salescoach-overlay .sc-status.success { background: rgba(47,163,107,.12); color: #1D7A4E; }
+#salescoach-overlay .sc-status.error { background: var(--sc-danger-soft); color: #A62B1F; }
+#salescoach-overlay .sc-hint { font-size: 12px; color: var(--sc-soft); text-align: center; }
 
-#salescoach-overlay .sc-status {
-  text-align: center; padding: 10px; border-radius: 8px; font-size: 13px; margin-top: 8px;
+/* Minimizado: vira uma pílula */
+#salescoach-overlay .sc-pill {
+  display: none; align-items: center; gap: 10px; padding: 8px 14px 8px 12px; border: 0; background: transparent;
+  color: var(--sc-strong); font-size: 13px; cursor: pointer; white-space: nowrap;
 }
-#salescoach-overlay .sc-status.sending { background: rgba(79,139,240,.15); color: #8FC1FF; }
-#salescoach-overlay .sc-status.success { background: rgba(79,203,138,.15); color: #BFF0D4; }
-#salescoach-overlay .sc-status.error { background: rgba(240,107,94,.15); color: #FFB3A8; }
+#salescoach-overlay .sc-pill-time { font-weight: 700; font-variant-numeric: tabular-nums; }
+#salescoach-overlay .sc-pill-new {
+  background: var(--sc-accent); color: #fff; font-weight: 700; font-size: 11.5px; padding: 2px 8px; border-radius: 99px;
+}
+#salescoach-overlay.minimized { width: auto; border-radius: 99px; overflow: visible; max-height: none; }
+#salescoach-overlay.minimized .sc-head, #salescoach-overlay.minimized .sc-body { display: none; }
+#salescoach-overlay.minimized .sc-pill { display: inline-flex; }
 
-#salescoach-overlay .sc-minimize {
-  position: absolute; top: 8px; right: 8px; background: none; border: none;
-  color: #6F82A0; cursor: pointer; font-size: 16px; padding: 4px; line-height: 1;
+@media (prefers-reduced-motion: reduce) {
+  #salescoach-overlay .sc-rec i, #salescoach-overlay .sc-pill-dot, #salescoach-overlay .sc-spin, #salescoach-overlay .sc-hero { animation: none; }
 }
-#salescoach-overlay .sc-minimize:hover { color: #ffffff; }
-#salescoach-overlay.minimized { width: auto; padding: 8px 12px; cursor: pointer; max-height: none; }
-#salescoach-overlay.minimized .sc-body { display: none; }
-#salescoach-overlay.minimized .sc-header { margin-bottom: 0; }

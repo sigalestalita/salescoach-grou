@@ -1,5 +1,6 @@
 import { json, preflight } from "../_shared/cors.ts";
 import { assertQuota, getCaller, HttpError } from "../_shared/tenant.ts";
+import { removeParts } from "../_shared/recording-parts.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -125,6 +126,10 @@ Deno.serve(async (req) => {
       console.error("Meeting creation error:", meetingError);
       return json(req, { error: "Failed to create meeting" }, 500);
     }
+
+    // A gravação principal chegou: a cópia do áudio em partes não é mais
+    // necessária (ver recording-parts).
+    if (existingMeetingId) await removeParts(adminClient, user.id, meeting.id);
 
     // Dispara o pipeline de análise como chamada interna.
     try {
