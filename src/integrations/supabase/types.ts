@@ -16,7 +16,6 @@ export type Database = {
     Tables: {
       analysis_results: {
         Row: {
-          methodology: Json | null
           bant_score: Json | null
           conversation_metrics: Json | null
           created_at: string
@@ -35,7 +34,6 @@ export type Database = {
           temperature: string | null
         }
         Insert: {
-          methodology?: Json | null
           bant_score?: Json | null
           conversation_metrics?: Json | null
           created_at?: string
@@ -54,7 +52,6 @@ export type Database = {
           temperature?: string | null
         }
         Update: {
-          methodology?: Json | null
           bant_score?: Json | null
           conversation_metrics?: Json | null
           created_at?: string
@@ -804,7 +801,6 @@ export type Database = {
       }
       meeting_types: {
         Row: {
-          analysis_template_id: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -816,7 +812,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          analysis_template_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -828,7 +823,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          analysis_template_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
