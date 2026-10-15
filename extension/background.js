@@ -43,9 +43,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.action === 'uploadComplete') {
     setBadge('');
+    chrome.storage.local.remove(['activeRecording']);
   }
   if (msg.action === 'uploadError' || msg.action === 'captureError') {
     setBadge('');
+    chrome.storage.local.remove(['activeRecording']);
+  }
+  // Cópia do áudio em partes (ver content.js): guarda qual aba grava qual
+  // reunião, para juntar o áudio se a aba ou o navegador fecharem.
+  if (msg.action === 'backupStarted' && msg.meetingId && sender.tab?.id) {
+    chrome.storage.local.set({ activeRecording: { meetingId: msg.meetingId, tabId: sender.tab.id, at: Date.now() } });
+  }
+  if (msg.action === 'backupFinished') {
+    chrome.storage.local.remove(['activeRecording']);
+  }
+  if (msg.action === 'recordingAbandoned' && msg.meetingId) {
+    // A página saiu (recarregou ou navegou). Espera as últimas partes.
+    setTimeout(() => finishAbandoned(msg.meetingId), 4000);
   }
   if (msg.action === 'stopCapture') {
     // Forward stop to all tabs
@@ -149,3 +163,48 @@ async function calendarLookup(meetingUrl, title) {
   const data = await res.json();
   return data.event || null;
 }
+
+// ── Reunião abandonada ──
+// A aba fechou (ou o navegador) com a gravação rodando ou subindo. O servidor
+// junta as partes de áudio que já chegaram e manda para análise. Se a gravação
+// principal tiver chegado, ele só apaga as partes.
+
+async function finishAbandoned(meetingId) {
+  const { activeRecording } = await chrome.storage.local.get(['activeRecording']);
+  if (!activeRecording || activeRecording.meetingId !== meetingId) return;
+  await chrome.storage.local.remove(['activeRecording']);
+  await chrome.storage.local.set({ recordingState: 'idle' });
+  setBadge('');
+  try {
+    const { accessToken } = await chrome.storage.local.get(['accessToken']);
+    const body = { action: 'finish', meetingId };
+    let res = accessToken ? await callFunction('recording-parts', body, accessToken) : null;
+    if (!res || res.status === 401) {
+      const fresh = await refreshSession();
+      if (fresh) res = await callFunction('recording-parts', body, fresh);
+    }
+    if (!res?.ok) console.warn('Sales Coach: reunião abandonada não finalizada', meetingId, res?.status);
+  } catch (e) {
+    console.warn('Sales Coach: reunião abandonada não finalizada', meetingId, e);
+    // Tenta de novo na próxima vez que o navegador abrir.
+    await chrome.storage.local.set({ activeRecording: { meetingId, tabId: null, at: Date.now() } });
+  }
+}
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const { activeRecording } = await chrome.storage.local.get(['activeRecording']);
+  if (activeRecording && activeRecording.tabId === tabId) finishAbandoned(activeRecording.meetingId);
+});
+
+// Navegador fechado no meio da reunião: termina na próxima abertura.
+chrome.runtime.onStartup.addListener(async () => {
+  const { activeRecording } = await chrome.storage.local.get(['activeRecording']);
+  if (activeRecording?.meetingId) finishAbandoned(activeRecording.meetingId);
+  else {
+    const { recordingState } = await chrome.storage.local.get(['recordingState']);
+    if (recordingState === 'recording' || recordingState === 'uploading') {
+      await chrome.storage.local.set({ recordingState: 'idle' });
+      setBadge('');
+    }
+  }
+});

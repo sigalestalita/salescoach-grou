@@ -38,6 +38,8 @@
   // Token capturado no início, para o envio não depender de chrome.storage
   // caso a extensão seja recarregada no meio da reunião.
   let lastToken = null;
+  // Gravação principal subindo: fechar a aba agora perderia o vídeo.
+  let uploading = false;
 
   // ── Overlay DOM ──
   //
@@ -398,8 +400,11 @@
       } catch (err) {
         // Qualquer falha aqui deixava o painel parado em "Enviando gravação…".
         console.error('Sales Coach: falha ao finalizar a gravação:', err);
-        failWithDownload(chunks, mimeType, err?.message || String(err));
         cleanup();
+        const rescued = await rescueFromBackup();
+        uploading = false;
+        const msg = err?.message || String(err);
+        failWithDownload(chunks, mimeType, rescued ? `O vídeo não foi enviado (${msg}), mas o áudio foi para análise.` : msg, rescued);
       }
     };
 
@@ -419,8 +424,14 @@
         const ebml = inicio[0] === 0x1a && inicio[1] === 0x45 && inicio[2] === 0xdf && inicio[3] === 0xa3;
         if (!ebml) {
           console.error('Sales Coach: gravação sem cabeçalho EBML, não será enviada.');
+          cleanup();
+          if (await rescueFromBackup()) {
+            showStatus('success', 'A gravação de vídeo saiu corrompida, mas o áudio foi enviado para análise.');
+            notifyBackground('uploadComplete', { meetingId });
+            autoRemove(8000); return;
+          }
           showStatus('error', '❌ A gravação saiu corrompida e não foi enviada. Grave de novo, com uma gravação por vez.');
-          cleanup(); autoRemove(9000); return;
+          autoRemove(9000); return;
         }
       }
       cleanup();
@@ -458,6 +469,8 @@
       meetingId = await preCreateMeeting(token, data.meetingData || {});
       if (meetingId) {
         chrome.storage.local.set({ lastMeetingId: meetingId });
+        // Cópia do áudio subindo aos poucos: protege a reunião se a aba fechar.
+        startBackup(mixedDest.stream, meetingId);
         // Microfone = vendedor; áudio da aba = cliente. Sem o áudio da aba,
         // só a trilha do vendedor entra.
         await startLive(token, meetingId, {
@@ -485,7 +498,109 @@
       mediaRecorder.stop();
       recordingEl.hidden = true;
     }
+    // A última parte do áudio sobe já: se a aba fechar durante o envio da
+    // gravação principal, a cópia está completa.
+    stopBackup();
   }
+
+  // ── Cópia do áudio em partes ──
+  //
+  // Em paralelo à gravação principal (tela + áudio, enviada no fim), grava só
+  // o áudio e sobe uma parte a cada 30 s para a função recording-parts. Se a
+  // aba ou o navegador fecham antes do envio, o background pede ao servidor
+  // que junte as partes e mande o áudio para análise. Com a gravação
+  // principal enviada, o servidor apaga as partes.
+  const BACKUP_SLICE_MS = 30000;
+  let backup = null; // { recorder, meetingId, next, queue, sending, done }
+
+  function startBackup(stream, mid) {
+    const tracks = stream.getAudioTracks();
+    if (!tracks.length || backup) return;
+    try {
+      const recorder = new MediaRecorder(new MediaStream(tracks), {
+        mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 32000,
+      });
+      const b = backup = { recorder, meetingId: mid, next: 0, queue: [], sending: null, stopped: null };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) { b.queue.push({ index: b.next++, blob: e.data }); pumpBackup(b); }
+      };
+      b.stopped = new Promise((resolve) => { recorder.onstop = resolve; });
+      recorder.start(BACKUP_SLICE_MS);
+      notifyBackground('backupStarted', { meetingId: mid });
+    } catch (e) {
+      console.warn('Sales Coach: cópia do áudio indisponível', e);
+      backup = null;
+    }
+  }
+
+  function stopBackup() {
+    if (backup && backup.recorder.state !== 'inactive') {
+      try { backup.recorder.stop(); } catch {}
+    }
+  }
+
+  /** Sobe as partes na ordem; parte que falha tenta de novo na próxima vez. */
+  function pumpBackup(b) {
+    if (b.sending || !b.queue.length) return b.sending;
+    b.sending = (async () => {
+      while (b.queue.length) {
+        const part = b.queue[0];
+        try {
+          const res = await authed(
+            `/functions/v1/recording-parts?meetingId=${encodeURIComponent(b.meetingId)}&part=${part.index}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: part.blob },
+            60000,
+          );
+          if (!res.ok && res.status !== 413) throw new Error(`status ${res.status}`);
+          b.queue.shift();
+        } catch (e) {
+          console.warn('Sales Coach: parte do áudio não subiu, tentando de novo depois', part.index, e);
+          break;
+        }
+      }
+      b.sending = null;
+    })();
+    return b.sending;
+  }
+
+  /**
+   * A gravação principal não chegou ao servidor: manda a cópia do áudio para
+   * análise. Devolve true se o servidor aceitou.
+   */
+  async function rescueFromBackup() {
+    const b = backup;
+    if (!b) return false;
+    try {
+      stopBackup();
+      await Promise.race([b.stopped, new Promise((r) => setTimeout(r, 3000))]);
+      for (let i = 0; i < 3 && (b.queue.length || b.sending); i++) {
+        await (b.sending || pumpBackup(b));
+      }
+      const res = await authed('/functions/v1/recording-parts', {
+        method: 'POST', body: JSON.stringify({ action: 'finish', meetingId: b.meetingId }),
+      }, 120000);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) notifyBackground('backupFinished', { meetingId: b.meetingId });
+      return res.ok && !!data.finished;
+    } catch (e) {
+      console.warn('Sales Coach: cópia do áudio não foi enviada', e);
+      return false;
+    }
+  }
+
+  // Fechar a aba com a gravação rodando ou subindo: o Chrome pergunta antes.
+  window.addEventListener('beforeunload', (e) => {
+    const busy = (mediaRecorder && mediaRecorder.state === 'recording') || uploading;
+    if (!busy) return;
+    e.preventDefault();
+    e.returnValue = 'A gravação ainda não foi enviada.';
+  });
+  // Saiu mesmo assim: o background junta o áudio que já subiu.
+  window.addEventListener('pagehide', () => {
+    if (backup && ((mediaRecorder && mediaRecorder.state === 'recording') || uploading)) {
+      notifyBackground('recordingAbandoned', { meetingId: backup.meetingId });
+    }
+  });
 
   function cleanup() {
     stopTimer();
@@ -863,6 +978,7 @@
   // ── Upload ──
   async function uploadRecording(blob) {
     safeStorageSet({ recordingState: 'uploading' });
+    uploading = true;
     try {
       const data = await chrome.storage.local.get(['meetingData']);
       const meta = data.meetingData || {};
@@ -893,6 +1009,7 @@
 
       safeStorageSet({ recordingState: 'done', lastMeetingId: result.meetingId });
       try { chrome.storage.local.remove(['meetingData']); } catch {}
+      uploading = false;
       showStatus('success', 'Gravação enviada! Análise em curso.');
       notifyBackground('uploadComplete', { meetingId: result.meetingId });
       autoRemove(5000);
@@ -900,8 +1017,14 @@
       const msg = err?.message === 'Failed to fetch'
         ? 'Sem conexão com o Sales Coach.'
         : (err?.message || String(err));
-      notifyBackground('uploadError', { error: msg });
-      failWithDownload([blob], blob.type, msg);
+      // O vídeo não subiu: o áudio já está quase todo no servidor.
+      showStatus('sending', 'O vídeo não subiu. Enviando o áudio da reunião…');
+      const rescued = await rescueFromBackup();
+      uploading = false;
+      notifyBackground(rescued ? 'uploadComplete' : 'uploadError', { error: msg, meetingId });
+      failWithDownload([blob], blob.type, rescued
+        ? `O vídeo não subiu (${msg}), mas o áudio foi enviado para análise. Se quiser guardar o vídeo, baixe abaixo.`
+        : msg, rescued);
     }
   }
 
@@ -929,9 +1052,9 @@
    * O envio falhou: mostra o motivo e oferece o arquivo, para a reunião não se
    * perder. O vendedor pode subir o arquivo depois em Agendas.
    */
-  function failWithDownload(parts, type, message) {
+  function failWithDownload(parts, type, message, rescued = false) {
     const blob = new Blob(parts, { type: type || 'video/webm' });
-    showStatus('error', `❌ ${message}`);
+    showStatus(rescued ? 'success' : 'error', rescued ? message : `❌ ${message}`);
     if (blob.size < 100) { autoRemove(8000); return; }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -941,7 +1064,7 @@
     a.textContent = 'Baixar a gravação';
     const hint = document.createElement('div');
     hint.className = 'sc-hint';
-    hint.textContent = 'Depois, envie o arquivo em Agendas → Nova Agenda.';
+    hint.textContent = rescued ? 'O vídeo é opcional: a análise usa o áudio.' : 'Depois, envie o arquivo em Agendas → Nova Agenda.';
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'sc-btn';
