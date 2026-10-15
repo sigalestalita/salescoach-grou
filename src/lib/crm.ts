@@ -83,6 +83,11 @@ async function call<T>(name: "crm-api" | "crm-oauth", body: Record<string, unkno
   if (error) {
     let message = error.message;
     const ctx = (error as { context?: Response }).context;
+    if (ctx?.status === 401) {
+      // Login expirado no servidor: sai e volta para a tela de login.
+      await supabase.auth.signOut().catch(() => {});
+      throw new Error("Sua sessão expirou. Entre novamente.");
+    }
     if (ctx && typeof ctx.json === "function") {
       const payload = await ctx.json().catch(() => null);
       if (payload?.error) message = payload.error;
