@@ -128,7 +128,15 @@ const Plataforma = () => {
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("platform-orgs", { body });
-    if (error) throw new Error(error.message);
+    if (error) {
+      // Sessão encerrada no servidor (ex.: login em outro domínio): volta ao login.
+      const status = (error as { context?: Response }).context?.status;
+      if (status === 401) {
+        await supabase.auth.signOut({ scope: "local" });
+        throw new Error("Sua sessão expirou. Entre novamente.");
+      }
+      throw new Error(error.message);
+    }
     if (data?.error) throw new Error(data.error);
     return data;
   }, []);
