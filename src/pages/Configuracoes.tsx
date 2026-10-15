@@ -8,6 +8,7 @@ import { BrandingSettings } from "@/components/settings/BrandingSettings";
 import { MethodologySettings } from "@/components/settings/MethodologySettings";
 import { MeetingTypesSettings } from "@/components/settings/MeetingTypesSettings";
 import { CrmSettings } from "@/components/settings/CrmSettings";
+import { LeadProfilesSettings } from "@/components/settings/LeadProfilesSettings";
 import { PlanUsageCard } from "@/components/settings/PlanUsageCard";
 
 const Configuracoes = () => {
@@ -44,6 +45,9 @@ const Configuracoes = () => {
           <div data-tour="cfg-crm"><CrmSettings /></div>
         </>
       )}
+
+      {/* Gestor também cuida dos perfis: é ele quem conduz o treino do time. */}
+      {(role === "admin" || role === "gestor") && <LeadProfilesSettings />}
 
       <PlanUsageCard />
 

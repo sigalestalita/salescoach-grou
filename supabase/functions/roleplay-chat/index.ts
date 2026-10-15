@@ -6,15 +6,18 @@
 //   - com sessionId + message: registra a fala do vendedor e devolve a
 //     resposta do lead simulado.
 //
-// A persona nasce do catálogo de dores e das objeções reais já vistas nas
-// reuniões da própria organização (highlights tipo "objecao"), então o
-// treino soa como o negócio real da empresa, não um cenário genérico.
+// A persona nasce dos perfis de cliente da empresa (lead_profiles: segmento,
+// cargo, dores, objeções), do catálogo de dores e das objeções reais já
+// vistas nas reuniões da própria organização (highlights tipo "objecao"),
+// então o treino soa como o negócio real da empresa, não um cenário genérico.
+// Empresa nova, sem reuniões, treina pelos perfis.
 
 import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 import { corsHeaders, json, preflight } from "../_shared/cors.ts";
 import { assertQuota, getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
 import { loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
 import { achaCenario, CENARIO_PADRAO, type Scenario } from "../_shared/roleplay-scenarios.ts";
+import { type LeadProfile, profilePromptLines } from "../_shared/lead-profiles.ts";
 
 const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flash-lite";
 const MODELO_RESERVA = "google/gemini-2.5-flash";
@@ -62,6 +65,8 @@ interface Persona {
   temperament: string;
   focusPain: string | null;
   knownObjections: string[];
+  /** Perfil de cliente da empresa que originou a persona, quando houver. */
+  profile?: LeadProfile & { id: string };
 }
 
 function pick<T>(arr: T[]): T {
@@ -89,8 +94,9 @@ async function buildPersona(
   difficulty: string,
   focusPainInput: string | null,
   cenario: Scenario,
+  profileId: string | null,
 ): Promise<Persona> {
-  const [painsRes, objectionsRes, produtosRes] = await Promise.all([
+  const [painsRes, objectionsRes, produtosRes, profilesRes] = await Promise.all([
     admin.from("pain_items").select("label").eq("org_id", orgId).limit(30),
     admin
       .from("highlights")
@@ -104,18 +110,29 @@ async function buildPersona(
     cenario.temContrato
       ? admin.from("knowledge_items").select("name").eq("org_id", orgId).eq("is_active", true).limit(20)
       : Promise.resolve({ data: [] }),
+    admin.from("lead_profiles")
+      .select("id, name, segment, role, company_profile, pains, objections, context")
+      .eq("org_id", orgId).eq("is_active", true).limit(50),
   ]);
 
+  // Perfil escolhido na tela ou sorteado entre os ativos. Sem a tabela (migração
+  // ainda não aplicada) a consulta falha e o treino segue sem perfil.
+  const profiles = ((profilesRes.error ? [] : profilesRes.data) ?? []) as Array<LeadProfile & { id: string }>;
+  const profile = (profileId && profiles.find((p) => p.id === profileId)) || (profiles.length ? pick(profiles) : undefined);
+
   const pains: string[] = (painsRes.data ?? []).map((p: { label: string }) => p.label);
-  const focusPain = focusPainInput || (pains.length ? pick(pains) : null);
+  const profilePains = profile?.pains?.length ? profile.pains : [];
+  const focusPain = focusPainInput || (profilePains.length ? pick(profilePains) : pains.length ? pick(pains) : null);
 
   const allObjections: string[] = (objectionsRes.data ?? []).map((h: { text: string }) => h.text);
-  // Até 2 objeções reais da empresa, mais uma típica da fase: o treino soa
-  // como o negócio real sem perder o que é próprio daquele momento da relação.
-  const knownObjections = [
-    ...Array.from(new Set(allObjections)).sort(() => Math.random() - 0.5).slice(0, 2),
-    pick(cenario.objecoesTipicas),
-  ].filter(Boolean);
+  // Objeções do perfil e as reais já vistas nas reuniões (até 2 no total),
+  // mais uma típica da fase: o treino soa como o negócio real sem perder o
+  // que é próprio daquele momento da relação.
+  const shuffle = <T,>(a: T[]) => [...a].sort(() => Math.random() - 0.5);
+  const knownObjections = Array.from(new Set([
+    ...shuffle(profile?.objections ?? []).slice(0, 2),
+    ...shuffle(Array.from(new Set(allObjections))).slice(0, profile?.objections?.length ? 1 : 2),
+  ])).slice(0, 2).concat(pick(cenario.objecoesTipicas)).filter(Boolean);
 
   const produtos: string[] = ((produtosRes.data ?? []) as Array<{ name: string }>).map((p) => p.name);
   const relationship = cenario.temContrato
@@ -134,11 +151,14 @@ async function buildPersona(
     gender: primeiro.genero,
     scenario: cenario.key,
     relationship,
-    role: pick(LEAD_ROLES),
-    company: `${pick(["Aliança", "Horizonte", "Vale Verde", "Central", "Bom Sucesso", "Nova Era", "Porto", "Planalto"])} ${pick(COMPANY_SUFFIX)}`,
+    role: profile?.role || pick(LEAD_ROLES),
+    company: profile?.segment
+      ? `${profile.segment} ${pick(["Aliança", "Horizonte", "Vale Verde", "Central", "Bom Sucesso", "Nova Era", "Porto", "Planalto"])}`
+      : `${pick(["Aliança", "Horizonte", "Vale Verde", "Central", "Bom Sucesso", "Nova Era", "Porto", "Planalto"])} ${pick(COMPANY_SUFFIX)}`,
     temperament: TEMPERAMENT[difficulty] ?? TEMPERAMENT.media,
     focusPain,
     knownObjections,
+    profile,
   };
 }
 
@@ -164,6 +184,7 @@ SEU PERSONAGEM:
 - Nome: ${persona.name}
 - Cargo: ${persona.role}, na empresa ${persona.company}
 - Temperamento: ${persona.temperament}
+${persona.profile ? profilePromptLines(persona.profile, persona.focusPain).join("\n") : ""}
 ${persona.focusPain ? `- Você tem esta dor, mas só a revela se o vendedor perguntar bem (não conte de graça): ${persona.focusPain}` : ""}
 ${persona.knownObjections.length ? `- Objeções que você pode levantar, quando fizer sentido no contexto (use no máximo uma por vez, com suas próprias palavras): ${persona.knownObjections.map((o) => `"${o}"`).join("; ")}` : ""}
 ${meetingTypeLabel ? `\nCONTEXTO DA CONVERSA: ${meetingTypeLabel}.${meetingTypeContext}` : ""}
@@ -186,7 +207,7 @@ Deno.serve(async (req) => {
     const { sessionId, message, start, sellerAudioPath, messageId, audioPath } = body as {
       sessionId?: string;
       message?: string;
-      start?: { meetingType?: string; focusPain?: string; difficulty?: string; mode?: string; scenario?: string };
+      start?: { meetingType?: string; focusPain?: string; difficulty?: string; mode?: string; scenario?: string; profileId?: string };
       sellerAudioPath?: string;
       messageId?: string;
       audioPath?: string;
@@ -216,7 +237,7 @@ Deno.serve(async (req) => {
 
       const difficulty = ["facil", "media", "dificil"].includes(start?.difficulty ?? "") ? start!.difficulty! : "media";
       const cenario = achaCenario(start?.scenario ?? CENARIO_PADRAO);
-      const persona = await buildPersona(ctx.admin, ctx.orgId, difficulty, start?.focusPain ?? null, cenario);
+      const persona = await buildPersona(ctx.admin, ctx.orgId, difficulty, start?.focusPain ?? null, cenario, start?.profileId ?? null);
 
       const base = {
         org_id: ctx.orgId,
