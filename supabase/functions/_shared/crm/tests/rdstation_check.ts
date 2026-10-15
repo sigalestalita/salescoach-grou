@@ -26,7 +26,9 @@ globalThis.fetch = (async (input: RequestInfo, init?: RequestInit) => {
   if (url.includes("/contacts?")) return Response.json({ data: [{ id: "c1" }] });
   if (url.includes("/deals?")) return Response.json({ data: [{ id: "d2", name: "Perdido", status: "lost" }, { id: "d1", name: "Aliança", status: "ongoing", custom_fields: { nota: null } }] });
   if (url.includes("/custom_fields?")) return Response.json({ data: [{ id: "f1", slug: "temp", name: "Temperatura", type: "option", options: ["Frio", "Quente"] }] });
-  if (url.match(/\/deals\/d1$/) && (init?.method ?? "GET") === "GET") return Response.json({ data: { id: "d1", name: "Aliança", custom_fields: { temp: "Frio" } } });
+  if (url.match(/\/deals\/d1$/) && (init?.method ?? "GET") === "GET") return Response.json({ data: { id: "d1", name: "Aliança", owner_id: "u77", custom_fields: { temp: "Frio" } } });
+  if (url.match(/\/deals\/d9$/)) return Response.json({ data: { id: "d9", name: "Sem dono" } });
+  if (url.includes("/users?")) return Response.json({ data: [{ id: "u1" }] });
   return Response.json({ data: {} }, { status: init?.method === "POST" ? 201 : 200 });
 }) as typeof fetch;
 Deno.env.set("RDSTATION_CRM_CLIENT_ID", "cid"); Deno.env.set("RDSTATION_CRM_CLIENT_SECRET", "sec");
@@ -49,6 +51,9 @@ assert(calls.at(-1)!.url.endsWith("/deals/d1/notes") && JSON.parse(calls.at(-1)!
 await crm.createTask("d1", { name: "Ligar", description: "x", dueDate: "2026-10-17" });
 const tb = JSON.parse(calls.at(-1)!.body!).data;
 assert(tb.deal_id === "d1" && tb.due_date === "2026-10-17T09:00:00-03:00" && tb.type === "task", "tarefa com prazo e negócio");
+assert(tb.created_by_id === "u77" && tb.owner_ids[0] === "u77", "tarefa criada em nome do responsável pelo negócio");
+await crm.createTask("d9", { name: "Ligar", description: "x", dueDate: "2026-10-17" });
+assert(JSON.parse(calls.at(-1)!.body!).data.created_by_id === "u1", "negócio sem responsável: primeiro usuário da conta");
 mode = "429";
 try { await crm.getDeal("d1"); assert(false, "deveria falhar"); } catch (e) { assert(e instanceof CrmError && e.kind === "rate" && e.retryAfterSeconds === 30, "429 vira espera com Retry-After"); }
 console.log("TUDO OK");
