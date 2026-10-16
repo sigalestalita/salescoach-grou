@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) return json(req, { error: "Muitas avaliações em pouco tempo. Tente de novo em instantes." }, 429);
       if (aiResponse.status === 402) return json(req, { error: "Créditos de IA esgotados." }, 402);
-      throw new Error(`AI gateway error: ${aiResponse.status}`);
+      console.error("roleplay-finish: gateway de IA", aiResponse.status, await aiResponse.text().catch(() => ""));
+      throw new HttpError(502, "A IA não conseguiu avaliar agora. Tente encerrar de novo em instantes.");
     }
 
     const aiData = await aiResponse.json();
@@ -108,11 +109,16 @@ Deno.serve(async (req) => {
       feedback = { raw: content };
     }
 
+    // overall_score é INTEGER em roleplay_sessions (nas reuniões é NUMERIC):
+    // nota quebrada como 72.5, ou que veio como texto, quebrava o salvamento.
+    const nota = Number(feedback.overall_score);
+    const overallScore = Number.isFinite(nota) ? Math.min(100, Math.max(0, Math.round(nota))) : null;
+
     const { data: updated, error } = await ctx.admin
       .from("roleplay_sessions")
       .update({
         status: "concluida",
-        overall_score: typeof feedback.overall_score === "number" ? feedback.overall_score : null,
+        overall_score: overallScore,
         temperature: typeof feedback.temperature === "string" ? feedback.temperature : null,
         feedback,
         ended_at: new Date().toISOString(),
@@ -121,7 +127,10 @@ Deno.serve(async (req) => {
       .select("id, overall_score, temperature, feedback, persona, meeting_type, difficulty, turn_count, created_at, ended_at")
       .single();
 
-    if (error || !updated) throw new HttpError(500, "Não foi possível salvar a avaliação");
+    if (error || !updated) {
+      console.error("roleplay-finish: falha ao salvar a avaliação", error);
+      throw new HttpError(500, "Não foi possível salvar a avaliação. Tente encerrar de novo.");
+    }
 
     await logUsage(ctx.admin, {
       orgId: ctx.orgId,
