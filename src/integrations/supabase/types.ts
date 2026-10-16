@@ -1555,6 +1555,7 @@ export type Database = {
           org_id: string
           overall_score: number | null
           persona: Json
+          scenario: string | null
           status: string
           temperature: string | null
           training_mode: string | null
@@ -1573,6 +1574,7 @@ export type Database = {
           org_id?: string
           overall_score?: number | null
           persona: Json
+          scenario?: string | null
           status?: string
           temperature?: string | null
           training_mode?: string | null
@@ -1591,6 +1593,7 @@ export type Database = {
           org_id?: string
           overall_score?: number | null
           persona?: Json
+          scenario?: string | null
           status?: string
           temperature?: string | null
           training_mode?: string | null

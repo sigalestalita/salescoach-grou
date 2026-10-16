@@ -92,6 +92,13 @@
       "when": 1792176026511,
       "tag": "0012_roleplay_audio",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792176048126,
+      "tag": "0013_roleplay_cenarios",
+      "breakpoints": true
     }
   ]
 }
