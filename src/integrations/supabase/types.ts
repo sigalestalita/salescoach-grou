@@ -1500,6 +1500,7 @@ export type Database = {
       }
       roleplay_messages: {
         Row: {
+          audio_path: string | null
           content: string
           created_at: string
           id: string
@@ -1508,6 +1509,7 @@ export type Database = {
           session_id: string
         }
         Insert: {
+          audio_path?: string | null
           content: string
           created_at?: string
           id?: string
@@ -1516,6 +1518,7 @@ export type Database = {
           session_id: string
         }
         Update: {
+          audio_path?: string | null
           content?: string
           created_at?: string
           id?: string
@@ -1552,8 +1555,10 @@ export type Database = {
           org_id: string
           overall_score: number | null
           persona: Json
+          scenario: string | null
           status: string
           temperature: string | null
+          training_mode: string | null
           turn_count: number
           updated_at: string
           user_id: string
@@ -1569,8 +1574,10 @@ export type Database = {
           org_id?: string
           overall_score?: number | null
           persona: Json
+          scenario?: string | null
           status?: string
           temperature?: string | null
+          training_mode?: string | null
           turn_count?: number
           updated_at?: string
           user_id: string
@@ -1586,8 +1593,10 @@ export type Database = {
           org_id?: string
           overall_score?: number | null
           persona?: Json
+          scenario?: string | null
           status?: string
           temperature?: string | null
+          training_mode?: string | null
           turn_count?: number
           updated_at?: string
           user_id?: string
@@ -1601,6 +1610,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      site_leads: {
+        Row: {
+          created_at: string
+          email: string
+          empresa: string
+          id: string
+          interesse: string
+          ip: string | null
+          mensagem: string | null
+          origem: string | null
+          plano: string | null
+          user_agent: string | null
+          usuarios: number | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          empresa: string
+          id?: string
+          interesse?: string
+          ip?: string | null
+          mensagem?: string | null
+          origem?: string | null
+          plano?: string | null
+          user_agent?: string | null
+          usuarios?: number | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          empresa?: string
+          id?: string
+          interesse?: string
+          ip?: string | null
+          mensagem?: string | null
+          origem?: string | null
+          plano?: string | null
+          user_agent?: string | null
+          usuarios?: number | null
+        }
+        Relationships: []
       }
       subscriptions: {
         Row: {
