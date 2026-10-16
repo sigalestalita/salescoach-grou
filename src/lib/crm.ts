@@ -2,13 +2,14 @@
 // valida papel e organização; o app não lê as tabelas de CRM direto.
 import { supabase } from "@/integrations/supabase/client";
 
-export type CrmProvider = "rdstation" | "hubspot" | "pipedrive" | "kommo";
+export type CrmProvider = "rdstation" | "hubspot" | "pipedrive" | "kommo" | "nexa";
 
 export const CRM_NAME: Record<CrmProvider, string> = {
   rdstation: "RD Station CRM",
   hubspot: "HubSpot",
   pipedrive: "Pipedrive",
   kommo: "Kommo",
+  nexa: "NEXA CRM",
 };
 
 export interface CrmSettings {
@@ -98,7 +99,8 @@ async function call<T>(name: "crm-api" | "crm-oauth", body: Record<string, unkno
 }
 
 export const crmApi = {
-  status: () => call<{ connection: CrmConnection | null; mappings: CrmMapping[]; catalog: CrmSource[] }>("crm-api", { action: "status" }),
+  status: () =>
+    call<{ connection: CrmConnection | null; mappings: CrmMapping[]; catalog: CrmSource[]; extra_providers?: CrmProvider[] }>("crm-api", { action: "status" }),
   connect: (provider: CrmProvider) =>
     call<{ url: string }>("crm-oauth", { provider, returnTo: `${window.location.origin}/configuracoes` }),
   fields: () => call<{ fields: CrmField[] }>("crm-api", { action: "fields" }),

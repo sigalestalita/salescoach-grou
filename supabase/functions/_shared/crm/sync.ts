@@ -88,7 +88,12 @@ async function resolveDeal(
   fieldKeys: string[],
 ): Promise<{ deal: CrmDeal | null; reason?: string }> {
   if (meeting.crm_deal_id && meeting.crm_provider === provider) {
-    return { deal: await crm.getDeal(String(meeting.crm_deal_id), fieldKeys) };
+    const deal = await crm.getDeal(String(meeting.crm_deal_id), fieldKeys);
+    // No NEXA CRM, uma conta-alvo ("conta:<id>") vira oportunidade ao ser lida: guarda o id novo.
+    if (deal.id !== String(meeting.crm_deal_id)) {
+      await admin.from("meetings").update({ crm_deal_id: deal.id, crm_deal_name: deal.name }).eq("id", meeting.id);
+    }
+    return { deal };
   }
   const email = String(meeting.lead_email ?? "").trim();
   if (!email) return { deal: null, reason: "A reunião não tem e-mail do lead. Escolha o negócio do CRM na reunião." };
@@ -96,11 +101,11 @@ async function resolveDeal(
   const deals = await crm.dealsForEmail(email);
   const abertos = deals.filter((d) => !d.status || d.status === "ongoing");
   if (abertos.length === 1) {
-    const d = abertos[0];
+    const deal = await crm.getDeal(abertos[0].id, fieldKeys);
     await admin.from("meetings").update({
-      crm_provider: provider, crm_deal_id: d.id, crm_deal_name: d.name, crm_linked_at: new Date().toISOString(),
+      crm_provider: provider, crm_deal_id: deal.id, crm_deal_name: deal.name, crm_linked_at: new Date().toISOString(),
     }).eq("id", meeting.id);
-    return { deal: await crm.getDeal(d.id, fieldKeys) };
+    return { deal };
   }
   if (!abertos.length) return { deal: null, reason: `Nenhum negócio aberto no CRM para ${email}. Escolha o negócio na reunião.` };
   return { deal: null, reason: `${abertos.length} negócios abertos para ${email}. Escolha o certo na reunião.` };
