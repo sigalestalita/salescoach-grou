@@ -2,7 +2,7 @@
 
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhncGZ1dW5tbWprZ3dqZWZvZmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0ODQwOTIsImV4cCI6MjA5MTA2MDA5Mn0.GhNqsTHRY59h4D13rYeLbwgaq6-x0nqJzfv9dXWcUAQ';
 const SUPABASE_URL = 'https://xgpfuunmmjkgwjefofcd.supabase.co';
-const APP_URL = 'https://salescoach.grougp.com.br';
+const APP_URL = 'https://salescoach.nexatech.ia.br';
 
 function setBadge(text, color = '#F06B5E') {
   chrome.action.setBadgeText({ text });
@@ -80,7 +80,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 function fromSalesCoach(sender) {
   try {
     const host = new URL(sender.url || sender.origin).hostname;
-    return host === 'grougp.com.br' || host.endsWith('.grougp.com.br');
+    // Domínio novo (nexatech.ia.br) e o antigo (grougp.com.br), enquanto os dois respondem.
+    return ['grougp.com.br', 'nexatech.ia.br'].some((d) => host === d || host.endsWith('.' + d));
   } catch {
     return false;
   }
