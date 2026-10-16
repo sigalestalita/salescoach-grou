@@ -7,7 +7,7 @@
 //   meeting           vínculo da reunião com o negócio e histórico de envios
 //   settings          preferências de envio (admin)
 //   disconnect        desliga o CRM e apaga os tokens (admin)
-//   connect_token     conecta o Kommo com token de longa duração (admin)
+//   connect_token     conecta com token colado: Kommo (longa duração) ou NEXA CRM (admin)
 //   search_deals      busca negócio por nome (quem vê a reunião)
 //   suggest_deals     negócios do e-mail do lead da reunião
 //   link_deal         vincula a reunião a um negócio e envia
@@ -20,6 +20,7 @@ import { ANON_KEY, CallerContext, getCaller, HttpError, requireRole, SUPABASE_UR
 import { loadTemplate } from "../_shared/analysis-template.ts";
 import { accountLabel, activeConnection, connectorFor, saveConnection } from "../_shared/crm/connection.ts";
 import { kommoAccountName, kommoBase, tokenExpiry } from "../_shared/crm/kommo.ts";
+import { nexaAccountName, nexaBase, nexaDisponivel } from "../_shared/crm/nexa.ts";
 import { sourceCatalog } from "../_shared/crm/mapping.ts";
 import { enqueueMeeting, processJob } from "../_shared/crm/sync.ts";
 import { CrmError } from "../_shared/crm/types.ts";
@@ -67,7 +68,10 @@ Deno.serve(async (req) => {
           .eq("org_id", ctx.orgId).neq("status", "desconectado").maybeSingle();
         const { data: mappings } = await ctx.admin.from("crm_field_mappings").select("*").eq("org_id", ctx.orgId);
         const template = await loadTemplate(ctx.admin, ctx.orgId);
-        return json(req, { connection: conn ?? null, mappings: mappings ?? [], catalog: sourceCatalog(template.qualification_criteria) });
+        return json(req, {
+          connection: conn ?? null, mappings: mappings ?? [], catalog: sourceCatalog(template.qualification_criteria),
+          extra_providers: nexaDisponivel(ctx.email) ? ["nexa"] : [],
+        });
       }
 
       case "fields": {
@@ -147,7 +151,22 @@ Deno.serve(async (req) => {
         // Kommo antes da aprovação da integração pública: o admin cria uma
         // integração privada na conta dele e cola aqui o token de longa duração.
         requireRole(ctx, "admin");
-        if (body.provider !== "kommo") throw new HttpError(400, "Conexão por token só para o Kommo.");
+        if (body.provider === "nexa") {
+          if (!nexaDisponivel(ctx.email)) throw new HttpError(403, "O NEXA CRM é só para a equipe da NEXA.");
+          const base = nexaBase(String(body.subdomain ?? ""));
+          if (!base) throw new HttpError(400, "Cole o endereço da integração que aparece em Ajustes no NEXA CRM (termina em /functions/v1/integracao).");
+          const token = String(body.token ?? "").trim();
+          if (!/^nexa_[A-Za-z0-9]{20,}$/.test(token)) throw new HttpError(400, "Cole o token gerado no NEXA CRM (começa com nexa_).");
+          const name = await nexaAccountName(token, base);
+          await saveConnection(ctx.admin, ctx.orgId, "nexa", ctx.userId,
+            { accessToken: token, refreshToken: null, expiresAt: null, apiDomain: base }, accountLabel("nexa", null, name));
+          await ctx.admin.from("audit_log").insert({
+            org_id: ctx.orgId, actor_user_id: ctx.userId, action: "crm_conectado", entity: "crm_connections",
+            metadata: { provider: "nexa", modo: "token" },
+          }).then(() => {}, () => {});
+          return json(req, { ok: true });
+        }
+        if (body.provider !== "kommo") throw new HttpError(400, "Conexão por token só para o Kommo e o NEXA CRM.");
         const apiDomain = kommoBase(String(body.subdomain ?? ""));
         if (!apiDomain) throw new HttpError(400, "Informe o endereço da conta no Kommo (ex.: suaempresa.kommo.com).");
         const token = String(body.token ?? "").trim();

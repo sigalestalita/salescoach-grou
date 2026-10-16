@@ -30,6 +30,12 @@ const DISPONIVEIS: [CrmProvider, string][] = [
   ["pipedrive", "Você entra no Pipedrive, escolhe a empresa, autoriza e volta para cá."],
   ["kommo", "Autorize pelo Kommo ou cole o token de longa duração de uma integração privada da sua conta."],
 ];
+/** CRMs que só algumas empresas veem (o servidor diz quais). */
+const EXTRAS: Partial<Record<CrmProvider, string>> = {
+  nexa: "CRM comercial da NEXA. Cole o endereço e o token gerados em Ajustes → Integração com o Sales Coach, no próprio CRM.",
+};
+/** CRMs que conectam só por token colado, sem autorização no site do CRM. */
+const SO_TOKEN: CrmProvider[] = ["nexa"];
 
 /** Dados que valem um campo próprio no CRM; o resto já vai na anotação. */
 const SUGERIDOS = ["nota", "temperatura", "proximo_passo", "data_proximo_passo", "link_analise"];
@@ -45,6 +51,10 @@ export function CrmSettings() {
   const [kommoForm, setKommoForm] = useState(false);
   const [kommoSub, setKommoSub] = useState("");
   const [kommoToken, setKommoToken] = useState("");
+  const [extras, setExtras] = useState<CrmProvider[]>([]);
+  const [nexaForm, setNexaForm] = useState(false);
+  const [nexaUrl, setNexaUrl] = useState("");
+  const [nexaToken, setNexaToken] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +62,7 @@ export function CrmSettings() {
       setConnection(s.connection);
       setMappings(s.mappings);
       setCatalog(s.catalog);
+      setExtras((s.extra_providers ?? []).filter((p) => p in EXTRAS));
       if (s.connection) {
         const f = await crmApi.fields().catch(() => null);
         setFields(f?.fields ?? null);
@@ -96,6 +107,35 @@ export function CrmSettings() {
     toast({ title: "Kommo conectado", description: "Agora escolha em quais campos cada dado é gravado." });
     await load();
   });
+
+  const connectNexa = () => run("connect:nexa-token", async () => {
+    await crmApi.connectToken("nexa", nexaUrl, nexaToken);
+    setNexaToken(""); setNexaForm(false);
+    toast({ title: "NEXA CRM conectado", description: "Agora escolha em quais campos cada dado é gravado." });
+    await load();
+  });
+
+  const nexaTokenForm = (
+    <div className="space-y-3 rounded-lg border border-dashed border-border p-4">
+      <p className="text-sm text-muted-foreground">
+        No NEXA CRM, em Ajustes e importar → Integração com o Sales Coach, copie o endereço e gere um token. Cole os dois aqui.
+        O token fica criptografado e pode ser revogado no CRM a qualquer momento.
+      </p>
+      <div className="grid gap-3 md:grid-cols-[2fr_2fr_auto] md:items-end">
+        <div className="space-y-1">
+          <Label htmlFor="nexa-url">Endereço da integração</Label>
+          <Input id="nexa-url" placeholder="https://….supabase.co/functions/v1/integracao" value={nexaUrl} onChange={(e) => setNexaUrl(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="nexa-token">Token</Label>
+          <Input id="nexa-token" type="password" autoComplete="off" placeholder="nexa_…" value={nexaToken} onChange={(e) => setNexaToken(e.target.value)} />
+        </div>
+        <Button onClick={connectNexa} disabled={!!busy || !nexaUrl.trim() || !nexaToken.trim()}>
+          {busy === "connect:nexa-token" ? "Conferindo…" : "Conectar"}
+        </Button>
+      </div>
+    </div>
+  );
 
   const kommoTokenForm = (
     <div className="space-y-3 rounded-lg border border-dashed border-border p-4">
@@ -161,7 +201,7 @@ export function CrmSettings() {
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : !connection ? (
           <div className="space-y-3">
-            {DISPONIVEIS.map(([provider, hint]) => (
+            {[...DISPONIVEIS, ...extras.map((p): [CrmProvider, string] => [p, EXTRAS[p] ?? ""])].map(([provider, hint]) => (
               <div key={provider} className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border p-4">
                 <div>
                   <p className="font-medium">{CRM_NAME[provider]}</p>
@@ -171,7 +211,7 @@ export function CrmSettings() {
                   {provider === "kommo" && (
                     <Button variant="outline" onClick={() => setKommoForm((v) => !v)} disabled={!!busy}>Usar token</Button>
                   )}
-                  <Button onClick={() => connect(provider)} disabled={!!busy}>
+                  <Button onClick={() => (SO_TOKEN.includes(provider) ? setNexaForm((v) => !v) : connect(provider))} disabled={!!busy}>
                     <Link2 className="mr-2 h-4 w-4" />
                     {busy === `connect:${provider}` ? "Abrindo…" : "Conectar"}
                   </Button>
@@ -179,6 +219,7 @@ export function CrmSettings() {
               </div>
             ))}
             {kommoForm && kommoTokenForm}
+            {nexaForm && nexaTokenForm}
             <p className="text-xs text-muted-foreground">Uma empresa usa um CRM por vez.</p>
           </div>
         ) : (
@@ -201,7 +242,12 @@ export function CrmSettings() {
                   <Button variant="outline" onClick={() => setKommoForm((v) => !v)} disabled={!!busy}>Novo token</Button>
                 )}
                 {connection.status !== "ativo" && (
-                  <Button onClick={() => connect(connection.provider)} disabled={!!busy}>Reconectar</Button>
+                  <Button
+                    onClick={() => (SO_TOKEN.includes(connection.provider) ? setNexaForm((v) => !v) : connect(connection.provider))}
+                    disabled={!!busy}
+                  >
+                    Reconectar
+                  </Button>
                 )}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -225,6 +271,7 @@ export function CrmSettings() {
             </div>
 
             {kommoForm && connection.provider === "kommo" && kommoTokenForm}
+            {nexaForm && connection.provider === "nexa" && nexaTokenForm}
 
             <div className="grid gap-4 md:grid-cols-3">
               {([

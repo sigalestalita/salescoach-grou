@@ -7,6 +7,7 @@ import { rdConnector, rdOAuth } from "./rdstation.ts";
 import { hubspotConnector, hubspotOAuth } from "./hubspot.ts";
 import { pipedriveConnector, pipedriveOAuth } from "./pipedrive.ts";
 import { kommoConnector, kommoOAuth } from "./kommo.ts";
+import { nexaConnector } from "./nexa.ts";
 import { CrmConnector, CrmError, CrmOAuth, CrmProvider, TokenSet } from "./types.ts";
 
 export interface ConnectionRow {
@@ -26,12 +27,13 @@ const CONNECTORS: Partial<Record<CrmProvider, (token: string, apiDomain: string 
   hubspot: hubspotConnector,
   pipedrive: pipedriveConnector,
   kommo: kommoConnector,
+  nexa: nexaConnector,
 };
 
 /** CRMs que já podem ser conectados. */
 export const AVAILABLE_PROVIDERS = Object.keys(CONNECTORS) as CrmProvider[];
 
-const LABEL: Record<CrmProvider, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot", pipedrive: "Pipedrive", kommo: "Kommo" };
+const LABEL: Record<CrmProvider, string> = { rdstation: "RD Station CRM", hubspot: "HubSpot", pipedrive: "Pipedrive", kommo: "Kommo", nexa: "NEXA CRM" };
 
 /** Nome da conexão: o CRM e, quando há, o subdomínio da conta (ex.: "Kommo · acme"). */
 export function accountLabel(provider: CrmProvider, apiDomain?: string | null, accountName?: string | null): string {
