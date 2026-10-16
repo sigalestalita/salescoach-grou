@@ -27,6 +27,11 @@ function findTarget(selector?: string): HTMLElement | null {
 
 export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (finished: boolean) => void }) {
   const [i, setI] = useState(0);
+  // Direção do último passo, para pular etapas opcionais no mesmo sentido.
+  const [dir, setDir] = useState<1 | -1>(1);
+  // Procurando o elemento da etapa: o balão só aparece depois, para uma
+  // etapa opcional sem elemento ser pulada sem piscar na tela.
+  const [searching, setSearching] = useState(true);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -50,14 +55,23 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (finished
       const el = findTarget(step?.target);
       if (el) {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
-        window.setTimeout(measure, 350);
+        window.setTimeout(() => { measure(); setSearching(false); }, 350);
       } else if (step?.target && tries++ < 20) {
         timer = window.setTimeout(seek, 100);
+      } else if (step?.optional) {
+        // Elemento que esta empresa ou papel não tem: segue para a próxima.
+        setI((v) => {
+          const n = v + dir;
+          if (n < 0 || n >= steps.length) { if (n >= steps.length) onClose(true); return v; }
+          return n;
+        });
       } else {
         setRect(null);
+        setSearching(false);
       }
     };
     setRect(null);
+    setSearching(!!step?.target);
     seek();
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
@@ -66,13 +80,16 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (finished
       window.removeEventListener("resize", measure);
       window.removeEventListener("scroll", measure, true);
     };
+    // dir e onClose de propósito fora: onClose muda a cada render do pai e
+    // reiniciaria a busca; dir já está atualizado quando a etapa muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, measure, location.pathname]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose(false);
       if (e.key === "ArrowRight") next();
-      if (e.key === "ArrowLeft") setI((v) => Math.max(0, v - 1));
+      if (e.key === "ArrowLeft") { setDir(-1); setI((v) => Math.max(0, v - 1)); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -82,7 +99,7 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (finished
   const last = i === steps.length - 1;
   function next() {
     if (last) onClose(true);
-    else setI((v) => v + 1);
+    else { setDir(1); setI((v) => v + 1); }
   }
 
   // Posição do balão: abaixo do elemento, ou acima/ao lado quando não cabe.
@@ -123,6 +140,7 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (finished
       {/* Clique fora não fecha: evita perder o tour por engano. */}
       <div className="fixed inset-0" />
 
+      {!searching && (
       <div className="fixed rounded-2xl border border-border/70 bg-card p-4 text-card-foreground shadow-2xl" style={cardStyle}>
         <div className="mb-1 flex items-start justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
@@ -139,11 +157,12 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: (finished
             Pular tour
           </button>
           <div className="flex gap-2">
-            {i > 0 && <Button variant="outline" size="sm" onClick={() => setI(i - 1)}>Anterior</Button>}
+            {i > 0 && <Button variant="outline" size="sm" onClick={() => { setDir(-1); setI(i - 1); }}>Anterior</Button>}
             <Button size="sm" onClick={next}>{last ? "Concluir" : "Próximo"}</Button>
           </div>
         </div>
       </div>
+      )}
     </div>,
     document.body,
   );
