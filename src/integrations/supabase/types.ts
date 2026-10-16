@@ -1912,6 +1912,14 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
+      knowledge_docs_preview: {
+        Args: { _chars?: number; _org_id: string }
+        Returns: {
+          category: string
+          preview: string
+          title: string
+        }[]
+      }
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }

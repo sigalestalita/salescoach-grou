@@ -71,6 +71,13 @@
       "when": 1792168640661,
       "tag": "0009_crm_nexa",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792174325138,
+      "tag": "0010_previa_base_conhecimento",
+      "breakpoints": true
     }
   ]
 }
