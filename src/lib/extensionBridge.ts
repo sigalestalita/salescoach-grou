@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
  * Com o usuário logado no site, pergunta à extensão (se instalada) quem está
  * logado nela. Se ninguém, ou outra pessoa, pede ao servidor um código de uso
  * único (função extension-session) e o entrega à extensão, que abre uma sessão
- * própria. Só páginas em *.grougp.com.br conseguem falar com a extensão
+ * própria. Só páginas em *.nexatech.ia.br e *.grougp.com.br conseguem falar com a extensão
  * (externally_connectable no manifesto).
  */
 
