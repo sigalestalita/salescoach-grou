@@ -1602,6 +1602,48 @@ export type Database = {
           },
         ]
       }
+      site_leads: {
+        Row: {
+          created_at: string
+          email: string
+          empresa: string
+          id: string
+          interesse: string
+          ip: string | null
+          mensagem: string | null
+          origem: string | null
+          plano: string | null
+          user_agent: string | null
+          usuarios: number | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          empresa: string
+          id?: string
+          interesse?: string
+          ip?: string | null
+          mensagem?: string | null
+          origem?: string | null
+          plano?: string | null
+          user_agent?: string | null
+          usuarios?: number | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          empresa?: string
+          id?: string
+          interesse?: string
+          ip?: string | null
+          mensagem?: string | null
+          origem?: string | null
+          plano?: string | null
+          user_agent?: string | null
+          usuarios?: number | null
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean
