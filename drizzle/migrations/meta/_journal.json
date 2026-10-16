@@ -64,6 +64,13 @@
       "when": 1792160326459,
       "tag": "0008_acessos_plataforma",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792168640661,
+      "tag": "0009_crm_nexa",
+      "breakpoints": true
     }
   ]
 }
