@@ -1,3 +1,4 @@
+import { functionErrorMessage } from "@/lib/function-error";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -156,7 +157,7 @@ export function LeadProfilesSettings() {
     setSuggesting(true);
     try {
       const { data, error } = await supabase.functions.invoke("suggest-lead-profiles", { body: { focus: focus.trim() || undefined } });
-      if (error) throw new Error(data?.error || error.message);
+      if (error) throw new Error(await functionErrorMessage(error, data));
       if (data?.error) throw new Error(data.error);
       setSuggestions((data.profiles ?? []).map(toDraft));
     } catch (e) {

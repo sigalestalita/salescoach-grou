@@ -1,3 +1,4 @@
+import { functionErrorMessage } from "@/lib/function-error";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgConfig } from "@/hooks/useOrgConfig";
@@ -290,7 +291,7 @@ const Roleplay = () => {
           },
         },
       });
-      if (error) throw new Error(data?.error || error.message);
+      if (error) throw new Error(await functionErrorMessage(error, data));
       setSession(data.session);
       setMessages([]);
       setFeedback(null);
@@ -322,7 +323,7 @@ const Roleplay = () => {
       // Sem token (sessão expirada) cai no caminho simples, que o supabase-js resolve.
       if (!token) {
         const { data, error } = await supabase.functions.invoke("roleplay-chat", { body: { sessionId: session.id, message: content } });
-        if (error) throw new Error(data?.error || error.message);
+        if (error) throw new Error(await functionErrorMessage(error, data));
         setMessages((prev) => [...prev, { role: "lead", content: data.reply }]);
         setSuggestFinish(!!data.suggestFinish);
         if (emVoz) {
@@ -488,7 +489,7 @@ const Roleplay = () => {
       const { data, error } = await supabase.functions.invoke("transcribe-utterance", {
         body: { sessionId: session?.id, audioBase64, durationSeconds },
       });
-      if (error) throw new Error(data?.error || error.message);
+      if (error) throw new Error(await functionErrorMessage(error, data));
 
       if (!data.text) {
         setMicError("Não consegui entender o áudio. Tente falar um pouco mais alto.");
@@ -616,7 +617,7 @@ const Roleplay = () => {
     setFinishing(true);
     try {
       const { data, error } = await supabase.functions.invoke("roleplay-finish", { body: { sessionId: session.id } });
-      if (error) throw new Error(data?.error || error.message);
+      if (error) throw new Error(await functionErrorMessage(error, data));
       setFeedback(data.session.feedback);
       loadHistory();
     } catch (e: any) {
