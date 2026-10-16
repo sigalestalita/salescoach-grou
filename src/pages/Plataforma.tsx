@@ -26,7 +26,7 @@ import { CRM_NAME, type CrmProvider } from "@/lib/crm";
  * acompanhar o consumo de cada uma.
  *
  * A lista mostra metadados e consumo. Para ver o conteúdo de uma empresa
- * (reuniões, análises, equipe), "Ver conta" abre o app no modo suporte: como
+ * (reuniões, análises, equipe), "Ver" abre o app no modo suporte: como
  * admin dela, só leitura, por até 8 horas e com registro no audit_log.
  * "Configurar" abre do mesmo jeito, com escrita liberada, para preparar a
  * conta antes de entregar (base de conhecimento, metodologia, tipos).
@@ -56,6 +56,9 @@ interface Org {
   created_at: string;
   demo_ends_at: string | null;
   users: number | null;
+  /** Pessoas com login na empresa (null sem a migração de acessos). */
+  people?: OrgPerson[] | null;
+  invites?: OrgInvite[];
   meetings: number | null;
   subscription: {
     status: string;
@@ -78,6 +81,64 @@ interface CrmOverview {
   last_sent_at: string | null;
   last_job_error: string | null;
 }
+
+interface OrgPerson {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: string | null;
+  created_at: string;
+  last_sign_in_at: string | null;
+  must_change_password: boolean;
+}
+
+interface OrgInvite {
+  email: string;
+  role: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+}
+
+const ROLE_NAME: Record<string, string> = { admin: "Admin", gestor: "Gestor", vendedor: "Vendedor" };
+
+/** "há 5 min", "há 3 h", "há 2 dias" ou a data. */
+function quando(iso: string | null): string {
+  if (!iso) return "nunca";
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  if (min < 24 * 60) return `há ${Math.round(min / 60)} h`;
+  if (min < 7 * 24 * 60) { const d = Math.round(min / 1440); return d === 1 ? "ontem" : `há ${d} dias`; }
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+const inviteState = (i: OrgInvite): "aceito" | "revogado" | "expirado" | "pendente" =>
+  i.accepted_at ? "aceito" : i.revoked_at ? "revogado" : new Date(i.expires_at).getTime() < Date.now() ? "expirado" : "pendente";
+
+/**
+ * Situação de acesso da empresa, para a dona do produto saber se o cliente
+ * entrou de fato: alguém já fez login? trocou a senha provisória? o convite
+ * foi aceito ou expirou?
+ */
+function acessoResumo(org: Org): { txt: string; tone: "ok" | "warn" | "bad" | "muted" } | null {
+  if (org.people == null) return null;
+  const logados = org.people.filter((p) => p.last_sign_in_at);
+  const pend = (org.invites ?? []).filter((i) => inviteState(i) === "pendente");
+  const exp = (org.invites ?? []).filter((i) => inviteState(i) === "expirado");
+  if (logados.length) {
+    const ultimo = logados.map((p) => p.last_sign_in_at!).sort().at(-1)!;
+    const provisoria = logados.some((p) => p.must_change_password);
+    return { txt: `Entrou ${quando(ultimo)}${provisoria ? " · senha provisória" : ""}`, tone: provisoria ? "warn" : "ok" };
+  }
+  if (org.people.length) return { txt: "Acesso criado, nunca entrou", tone: "warn" };
+  if (pend.length) return { txt: "Convite enviado, não aceito", tone: "warn" };
+  if (exp.length) return { txt: "Convite expirou", tone: "bad" };
+  return { txt: "Sem acesso criado", tone: "muted" };
+}
+
+const TONE_CLASS = { ok: "text-emerald-700", warn: "text-orange-600", bad: "text-destructive", muted: "text-muted-foreground" } as const;
 
 /** Acesso gerado para o admin de uma empresa. A senha só aparece aqui. */
 interface CreatedAccess {
@@ -166,6 +227,7 @@ const Plataforma = () => {
   const [accessEmail, setAccessEmail] = useState("");
   const [accessName, setAccessName] = useState("");
   const [suspendOrg, setSuspendOrg] = useState<Org | null>(null);
+  const [peopleOrg, setPeopleOrg] = useState<Org | null>(null);
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("platform-orgs", { body });
@@ -419,7 +481,7 @@ const Plataforma = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             <Building2 className="h-5 w-5 text-primary" />
             <div>
@@ -440,7 +502,7 @@ const Plataforma = () => {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
+      <main className="mx-auto max-w-[1400px] space-y-6 px-6 py-8">
         {access && (
           <Card className="border-primary/40">
             <CardHeader>
@@ -602,7 +664,7 @@ const Plataforma = () => {
                       <TableHead>Demonstração</TableHead>
                       <TableHead>Plano</TableHead>
                       <TableHead>CRM</TableHead>
-                      <TableHead className="text-right">Usuários</TableHead>
+                      <TableHead>Acesso</TableHead>
                       <TableHead className="text-right">Reuniões</TableHead>
                       <TableHead>Consumo no ciclo</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
@@ -617,7 +679,7 @@ const Plataforma = () => {
                       return (
                         <TableRow key={org.id}>
                           <TableCell>
-                            <div className="font-medium">{org.name}</div>
+                            <div className="whitespace-nowrap font-medium">{org.name}</div>
                             <div className="font-mono text-xs text-muted-foreground">{org.custom_domain ?? org.slug}</div>
                           </TableCell>
                           <TableCell><Badge variant={st.variant}>{st.label}</Badge></TableCell>
@@ -639,7 +701,7 @@ const Plataforma = () => {
                               onValueChange={(key) => setPlan(org, key)}
                               disabled={isBusy}
                             >
-                              <SelectTrigger className="h-8 w-[160px] text-xs">
+                              <SelectTrigger className="h-8 w-[130px] text-xs">
                                 <SelectValue placeholder="Sem plano" />
                               </SelectTrigger>
                               <SelectContent>
@@ -650,13 +712,23 @@ const Plataforma = () => {
                             </Select>
                           </TableCell>
                           <TableCell>{crmBadge(org)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{org.users ?? 0}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const a = acessoResumo(org);
+                              return (
+                                <button type="button" onClick={() => setPeopleOrg(org)} className="max-w-[170px] text-left text-xs underline-offset-2 hover:underline" title="Ver quem entrou">
+                                  <span className="block tabular-nums">{org.users ?? 0} usuário{org.users === 1 ? "" : "s"}</span>
+                                  {a && <span className={`block font-medium ${TONE_CLASS[a.tone]}`}>{a.txt}</span>}
+                                </button>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell className="text-right tabular-nums">{org.meetings ?? 0}</TableCell>
                           <TableCell>{usageSummary(org)}</TableCell>
                           <TableCell className="space-x-1 whitespace-nowrap text-right">
-                            <Button variant="outline" size="sm" disabled={isBusy} onClick={() => viewOrg(org)}>
+                            <Button variant="outline" size="sm" disabled={isBusy} onClick={() => viewOrg(org)} title="Ver a conta como ela está, sem editar">
                               <Eye className="mr-1 h-3.5 w-3.5" />
-                              Ver conta
+                              Ver
                             </Button>
                             <Button variant="outline" size="sm" disabled={isBusy} onClick={() => viewOrg(org, true)}
                               title="Entrar na conta com edição liberada, para configurar">
@@ -836,6 +908,85 @@ const Plataforma = () => {
                 {busy === accessOrg?.id ? "Gerando..." : "Gerar acesso"}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!peopleOrg} onOpenChange={(o) => !o && setPeopleOrg(null)}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Acessos de {peopleOrg?.name}</DialogTitle>
+              <DialogDescription>
+                Quem tem login na empresa, quando entrou pela última vez e como estão os convites. O operador da plataforma,
+                no modo suporte, não aparece aqui.
+              </DialogDescription>
+            </DialogHeader>
+            {peopleOrg?.people == null ? (
+              <p className="text-sm text-muted-foreground">Os acessos aparecem depois da próxima atualização do sistema.</p>
+            ) : (
+              <div className="space-y-5">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Pessoa</TableHead>
+                        <TableHead>Papel</TableHead>
+                        <TableHead>Conta criada</TableHead>
+                        <TableHead>Último acesso</TableHead>
+                        <TableHead>Senha</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {peopleOrg.people.length === 0 && (
+                        <TableRow><TableCell colSpan={5} className="text-sm text-muted-foreground">Ninguém com login ainda.</TableCell></TableRow>
+                      )}
+                      {[...peopleOrg.people].sort((a, b) => (b.last_sign_in_at ?? "").localeCompare(a.last_sign_in_at ?? "")).map((p) => (
+                        <TableRow key={p.user_id}>
+                          <TableCell>
+                            <div className="font-medium">{p.full_name || p.email}</div>
+                            <div className="text-xs text-muted-foreground">{p.email}</div>
+                          </TableCell>
+                          <TableCell className="text-sm">{ROLE_NAME[p.role ?? ""] ?? p.role ?? "—"}</TableCell>
+                          <TableCell className="text-xs tabular-nums">{new Date(p.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                          <TableCell className={`text-xs ${p.last_sign_in_at ? "" : "font-medium text-orange-600"}`} title={p.last_sign_in_at ? new Date(p.last_sign_in_at).toLocaleString("pt-BR") : undefined}>
+                            {p.last_sign_in_at ? quando(p.last_sign_in_at) : "Nunca entrou"}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {p.must_change_password ? <span className="text-orange-600">Provisória, ainda não trocou</span> : "Própria"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {(peopleOrg.invites ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold">Convites</h3>
+                    <ul className="space-y-1.5 text-sm">
+                      {(peopleOrg.invites ?? []).map((i) => {
+                        const st = inviteState(i);
+                        return (
+                          <li key={`${i.email}-${i.created_at}`} className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-border px-3 py-2">
+                            <span>{i.email} <span className="text-xs text-muted-foreground">· {ROLE_NAME[i.role] ?? i.role}</span></span>
+                            <span className={`text-xs ${st === "aceito" ? "text-emerald-700" : st === "pendente" ? "text-orange-600" : "text-muted-foreground"}`}>
+                              {st === "aceito" ? `Aceito ${quando(i.accepted_at)}`
+                                : st === "pendente" ? `Enviado ${quando(i.created_at)}, não aceito (vale até ${new Date(i.expires_at).toLocaleDateString("pt-BR")})`
+                                : st === "expirado" ? `Expirou em ${new Date(i.expires_at).toLocaleDateString("pt-BR")}` : "Revogado"}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            {peopleOrg && (
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { const o = peopleOrg; setPeopleOrg(null); setAccessOrg(o); setAccessEmail(""); setAccessName(""); }}>
+                  Gerar acesso do admin
+                </Button>
+              </DialogFooter>
+            )}
           </DialogContent>
         </Dialog>
 
