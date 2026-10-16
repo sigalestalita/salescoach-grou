@@ -279,12 +279,19 @@ export async function fetchKnowledgeContext(
   admin: SupabaseClient,
   orgId: string,
 ): Promise<string> {
+  // Só os 2.000 primeiros caracteres de cada documento vão para o prompt: o corte
+  // é feito no banco (knowledge_docs_preview), sem baixar documentos inteiros,
+  // que com PDFs grandes estouravam memória/CPU da função. Sem a migração, cai
+  // na consulta antiga.
+  const preview = async () => {
+    const r = await admin.rpc("knowledge_docs_preview", { _org_id: orgId, _chars: 2000 });
+    if (!r.error) return { data: (r.data ?? []) as { title: string; category: string | null; extracted_content: string | null }[] };
+    const { data } = await admin.from("knowledge_documents").select("title, category, extracted_content")
+      .eq("org_id", orgId).not("extracted_content", "is", null);
+    return { data: data ?? [] };
+  };
   const [docsRes, itemsRes] = await Promise.all([
-    admin
-      .from("knowledge_documents")
-      .select("title, category, extracted_content")
-      .eq("org_id", orgId)
-      .not("extracted_content", "is", null),
+    preview().then(({ data }) => ({ data: data.map((d) => ({ ...d, extracted_content: (d as { preview?: string }).preview ?? d.extracted_content })) })),
     admin
       .from("knowledge_items")
       .select("name, item_type, category, description, metadata")
