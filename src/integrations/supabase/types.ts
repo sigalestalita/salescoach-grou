@@ -1500,6 +1500,7 @@ export type Database = {
       }
       roleplay_messages: {
         Row: {
+          audio_path: string | null
           content: string
           created_at: string
           id: string
@@ -1508,6 +1509,7 @@ export type Database = {
           session_id: string
         }
         Insert: {
+          audio_path?: string | null
           content: string
           created_at?: string
           id?: string
@@ -1516,6 +1518,7 @@ export type Database = {
           session_id: string
         }
         Update: {
+          audio_path?: string | null
           content?: string
           created_at?: string
           id?: string
@@ -1554,6 +1557,7 @@ export type Database = {
           persona: Json
           status: string
           temperature: string | null
+          training_mode: string | null
           turn_count: number
           updated_at: string
           user_id: string
@@ -1571,6 +1575,7 @@ export type Database = {
           persona: Json
           status?: string
           temperature?: string | null
+          training_mode?: string | null
           turn_count?: number
           updated_at?: string
           user_id: string
@@ -1588,6 +1593,7 @@ export type Database = {
           persona?: Json
           status?: string
           temperature?: string | null
+          training_mode?: string | null
           turn_count?: number
           updated_at?: string
           user_id?: string
