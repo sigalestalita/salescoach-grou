@@ -7,6 +7,17 @@
  */
 export async function functionErrorMessage(error: unknown, data?: { error?: string } | null): Promise<string> {
   if (data?.error) return data.error;
-  const detail = await (error as { context?: Response })?.context?.json?.().catch(() => null);
-  return (detail as { error?: string } | null)?.error ?? (error instanceof Error ? error.message : "Erro inesperado.");
+  const res = (error as { context?: Response })?.context;
+  const status = typeof res?.status === "number" ? res.status : null;
+  const body = await res?.text?.().catch(() => "") ?? "";
+  let detail: { error?: string; message?: string; code?: string } | null = null;
+  try { detail = JSON.parse(body); } catch { /* corpo não é JSON */ }
+  if (detail?.error) return detail.error;
+  // Resposta da própria plataforma (tempo, memória, CPU): mostra o código para dar para investigar.
+  if (status === 504 || status === 546 || detail?.code === "WORKER_LIMIT") {
+    return `O servidor não terminou a tempo (${detail?.code ?? `HTTP ${status}`}). Tente de novo em instantes.`;
+  }
+  const extra = detail?.message ?? (body && body.length < 160 ? body : "");
+  if (status) return `Erro ${status}${detail?.code ? ` · ${detail.code}` : ""}${extra ? `: ${extra}` : ""}`;
+  return error instanceof Error ? error.message : "Erro inesperado.";
 }

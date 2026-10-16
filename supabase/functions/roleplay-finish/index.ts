@@ -79,7 +79,11 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    // A função tem limite de tempo: a IA ganha até 100 s; passou disso, responde
+    // com mensagem clara em vez de a plataforma derrubar a chamada.
+    const t0 = Date.now();
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      signal: AbortSignal.timeout(100_000),
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -90,7 +94,11 @@ Deno.serve(async (req) => {
         ],
         temperature: 0.4,
       }),
+    }).catch((e) => {
+      console.error("roleplay-finish: IA sem resposta", Date.now() - t0, "ms", e);
+      throw new HttpError(504, "A IA demorou demais para avaliar. Tente encerrar de novo.");
     });
+    console.log("roleplay-finish: IA respondeu em", Date.now() - t0, "ms; prompt com", prompt.length, "caracteres");
 
     if (!aiResponse.ok) {
       if (aiResponse.status === 429) return json(req, { error: "Muitas avaliações em pouco tempo. Tente de novo em instantes." }, 429);
