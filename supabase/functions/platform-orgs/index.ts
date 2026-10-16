@@ -117,6 +117,16 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false });
       if (error) throw error;
 
+      // Quem tem login em cada empresa, último acesso e convites. Sem a migração
+      // de acessos aplicada, o painel segue sem essas informações.
+      const [{ data: people, error: peopleErr }, { data: invites }] = await Promise.all([
+        admin.rpc("platform_org_people"),
+        admin.from("organization_invites").select("org_id, email, role, created_at, expires_at, accepted_at, revoked_at")
+          .order("created_at", { ascending: false }).limit(2000),
+      ]);
+      if (peopleErr) console.warn("platform_org_people:", peopleErr.message);
+      const byOrg = <T extends { org_id: string }>(rows: T[] | null, id: string) => (rows ?? []).filter((r) => r.org_id === id);
+
       const enriched = await Promise.all(
         (orgs ?? []).map(async (org: { id: string }) => {
           const [{ count: users }, { count: meetings }, { data: sub }, { data: quota }] =
@@ -126,7 +136,11 @@ Deno.serve(async (req) => {
               admin.from("subscriptions").select("status, plan_id, current_period_end, plans(key, name)").eq("org_id", org.id).maybeSingle(),
               admin.rpc("org_quota_status", { _org_id: org.id }),
             ]);
-          return { ...org, users, meetings, subscription: sub, usage: quota };
+          return {
+            ...org, users, meetings, subscription: sub, usage: quota,
+            people: peopleErr ? null : byOrg(people as { org_id: string }[] | null, org.id).map(({ org_id: _o, ...p }) => p),
+            invites: byOrg(invites, org.id).map(({ org_id: _o, ...i }) => i),
+          };
         }),
       );
 

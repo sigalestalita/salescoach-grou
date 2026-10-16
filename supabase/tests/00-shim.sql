@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS auth.users (
   email               TEXT UNIQUE,
   encrypted_password  TEXT,
   raw_user_meta_data  JSONB DEFAULT '{}'::jsonb,
+  last_sign_in_at     TIMESTAMP WITH TIME ZONE,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
