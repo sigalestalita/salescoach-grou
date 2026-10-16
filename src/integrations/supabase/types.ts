@@ -1915,6 +1915,19 @@ export type Database = {
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }
+      platform_org_people: {
+        Args: never
+        Returns: {
+          created_at: string
+          email: string
+          full_name: string
+          last_sign_in_at: string
+          must_change_password: boolean
+          org_id: string
+          role: string
+          user_id: string
+        }[]
+      }
       platform_support_enter: {
         Args: { _edit?: boolean; _org_id: string }
         Returns: string
