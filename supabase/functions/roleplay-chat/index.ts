@@ -227,7 +227,8 @@ Deno.serve(async (req) => {
       if (!msg || dono?.user_id !== ctx.userId || dono?.org_id !== ctx.orgId) {
         throw new HttpError(404, "Fala não encontrada");
       }
-      await ctx.admin.from("roleplay_messages").update({ audio_path: audioPath }).eq("id", messageId);
+      const { error: semColuna } = await ctx.admin.from("roleplay_messages").update({ audio_path: audioPath }).eq("id", messageId);
+      if (semColuna) console.error("roleplay-chat: não deu para anexar o áudio:", semColuna.message);
       return json(req, { ok: true });
     }
 
@@ -302,11 +303,19 @@ Deno.serve(async (req) => {
     // A fala do vendedor é gravada em paralelo: ela não precisa estar no banco
     // para o lead começar a responder. O id volta para o navegador, que usa
     // ele se precisar anexar o áudio depois.
-    const gravaFalaDoVendedor = ctx.admin
-      .from("roleplay_messages")
-      .insert({ session_id: sessionId, org_id: ctx.orgId, role: "seller", content: message.trim(), audio_path: sellerAudioPath ?? null })
-      .select("id")
-      .single();
+    // Se a coluna audio_path ainda não existir no banco (migração
+    // 20260921120000 não aplicada), grava sem ela: perder a fala do vendedor
+    // deixava o treino sem avaliação ("Converse um pouco mais...").
+    const gravaFalaDoVendedor = (async () => {
+      const fala = { session_id: sessionId, org_id: ctx.orgId, role: "seller", content: message.trim() };
+      let r = await ctx.admin.from("roleplay_messages").insert({ ...fala, audio_path: sellerAudioPath ?? null }).select("id").single();
+      if (r.error) {
+        console.error("roleplay-chat: falha ao gravar a fala do vendedor, tentando sem audio_path:", r.error.message);
+        r = await ctx.admin.from("roleplay_messages").insert(fala).select("id").single();
+        if (r.error) console.error("roleplay-chat: a fala do vendedor não foi gravada:", r.error.message);
+      }
+      return r;
+    })();
 
     const chatMessages = [
       { role: "system", content: systemPrompt(persona, orgRes.data?.name ?? "a empresa", meetingTypeLabel, meetingTypeContext, achaCenario(session.scenario ?? persona.scenario)) },
@@ -363,11 +372,12 @@ Deno.serve(async (req) => {
     const fechaTurno = async (leadReply: string, uso?: { prompt_tokens?: number; completion_tokens?: number }) => {
       const { data: falaVendedor } = await gravaFalaDoVendedor;
       idFalaVendedor = falaVendedor?.id ?? null;
-      const { data: falaLead } = await ctx.admin
+      const { data: falaLead, error: erroLead } = await ctx.admin
         .from("roleplay_messages")
         .insert({ session_id: sessionId, org_id: ctx.orgId, role: "lead", content: leadReply })
         .select("id")
         .single();
+      if (erroLead) console.error("roleplay-chat: a fala do lead não foi gravada:", erroLead.message);
       idFalaLead = falaLead?.id ?? null;
       await ctx.admin.from("roleplay_sessions").update({ turn_count: turnCount, updated_at: new Date().toISOString() }).eq("id", sessionId);
       await logUsage(ctx.admin, {
