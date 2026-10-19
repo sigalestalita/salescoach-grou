@@ -1028,28 +1028,51 @@
       const token = await getValidToken();
       if (!token) { showStatus('error', '❌ Sessão expirada.'); notifyBackground('uploadError', { error: 'Sessão expirada' }); autoRemove(6000); return; }
 
-      const formData = new FormData();
-      formData.append('file', blob, `recording-${Date.now()}.webm`);
-      formData.append('title', meta.title || 'Gravação via Extensão');
-      if (meta.meetingType) formData.append('meeting_type', meta.meetingType);
-      formData.append('lead_name', meta.leadName || '');
-      formData.append('lead_company', meta.leadCompany || '');
-      formData.append('lead_email', meta.leadEmail || '');
-      if (meetingId) formData.append('meeting_id', meetingId);
-      formData.append('meeting_url', meta.meetingUrl || location.href);
-      if (meta.calendarEventId) formData.append('calendar_event_id', meta.calendarEventId);
-      if (meta.attendees?.length) formData.append('attendees', JSON.stringify(meta.attendees));
-      formData.append('tela', blob.type.startsWith('video/') ? '1' : '0');
+      const campos = {
+        title: meta.title || 'Gravação via Extensão',
+        ...(meta.meetingType ? { meeting_type: meta.meetingType } : {}),
+        lead_name: meta.leadName || '',
+        lead_company: meta.leadCompany || '',
+        lead_email: meta.leadEmail || '',
+        ...(meetingId ? { meeting_id: meetingId } : {}),
+        meeting_url: meta.meetingUrl || location.href,
+        ...(meta.calendarEventId ? { calendar_event_id: meta.calendarEventId } : {}),
+        ...(meta.attendees?.length ? { attendees: JSON.stringify(meta.attendees) } : {}),
+        tela: blob.type.startsWith('video/') ? '1' : '0',
+      };
 
-      // Prazo generoso: uma reunião longa pode ter centenas de MB.
-      const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/upload-recording`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
-        body: formData,
-      }, 15 * 60 * 1000);
+      // 1) Direto no Storage, em partes (vídeo longo não cabe na memória da
+      //    função: era o "status 546"); 2) se falhar, o envio antigo, inteiro.
       let result = {};
-      try { result = await res.json(); } catch {}
-      if (!res.ok) throw new Error(result.error || `Erro no envio (status ${res.status})`);
+      let path = null;
+      try {
+        path = await uploadDireto(blob);
+      } catch (err) {
+        console.warn('Sales Coach: envio direto falhou, tentando o envio inteiro:', err?.message || err);
+      }
+      if (path) {
+        const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/upload-recording`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${await getValidToken() || token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...campos, path }),
+        }, 2 * 60 * 1000);
+        try { result = await res.json(); } catch {}
+        // Servidor ainda sem o registro por caminho: cai no envio inteiro.
+        if (!res.ok) { console.warn('Sales Coach: registro falhou:', result.error || res.status); path = null; }
+      }
+      if (!path) {
+        const formData = new FormData();
+        formData.append('file', blob, `recording-${Date.now()}.webm`);
+        for (const [k, v] of Object.entries(campos)) formData.append(k, v);
+        // Prazo generoso: uma reunião longa pode ter centenas de MB.
+        const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/upload-recording`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+          body: formData,
+        }, 15 * 60 * 1000);
+        try { result = await res.json(); } catch {}
+        if (!res.ok) throw new Error(result.error || `Erro no envio (status ${res.status})`);
+      }
 
       safeStorageSet({ recordingState: 'done', lastMeetingId: result.meetingId });
       try { chrome.storage.local.remove(['meetingData']); } catch {}
@@ -1070,6 +1093,65 @@
         ? `O vídeo não subiu (${msg}), mas o áudio foi enviado para análise. Se quiser guardar o vídeo, baixe abaixo.`
         : msg, rescued);
     }
+  }
+
+  /**
+   * Sobe a gravação direto no Storage pelo protocolo retomável (TUS), em
+   * partes de 6 MB, com o login do vendedor. Devolve o caminho do arquivo.
+   */
+  async function uploadDireto(blob) {
+    const PARTE = 6 * 1024 * 1024;
+    const token = await getValidToken();
+    if (!token) throw new Error('sessão expirada');
+    let userId = (await chrome.storage.local.get(['userId'])).userId;
+    if (!userId) {
+      try { userId = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub; } catch {}
+    }
+    if (!userId) throw new Error('usuário desconhecido');
+    const path = `${userId}/${Date.now()}-recording.webm`;
+    const b64 = (t) => btoa(unescape(encodeURIComponent(t)));
+    const base = `${SUPABASE_URL}/storage/v1/upload/resumable`;
+    const auth = async () => ({ Authorization: `Bearer ${await getValidToken() || token}`, apikey: SUPABASE_ANON_KEY, 'Tus-Resumable': '1.0.0' });
+
+    const criar = await fetchWithTimeout(base, {
+      method: 'POST',
+      headers: {
+        ...(await auth()),
+        'Upload-Length': String(blob.size),
+        'Upload-Metadata': [
+          `bucketName ${b64('meeting-files')}`, `objectName ${b64(path)}`,
+          `contentType ${b64((blob.type || 'video/webm').split(';')[0])}`, `cacheControl ${b64('3600')}`,
+        ].join(','),
+        'x-upsert': 'false',
+      },
+    }, 60 * 1000);
+    const loc = criar.headers.get('Location');
+    if (criar.status !== 201 || !loc) throw new Error(`não abriu o envio (status ${criar.status})`);
+    const url = new URL(loc, base).toString();
+
+    let offset = 0;
+    let falhas = 0;
+    while (offset < blob.size) {
+      showStatus('sending', `Enviando gravação… ${Math.floor((offset / blob.size) * 100)}%`);
+      try {
+        const r = await fetchWithTimeout(url, {
+          method: 'PATCH',
+          headers: { ...(await auth()), 'Upload-Offset': String(offset), 'Content-Type': 'application/offset+octet-stream' },
+          body: blob.slice(offset, offset + PARTE),
+        }, 3 * 60 * 1000);
+        if (r.status !== 204) throw new Error(`parte recusada (status ${r.status})`);
+        offset = Number(r.headers.get('Upload-Offset') ?? offset + PARTE);
+        falhas = 0;
+      } catch (err) {
+        if (++falhas > 4) throw err;
+        await new Promise((ok) => setTimeout(ok, 2000 * falhas));
+        // Retoma de onde o servidor parou.
+        const h = await fetchWithTimeout(url, { method: 'HEAD', headers: await auth() }, 30 * 1000).catch(() => null);
+        const srv = Number(h?.headers.get('Upload-Offset'));
+        if (Number.isFinite(srv) && srv >= 0 && h?.ok) offset = srv;
+      }
+    }
+    return path;
   }
 
   // ── Helpers ──
