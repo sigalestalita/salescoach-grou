@@ -206,6 +206,27 @@ const GRAVACAO_CORROMPIDA =
   "A gravação chegou corrompida e não pode ser transcrita. Isso acontecia na extensão até a versão 1.6.0: " +
   "baixe a versão mais recente na página Extensão, reinstale no Chrome e grave a próxima reunião novamente.";
 
+// Acima disto, o arquivo não é baixado na função (ver arquivoGrande).
+const LIMITE_DOWNLOAD = 40 * 1024 * 1024;
+
+/** Arquivo do Storage grande demais para baixar na função, com a AssemblyAI disponível. */
+async function arquivoGrande(supabase: any, path: string): Promise<boolean> {
+  if (!Deno.env.get("ASSEMBLYAI_API_KEY")) return false;
+  const i = path.lastIndexOf("/");
+  const { data } = await supabase.storage.from("meeting-files")
+    .list(path.slice(0, i), { search: path.slice(i + 1), limit: 5 });
+  const obj = (data ?? []).find((o: { name: string }) => o.name === path.slice(i + 1));
+  return Number(obj?.metadata?.size ?? 0) > LIMITE_DOWNLOAD;
+}
+
+/** Lê só os 4 primeiros bytes: o .webm da extensão tem de começar pelo cabeçalho EBML. */
+async function comecaComEbml(url: string): Promise<boolean> {
+  if (!/\.webm(\?|$)/i.test(url)) return true;
+  const r = await fetch(url, { headers: { Range: "bytes=0-3" } });
+  const b = new Uint8Array(await r.arrayBuffer()).slice(0, 4);
+  return EBML.every((v, i) => b[i] === v);
+}
+
 async function repararWebm(blob: Blob): Promise<Blob | null> {
   const inicio = new Uint8Array(await blob.slice(0, 8 * 1024 * 1024).arrayBuffer());
   for (let i = 0; i + 3 < inicio.length; i++) {
@@ -327,6 +348,20 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       }
 
       const result = await transcribeWithAssemblyAI(assemblyAudioUrl);
+      transcript = result.text;
+      speakers = result.speakers;
+    } else if (meeting.file_url && await arquivoGrande(supabase, meeting.file_url)) {
+      // Vídeo longo: baixar aqui estoura a memória da função. A AssemblyAI
+      // baixa direto do Storage por um link assinado (como no Google Drive).
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
+      const { data: assinado, error: assinErr } = await supabase.storage
+        .from("meeting-files").createSignedUrl(meeting.file_url, 6 * 3600);
+      if (assinErr || !assinado?.signedUrl) throw new Error(`Link do arquivo não gerado: ${assinErr?.message ?? "sem URL"}`);
+      if (!await comecaComEbml(assinado.signedUrl)) {
+        await supabase.from("meetings").update({ status: "erro", error_message: GRAVACAO_CORROMPIDA }).eq("id", meetingId);
+        return;
+      }
+      const result = await transcribeWithAssemblyAI(assinado.signedUrl);
       transcript = result.text;
       speakers = result.speakers;
     } else if (meeting.file_url) {

@@ -76,7 +76,8 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
   };
 
   const mediaExt = (mediaUrl ?? "").split("?")[0].match(/\.(mp4|webm|m4a|mp3|ogg)$/i)?.[1]?.toLowerCase() ?? null;
-  const isVideo = meeting.file_type === "webm" || meeting.file_type === "mp4" || mediaExt === "mp4" || mediaExt === "webm" || (meeting.file_url?.endsWith(".webm") || meeting.file_url?.endsWith(".mp4"));
+  // Gravação da extensão sem a tela: o arquivo é webm, mas só tem áudio.
+  const isVideo = meeting.gravou_tela !== false && (meeting.file_type === "webm" || meeting.file_type === "mp4" || mediaExt === "mp4" || mediaExt === "webm" || (meeting.file_url?.endsWith(".webm") || meeting.file_url?.endsWith(".mp4")));
   const mediaMime = mediaExt === "mp4" ? "video/mp4" : mediaExt === "m4a" ? "audio/mp4" : mediaExt === "mp3" ? "audio/mpeg" : mediaExt === "ogg" ? "audio/ogg" : isVideo ? "video/webm" : "audio/webm";
 
   return (
@@ -104,6 +105,11 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
                   <audio controls className="w-full" preload="metadata">
                     <source src={mediaUrl} type={mediaMime} />
                   </audio>
+                )}
+                {meeting.gravou_tela === false && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Gravada sem a tela: só o áudio chegou. A tela não foi compartilhada ao iniciar a gravação, ou o vídeo não conseguiu subir.
+                  </p>
                 )}
               </CardContent>
             </CollapsibleContent>

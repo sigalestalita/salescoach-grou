@@ -15,13 +15,24 @@ Deno.serve(async (req) => {
     const orgId = ctx.orgId;
     await assertQuota(ctx.admin, orgId, "analise", 1);
 
-    // Parse multipart form
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const title = (formData.get("title") as string) || "Gravação via Extensão";
+    // Dois jeitos de chegar:
+    // - JSON { path, ... }: a extensão (1.10.3+) já subiu o arquivo direto no
+    //   Storage (upload retomável) e só registra a reunião. Vídeos longos não
+    //   passam pela memória da função (antes estouravam: status 546).
+    // - multipart com "file": versões antigas da extensão.
+    const isJson = (req.headers.get("content-type") ?? "").includes("application/json");
+    const body: Record<string, unknown> = isJson ? await req.json().catch(() => ({})) : {};
+    const formData = isJson ? null : await req.formData();
+    const campo = (k: string): string | null => {
+      const v = isJson ? body[k] : formData!.get(k);
+      return typeof v === "string" ? v : null;
+    };
+    const file = formData ? formData.get("file") as File | null : null;
+    const pathEnviado = isJson ? campo("path") : null;
+    const title = campo("title") || "Gravação via Extensão";
     // Tipo de reunião é configurado por organização; sem indicação, usa o
     // primeiro tipo ativo da própria organização.
-    let meetingType = (formData.get("meeting_type") as string) || null;
+    let meetingType = campo("meeting_type") || null;
     {
       const { data: orgTypes } = await ctx.admin
         .from("meeting_types")
@@ -34,16 +45,16 @@ Deno.serve(async (req) => {
         meetingType = validKeys[0] ?? null;
       }
     }
-    const leadName = (formData.get("lead_name") as string) || null;
-    const leadCompany = (formData.get("lead_company") as string) || null;
-    const leadEmail = (formData.get("lead_email") as string) || null;
-    const existingMeetingId = (formData.get("meeting_id") as string) || null;
+    const leadName = campo("lead_name") || null;
+    const leadCompany = campo("lead_company") || null;
+    const leadEmail = campo("lead_email") || null;
+    const existingMeetingId = campo("meeting_id") || null;
     // Vindos da agenda do vendedor, quando conectada (extensão).
-    const meetingUrl = ((formData.get("meeting_url") as string) || "").slice(0, 2000) || null;
-    const calendarEventId = ((formData.get("calendar_event_id") as string) || "").slice(0, 300) || null;
+    const meetingUrl = (campo("meeting_url") || "").slice(0, 2000) || null;
+    const calendarEventId = (campo("calendar_event_id") || "").slice(0, 300) || null;
     let attendees: unknown = null;
     try {
-      const raw = formData.get("attendees") as string | null;
+      const raw = campo("attendees");
       const parsed = raw ? JSON.parse(raw) : null;
       if (Array.isArray(parsed)) {
         attendees = parsed.slice(0, 30).filter((a) => a && typeof a.email === "string").map((a) => ({
@@ -54,50 +65,67 @@ Deno.serve(async (req) => {
       }
     } catch { /* participantes são opcionais */ }
 
-    if (!file) {
-      return json(req, { error: "No file provided" }, 400);
-    }
-
+    const telaCampo = campo("tela");
     const adminClient = ctx.admin;
+    let fileName: string;
+    let gravouTela: boolean | null;
 
-    // Upload file to storage
-    const fileName = `${user.id}/${Date.now()}-${file.name}`;
-    const fileBuffer = await file.arrayBuffer();
+    if (pathEnviado !== null) {
+      // O arquivo tem de estar na pasta do próprio vendedor e existir.
+      const partes = pathEnviado.split("/");
+      if (partes.length !== 2 || partes[0] !== user.id || !/^[\w.-]{1,200}$/.test(partes[1])) {
+        return json(req, { error: "Caminho de arquivo inválido" }, 400);
+      }
+      const { data: achados } = await adminClient.storage.from("meeting-files").list(user.id, { search: partes[1], limit: 5 });
+      if (!achados?.some((o: { name: string }) => o.name === partes[1])) {
+        return json(req, { error: "Arquivo não encontrado no armazenamento" }, 400);
+      }
+      fileName = pathEnviado;
+      gravouTela = telaCampo === "1" ? true : telaCampo === "0" ? false : null;
+    } else {
+      if (!file) {
+        return json(req, { error: "No file provided" }, 400);
+      }
+      // "1"/"0" vindo da extensão; sem o campo, decide pelo tipo do arquivo.
+      gravouTela = telaCampo === "1" ? true : telaCampo === "0" ? false
+        : file.type ? file.type.startsWith("video/") : null;
 
-    const { error: uploadError } = await adminClient.storage
-      .from("meeting-files")
-      .upload(fileName, fileBuffer, {
-        contentType: file.type || "video/webm",
-        upsert: false,
-      });
+      // Upload file to storage
+      fileName = `${user.id}/${Date.now()}-${file.name}`;
+      const fileBuffer = await file.arrayBuffer();
 
-    if (uploadError) {
-      console.error("Upload error:", uploadError);
-      return json(req, { error: "Failed to upload file" }, 500);
+      const { error: uploadError } = await adminClient.storage
+        .from("meeting-files")
+        .upload(fileName, fileBuffer, {
+          contentType: file.type || "video/webm",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        return json(req, { error: "Failed to upload file" }, 500);
+      }
     }
 
     const profile = { team_id: ctx.teamId };
 
     // Create OR update meeting record (when extension pre-created it for live mode)
-    let meeting: { id: string } | null = null;
-    let meetingError: unknown = null;
-    if (existingMeetingId) {
-      const upd = await adminClient
-        .from("meetings")
-        .update({
-          file_url: fileName,
-          file_type: "webm",
-          status: "enviado",
-        })
-        .eq("id", existingMeetingId)
-        .eq("seller_id", user.id)
-        .eq("org_id", orgId)
-        .select("id")
-        .single();
-      meeting = upd.data;
-      meetingError = upd.error;
-    } else {
-      const ins = await adminClient
+    // gravou_tela vai à parte: se a migração ainda não chegou ao banco, a
+    // reunião é gravada sem ela (nunca perder a gravação por um campo extra).
+    const extra = gravouTela === null ? {} : { gravou_tela: gravouTela };
+    const salvar = async (comExtra: boolean) => {
+      const campos = comExtra ? extra : {};
+      if (existingMeetingId) {
+        return await adminClient
+          .from("meetings")
+          .update({ file_url: fileName, file_type: "webm", status: "enviado", ...campos })
+          .eq("id", existingMeetingId)
+          .eq("seller_id", user.id)
+          .eq("org_id", orgId)
+          .select("id")
+          .single();
+      }
+      return await adminClient
         .from("meetings")
         .insert({
           title,
@@ -115,12 +143,18 @@ Deno.serve(async (req) => {
           file_type: "webm",
           status: "enviado",
           meeting_date: new Date().toISOString(),
+          ...campos,
         })
         .select("id")
         .single();
-      meeting = ins.data;
-      meetingError = ins.error;
+    };
+    let res = await salvar(true);
+    if (res.error && /gravou_tela/.test(res.error.message ?? "")) {
+      console.warn("upload-recording: coluna gravou_tela ausente; salvando sem ela.");
+      res = await salvar(false);
     }
+    const meeting: { id: string } | null = res.data;
+    const meetingError: unknown = res.error;
 
     if (meetingError || !meeting) {
       console.error("Meeting creation error:", meetingError);
