@@ -925,8 +925,8 @@ export type Database = {
           duration_seconds: number | null
           error_message: string | null
           file_type: string | null
-          gravou_tela: boolean | null
           file_url: string | null
+          gravou_tela: boolean | null
           id: string
           lead_company: string | null
           lead_email: string | null
@@ -961,8 +961,8 @@ export type Database = {
           duration_seconds?: number | null
           error_message?: string | null
           file_type?: string | null
-          gravou_tela?: boolean | null
           file_url?: string | null
+          gravou_tela?: boolean | null
           id?: string
           lead_company?: string | null
           lead_email?: string | null
@@ -997,8 +997,8 @@ export type Database = {
           duration_seconds?: number | null
           error_message?: string | null
           file_type?: string | null
-          gravou_tela?: boolean | null
           file_url?: string | null
+          gravou_tela?: boolean | null
           id?: string
           lead_company?: string | null
           lead_email?: string | null
