@@ -82,9 +82,13 @@ Deno.serve(async (req) => {
 
     // Só assume a reunião se ela ainda espera a gravação: se a principal
     // chegou enquanto isto rodava, ela vale.
-    const { data: claimed } = await ctx.admin.from("meetings")
-      .update({ file_url: fileName, file_type: "webm", status: "enviado" })
+    // Só o áudio chega por aqui: gravou_tela = false (sem a coluna no banco, segue sem ela).
+    const assumir = (campos: Record<string, unknown>) => ctx.admin.from("meetings")
+      .update({ file_url: fileName, file_type: "webm", status: "enviado", ...campos })
       .eq("id", meetingId).eq("status", "ao_vivo").select("id");
+    let assumiu = await assumir({ gravou_tela: false });
+    if (assumiu.error && /gravou_tela/.test(assumiu.error.message ?? "")) assumiu = await assumir({});
+    const claimed = assumiu.data;
     if (!claimed?.length) {
       await ctx.admin.storage.from(BUCKET).remove([fileName]);
       await removeParts(ctx.admin, ctx.userId, meetingId);

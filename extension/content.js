@@ -330,6 +330,49 @@
     }
   }
 
+  async function pedirTela() {
+    try {
+      return await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
+        audio: true,
+        // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
+        // em "Compartilhar".
+        preferCurrentTab: true,
+      });
+    } catch (err) {
+      console.warn('Screen denied:', err.message);
+      return null;
+    }
+  }
+
+  /** A tela foi recusada: tentar de novo (o clique libera a janela do Chrome) ou seguir só com o áudio. */
+  function escolherSemTela() {
+    return new Promise((resolve) => {
+      initEl.className = 'sc-status error';
+      initEl.textContent = 'A tela não foi compartilhada. Sem ela, a gravação fica sem vídeo e sem a voz do cliente.';
+      const tela = document.createElement('button');
+      tela.type = 'button';
+      tela.className = 'sc-btn sc-btn-primary';
+      tela.textContent = 'Compartilhar a tela';
+      const audio = document.createElement('button');
+      audio.type = 'button';
+      audio.className = 'sc-btn';
+      audio.textContent = 'Gravar só o meu áudio';
+      const hint = document.createElement('div');
+      hint.className = 'sc-hint';
+      hint.textContent = 'Escolha a aba da reunião e deixe "Compartilhar áudio da guia" ligado.';
+      const fim = (escolha) => {
+        tela.remove(); audio.remove(); hint.remove();
+        initEl.className = 'sc-status sending';
+        initEl.textContent = 'Escolha a aba da reunião e clique em Compartilhar.';
+        resolve(escolha);
+      };
+      tela.addEventListener('click', () => fim('tela'));
+      audio.addEventListener('click', () => fim('audio'));
+      initEl.after(tela, audio, hint);
+    });
+  }
+
   async function beginRecording() {
 
     let hasScreen = false, hasSystemAudio = false;
@@ -337,18 +380,18 @@
     recordingEl.hidden = true;
     statusMsgEl.hidden = true;
 
-    try {
-      screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
-        audio: true,
-        // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
-        // em "Compartilhar".
-        preferCurrentTab: true,
-      });
+    // Sem a tela, a gravação fica só com o microfone: sem vídeo e sem a voz
+    // do cliente. Antes isso acontecia em silêncio; agora a pessoa escolhe.
+    screenStream = await pedirTela();
+    while (!screenStream) {
+      if (await escolherSemTela() !== 'tela') break;
+      screenStream = await pedirTela();
+    }
+    if (screenStream) {
       hasScreen = true;
       hasSystemAudio = screenStream.getAudioTracks().length > 0;
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => stopRecording());
-    } catch (err) { console.warn('Screen denied:', err.message); }
+    }
 
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
@@ -996,6 +1039,7 @@
       formData.append('meeting_url', meta.meetingUrl || location.href);
       if (meta.calendarEventId) formData.append('calendar_event_id', meta.calendarEventId);
       if (meta.attendees?.length) formData.append('attendees', JSON.stringify(meta.attendees));
+      formData.append('tela', blob.type.startsWith('video/') ? '1' : '0');
 
       // Prazo generoso: uma reunião longa pode ter centenas de MB.
       const res = await fetchWithTimeout(`${SUPABASE_URL}/functions/v1/upload-recording`, {

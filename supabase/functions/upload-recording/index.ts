@@ -57,6 +57,10 @@ Deno.serve(async (req) => {
     if (!file) {
       return json(req, { error: "No file provided" }, 400);
     }
+    // "1"/"0" vindo da extensão; sem o campo, decide pelo tipo do arquivo.
+    const telaCampo = formData.get("tela") as string | null;
+    const gravouTela = telaCampo === "1" ? true : telaCampo === "0" ? false
+      : file.type ? file.type.startsWith("video/") : null;
 
     const adminClient = ctx.admin;
 
@@ -79,25 +83,22 @@ Deno.serve(async (req) => {
     const profile = { team_id: ctx.teamId };
 
     // Create OR update meeting record (when extension pre-created it for live mode)
-    let meeting: { id: string } | null = null;
-    let meetingError: unknown = null;
-    if (existingMeetingId) {
-      const upd = await adminClient
-        .from("meetings")
-        .update({
-          file_url: fileName,
-          file_type: "webm",
-          status: "enviado",
-        })
-        .eq("id", existingMeetingId)
-        .eq("seller_id", user.id)
-        .eq("org_id", orgId)
-        .select("id")
-        .single();
-      meeting = upd.data;
-      meetingError = upd.error;
-    } else {
-      const ins = await adminClient
+    // gravou_tela vai à parte: se a migração ainda não chegou ao banco, a
+    // reunião é gravada sem ela (nunca perder a gravação por um campo extra).
+    const extra = gravouTela === null ? {} : { gravou_tela: gravouTela };
+    const salvar = async (comExtra: boolean) => {
+      const campos = comExtra ? extra : {};
+      if (existingMeetingId) {
+        return await adminClient
+          .from("meetings")
+          .update({ file_url: fileName, file_type: "webm", status: "enviado", ...campos })
+          .eq("id", existingMeetingId)
+          .eq("seller_id", user.id)
+          .eq("org_id", orgId)
+          .select("id")
+          .single();
+      }
+      return await adminClient
         .from("meetings")
         .insert({
           title,
@@ -115,12 +116,18 @@ Deno.serve(async (req) => {
           file_type: "webm",
           status: "enviado",
           meeting_date: new Date().toISOString(),
+          ...campos,
         })
         .select("id")
         .single();
-      meeting = ins.data;
-      meetingError = ins.error;
+    };
+    let res = await salvar(true);
+    if (res.error && /gravou_tela/.test(res.error.message ?? "")) {
+      console.warn("upload-recording: coluna gravou_tela ausente; salvando sem ela.");
+      res = await salvar(false);
     }
+    const meeting: { id: string } | null = res.data;
+    const meetingError: unknown = res.error;
 
     if (meetingError || !meeting) {
       console.error("Meeting creation error:", meetingError);
