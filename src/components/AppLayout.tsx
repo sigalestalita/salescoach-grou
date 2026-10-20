@@ -10,6 +10,7 @@ import { DemoBanner, DemoEndedScreen, FirstPasswordDialog, isDemoOver, useDemoEn
 import { exitSupport } from "@/lib/support";
 import { useEffect } from "react";
 import { syncExtensionSession } from "@/lib/extensionBridge";
+import { ExtensionUpdateBanner } from "@/components/ExtensionUpdateBanner";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -43,6 +44,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex min-w-0 flex-1 flex-col">
             {support && <SupportBanner orgName={support.orgName} until={support.until} canEdit={support.canEdit} />}
             {demoEndsAt && <DemoBanner endsAt={demoEndsAt} />}
+            <ExtensionUpdateBanner ativo={!support} />
             <FirstPasswordDialog />
             <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
               <div className="flex items-center gap-3">

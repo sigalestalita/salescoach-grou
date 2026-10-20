@@ -7,20 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { EXTENSAO_ATUAL, MANUAL_URL, SO_MANUAL, VERSAO_MANUAL, desatualizada } from "@/lib/extensionVersion";
+import { useExtensionVersion } from "@/lib/useExtensionVersion";
 
 const STORE_URL = "https://chromewebstore.google.com/detail/icabeghcpefeaeklfldpdfklkjfpbbkd";
 
-/**
- * Instalação manual: a versão mais nova da extensão enquanto a Chrome Web Store
- * analisa a atualização. O arquivo é gerado por scripts/extensao-manual.sh e
- * leva a chave pública da extensão publicada, para ficar com o mesmo id da
- * loja (o login automático pelo site depende disso). Ao publicar uma versão
- * nova: rode o script e atualize MANUAL_VERSION. Quando a loja estiver em dia,
- * MANUAL_VERSION = null esconde a seção.
- */
-// A 1.10.1 foi aprovada na loja: sem versão manual no momento.
-const MANUAL_VERSION: string | null = null;
-const MANUAL_URL = MANUAL_VERSION ? `/downloads/sales-coach-extensao-${MANUAL_VERSION}.zip` : "";
+// Versões disponíveis (loja e instalação manual): src/lib/extensionVersion.ts.
+const MANUAL_VERSION = SO_MANUAL ? VERSAO_MANUAL : null;
 const EXTENSIONS_PAGE = "chrome://extensions";
 
 const steps = [
@@ -306,6 +299,59 @@ function ManualInstall() {
   );
 }
 
+/** Versão instalada neste navegador e, se estiver antiga, como atualizar. */
+function VersaoInstalada() {
+  const { versao, verificado } = useExtensionVersion();
+  if (!verificado) return null;
+  if (!versao) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Versão atual da extensão: <B>{EXTENSAO_ATUAL}</B>. Não encontramos a extensão neste navegador.
+      </p>
+    );
+  }
+  if (!desatualizada(versao)) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Check className="h-4 w-4 text-green-600" /> Sua extensão está atualizada (versão <B>{versao}</B>).
+      </p>
+    );
+  }
+  return (
+    <Card id="atualizar" className="scroll-mt-20 border-amber-300 bg-amber-50">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-amber-950">
+          <AlertCircle className="h-5 w-5" /> Sua extensão está desatualizada
+        </CardTitle>
+        <CardDescription className="text-amber-900">
+          Neste navegador está a versão <B>{versao}</B>, e a <B>{EXTENSAO_ATUAL}</B> já está disponível. Atualize para gravar com
+          as correções mais recentes.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm text-amber-950">
+        {SO_MANUAL ? (
+          <p>
+            A versão {EXTENSAO_ATUAL} ainda está em análise na Chrome Web Store. Use a <B>instalação manual</B>, logo abaixo.
+          </p>
+        ) : (
+          <ol className="list-decimal space-y-1.5 pl-5">
+            <li>
+              Abra <B>{EXTENSIONS_PAGE}</B> numa aba nova (copie o endereço abaixo e cole na barra do Chrome).
+              <CopyAddress />
+            </li>
+            <li>Ligue o <B>Modo do desenvolvedor</B>, no canto superior direito, e clique em <B>Atualizar</B>.</li>
+            <li>Desligue o Modo do desenvolvedor e volte para esta página.</li>
+            <li>
+              Se a versão continuar a mesma, remova a extensão nessa página e instale de novo pelo botão{" "}
+              <B>Instalar no Chrome</B>. Instalou pelo arquivo, sem a loja? Faça esse caminho.
+            </li>
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Extensao() {
   return (
     <div className="space-y-6">
@@ -332,6 +378,8 @@ export default function Extensao() {
           </Button>
         </CardContent>
       </Card>
+
+      <VersaoInstalada />
 
       <ManualInstall />
 
