@@ -8,8 +8,8 @@
 # funcionando. A chave é pública (não é segredo), mas a loja recusa pacote com
 # o campo "key": não envie este zip para a loja.
 #
-# Rode de novo a cada versão nova da extensão e atualize MANUAL_VERSION em
-# src/pages/Extensao.tsx.
+# Rode de novo a cada versão nova da extensão e preencha VERSAO_MANUAL em
+# src/lib/extensionVersion.ts (o app avisa quem está com a versão antiga).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
