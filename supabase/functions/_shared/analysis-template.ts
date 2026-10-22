@@ -33,6 +33,8 @@ export interface Playbook {
   evitar?: string[];
   sinais?: PlaybookSignal[];
   campos?: { key: string; label: string; description?: string }[];
+  /** O time também vende nesta conversa (upsell, cross-sell, renovação com proposta). */
+  expansao_comercial?: boolean;
 }
 
 export type TemplateMode = "vendas" | "playbook";
@@ -166,6 +168,7 @@ export function normalizePlaybook(raw: unknown): Playbook {
     evitar: strList(p.evitar),
     sinais,
     campos,
+    expansao_comercial: p.expansao_comercial === true,
   };
 }
 
@@ -374,7 +377,9 @@ export function buildPlaybookPrompt(input: PromptInput): string {
     ? `\n  "talk_ratio": { "seller": <0-100, fala de quem atende>, "lead": <0-100, fala do cliente>, "reason": "<justificativa>" },`
     : "";
 
-  return `${t.persona} Analise a transcrição abaixo de uma conversa de atendimento com um cliente, seguindo o playbook "${t.methodology_label}" da empresa, e retorne uma análise estruturada. Não é uma reunião de venda: não avalie qualificação comercial, avalie a condução do atendimento pelo playbook.
+  return `${t.persona} Analise a transcrição abaixo de uma conversa de atendimento com um cliente, seguindo o playbook "${t.methodology_label}" da empresa, e retorne uma análise estruturada. ${p.expansao_comercial
+    ? "O time de atendimento também é responsável por expansão nesta carteira (upsell e cross-sell): avalie a condução pelo playbook e, se houve oferta, se ela veio no momento certo, ligada a uma necessidade dita pelo cliente, e se produtos, preços e condições citados batem com a base de conhecimento. Não avalie como qualificação de lead novo."
+    : "Não é uma reunião de venda: não avalie qualificação comercial, avalie a condução do atendimento pelo playbook."}
 
 TRANSCRIÇÃO:
 ${input.transcript}
@@ -438,18 +443,40 @@ IMPORTANTE:
 Seja específico e use a conversa como evidência.`;
 }
 
-/** Contexto da base de conhecimento, sempre restrito à organização. */
+export type KnowledgeArea = "vendas" | "atendimento";
+
+/**
+ * De qual área da base de conhecimento a conversa usa os documentos (além dos
+ * marcados como "ambos"). Playbook com expansão comercial usa tudo: o CS que
+ * faz upsell e cross-sell precisa dos materiais de venda (preço, portfólio).
+ */
+export function knowledgeAreaFor(t: Pick<AnalysisTemplate, "mode" | "playbook"> | null | undefined): KnowledgeArea | null {
+  if (t?.mode !== "playbook") return "vendas";
+  return t.playbook?.expansao_comercial ? null : "atendimento";
+}
+
+/** Se um documento entra para a área pedida (null = todas). */
+export function docMatchesArea(docArea: string | null | undefined, area: KnowledgeArea | null): boolean {
+  return area === null || !docArea || docArea === "ambos" || docArea === area;
+}
+
+/**
+ * Contexto da base de conhecimento, sempre restrito à organização. Com
+ * `area`, só os documentos daquela área e os marcados como "ambos".
+ */
 export async function fetchKnowledgeContext(
   admin: SupabaseClient,
   orgId: string,
+  area: KnowledgeArea | null = null,
 ): Promise<string> {
   // Só os 2.000 primeiros caracteres de cada documento vão para o prompt: o corte
   // é feito no banco (knowledge_docs_preview), sem baixar documentos inteiros,
   // que com PDFs grandes estouravam memória/CPU da função. Sem a migração, cai
   // na consulta antiga.
   const preview = async () => {
-    const r = await admin.rpc("knowledge_docs_preview", { _org_id: orgId, _chars: 2000 });
+    const r = await admin.rpc("knowledge_docs_preview", { _org_id: orgId, _chars: 2000, _area: area });
     if (!r.error) return { data: (r.data ?? []) as { title: string; category: string | null; extracted_content: string | null }[] };
+    // Sem a migração da área (coluna e RPC novas), cai na consulta antiga, sem filtro.
     const { data } = await admin.from("knowledge_documents").select("title, category, extracted_content")
       .eq("org_id", orgId).not("extracted_content", "is", null);
     return { data: data ?? [] };

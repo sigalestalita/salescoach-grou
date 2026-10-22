@@ -19,7 +19,7 @@ import {
   HttpError,
   logUsage,
 } from "../_shared/tenant.ts";
-import { loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
+import { docMatchesArea, knowledgeAreaFor, loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
 
 const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 // Mesmo modelo da análise, comprovadamente aceito pelo gateway. LIVE_COACH_MODEL
@@ -135,13 +135,16 @@ Deno.serve(async (req) => {
         loadMeetingTypeContext(admin, orgId, meeting.meeting_type),
         admin.from("meeting_types").select("label").eq("org_id", orgId).eq("key", meeting.meeting_type ?? "").maybeSingle(),
         admin.from("offer_types").select("label, instructions").eq("org_id", orgId).eq("is_active", true).order("sort_order"),
-        admin.from("knowledge_documents").select("id, title, category, extracted_content").eq("org_id", orgId).not("extracted_content", "is", null),
+        // "*" e não a lista de colunas: antes da migração da área, pedir "area" derrubaria a consulta.
+        admin.from("knowledge_documents").select("*").eq("org_id", orgId).not("extracted_content", "is", null),
         admin.from("knowledge_items").select("name, item_type, category, description").eq("org_id", orgId).limit(KB_ITEMS),
       ]);
 
-    // Documentos ranqueados pelo que está sendo dito agora.
+    // Documentos da área da reunião (e os de "ambos"), ranqueados pelo que está sendo dito agora.
+    const area = knowledgeAreaFor(template);
     const query = terms(lastTurn + " " + transcript);
     const rankedDocs = (docs || [])
+      .filter((d) => docMatchesArea((d as { area?: string | null }).area, area))
       .map((d) => ({ ...d, score: relevance(query, `${d.title} ${d.extracted_content ?? ""}`) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, KB_DOCS);
@@ -169,14 +172,14 @@ Deno.serve(async (req) => {
     const criteriaKeys = template.qualification_criteria.map((c) => c.key);
     const playbook = template.mode === "playbook" ? template.playbook ?? {} : null;
     const categorias = playbook
-      ? [...criteriaKeys, "risco", "oportunidade", "duvida", "reclamacao", "compromisso", "postura"]
+      ? [...criteriaKeys, "risco", "oportunidade", "duvida", "reclamacao", "compromisso", "postura", ...(playbook.expansao_comercial ? ["oferta"] : [])]
       : [...criteriaKeys, "objecao", "oferta", "proxima_pergunta", "fechamento", "rapport", "talk_ratio"];
 
     // ── Prompt ────────────────────────────────────────────────────────────
     // Playbook de atendimento: guia a conversa pelas etapas do playbook e
     // pelos sinais que ele manda detectar, em vez de qualificar uma venda.
     const lista = (xs?: string[]) => (xs ?? []).map((x) => `- ${x}`).join("\n");
-    const systemPlaybook = playbook ? `${template.persona} Você acompanha AO VIVO uma conversa de atendimento com um cliente (não é uma venda), em português do Brasil, e orienta em tempo real a pessoa do time que está atendendo.
+    const systemPlaybook = playbook ? `${template.persona} Você acompanha AO VIVO uma conversa de atendimento com um cliente${playbook.expansao_comercial ? "" : " (não é uma venda)"}, em português do Brasil, e orienta em tempo real a pessoa do time que está atendendo.${playbook.expansao_comercial ? "\nEste time também é responsável por expansão da carteira (upsell e cross-sell): quando o cliente mostrar uma necessidade que outro produto, plano ou serviço resolve, oriente a oferta, ligada ao que ele disse, com preço e condições só da base de conhecimento. Nunca empurre oferta com o cliente insatisfeito ou com problema em aberto." : ""}
 
 PLAYBOOK "${template.methodology_label}"
 ${playbook.objetivo ? `Objetivo da conversa: ${playbook.objetivo}\n` : ""}ETAPAS:
@@ -186,7 +189,7 @@ ${template.extra_instructions ? `REGRAS DESTA OPERAÇÃO:\n${template.extra_inst
 SUA TAREFA A CADA CHAMADA:
 1. Veja quais etapas do playbook já foram feitas e quais faltam.
 2. Identifique o momento: o cliente acabou de mostrar um sinal de risco, uma insatisfação, uma dúvida, uma oportunidade, ou a conversa está sem direção?
-3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) tratar um sinal de risco ou reclamação que acabou de surgir; (b) responder uma dúvida com a informação certa da base de conhecimento; (c) puxar uma etapa obrigatória que ainda não aconteceu; (d) registrar um compromisso com prazo; (e) corrigir postura (ouvir mais, confirmar entendimento).
+3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) tratar um sinal de risco ou reclamação que acabou de surgir; (b) responder uma dúvida com a informação certa da base de conhecimento; (c) puxar uma etapa obrigatória que ainda não aconteceu; (d) registrar um compromisso com prazo;${playbook.expansao_comercial ? " (d2) aproveitar uma oportunidade de expansão que o cliente abriu;" : ""} (e) corrigir postura (ouvir mais, confirmar entendimento).
 4. Escreva a frase EXATA que a pessoa deve dizer, em primeira pessoa, natural, como se fosse falada. Use só informações da base de conhecimento; nunca invente prazo, preço, política ou funcionalidade.
 5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}.
 

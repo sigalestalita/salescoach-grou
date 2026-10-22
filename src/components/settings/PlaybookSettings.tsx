@@ -58,6 +58,7 @@ interface Suggestion {
   campos: PlaybookField[];
   temperature_levels: Level[];
   extra_instructions: string;
+  expansao_comercial?: boolean;
 }
 
 const slugify = (value: string) =>
@@ -198,6 +199,7 @@ export const PlaybookSettings = () => {
           evitar: lines(evitar),
           sinais: withKeys(draft.playbook.sinais ?? []).map((x) => ({ key: x.key, label: x.label, description: x.description ?? "", tipo: x.tipo })),
           campos: withKeys(draft.playbook.campos ?? []).map((x) => ({ key: x.key, label: x.label, description: x.description ?? "" })),
+          expansao_comercial: draft.playbook.expansao_comercial === true,
         },
       };
       const isNew = !draft.id;
@@ -283,7 +285,7 @@ export const PlaybookSettings = () => {
       temperature_levels: suggestion.temperature_levels.length ? suggestion.temperature_levels.map((l) => ({ ...l })) : HEALTH_LEVELS.map((l) => ({ ...l })),
       playbook: {
         objetivo: suggestion.objetivo, boas_praticas: suggestion.boas_praticas, evitar: suggestion.evitar,
-        sinais: suggestion.sinais, campos: suggestion.campos,
+        sinais: suggestion.sinais, campos: suggestion.campos, expansao_comercial: suggestion.expansao_comercial === true,
       },
     });
     setCreateType(true);
@@ -366,6 +368,18 @@ export const PlaybookSettings = () => {
               <Label htmlFor="pb-objetivo">Objetivo da conversa</Label>
               <Textarea id="pb-objetivo" rows={2} value={draft.playbook.objetivo ?? ""} onChange={(e) => patchBody({ objetivo: e.target.value })}
                 placeholder="O que esta conversa precisa alcançar" />
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border p-3">
+              <Switch id="pb-expansao" checked={draft.playbook.expansao_comercial === true}
+                onCheckedChange={(v) => patchBody({ expansao_comercial: v })} />
+              <div className="space-y-0.5">
+                <Label htmlFor="pb-expansao">Nesta conversa o time também vende (upsell e cross-sell)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Para carteiras em que o CS cuida da expansão. A IA passa a usar também os documentos de Vendas da base de
+                  conhecimento (preços, portfólio) e avalia se a oferta veio na hora certa, ligada a uma necessidade do cliente.
+                </p>
+              </div>
             </div>
 
             {/* Etapas */}

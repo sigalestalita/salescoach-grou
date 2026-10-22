@@ -26,8 +26,9 @@ extensão ou enviada pelo app, ser avaliada pelo playbook.
 Configurações → **Playbooks de atendimento**:
 
 1. **Novo playbook** a partir de um modelo: Onboarding, Check-in de
-   acompanhamento, Revisão de resultados (QBR), Renovação, Atendimento de
-   suporte, Recuperação de cliente em risco. Ou **Montar a partir do nosso
+   acompanhamento, Revisão de resultados (QBR), Renovação, Expansão de conta
+   (upsell e cross-sell), Atendimento de suporte, Recuperação de cliente em
+   risco. Ou **Montar a partir do nosso
    playbook**: cole o texto do playbook do time e a IA estrutura em etapas,
    sinais e faixas de saúde (função `suggest-playbook`), usando também a base
    de conhecimento. Nada é salvo antes da revisão.
@@ -39,11 +40,41 @@ Configurações → **Playbooks de atendimento**:
 A base de conhecimento continua valendo: a IA confere se as respostas dadas
 ao cliente batem com os documentos da empresa.
 
+## Base de conhecimento por área
+
+Cada documento da base tem uma área (`knowledge_documents.area`): `vendas`,
+`atendimento` ou `ambos` (o padrão, e o valor dos documentos que já existiam).
+Reuniões de venda usam `vendas` + `ambos`; conversas avaliadas por playbook,
+`atendimento` + `ambos`. O filtro vale para a análise (`analyze-meeting`), o
+coach ao vivo (`live-coach`) e o roleplay; as sugestões de metodologia e de
+perfis de lead e o gerador de argumentos usam `vendas` + `ambos`. Produtos &
+Serviços (`knowledge_items`) valem para as duas áreas. A regra mora em
+`knowledgeAreaFor` e `docMatchesArea` (`_shared/analysis-template.ts`) e no RPC
+`knowledge_docs_preview(_org_id, _chars, _area)`.
+
+## CS que também vende (upsell e cross-sell)
+
+Em carteiras em que o CS cuida da expansão, o playbook tem a opção **"Nesta
+conversa o time também vende"** (`playbook.expansao_comercial`). Com ela:
+
+- a análise e o coach ao vivo usam os documentos das **duas** áreas (preço,
+  portfólio e materiais de venda entram);
+- o prompt deixa de dizer "não é venda" e avalia se a oferta veio na hora
+  certa, ligada a uma necessidade dita pelo cliente, com preços e condições da
+  base;
+- o coach ao vivo pode sugerir a oferta quando o cliente abre espaço (categoria
+  `oferta`), nunca com o cliente insatisfeito ou com problema em aberto.
+
+O modelo **Expansão de conta (upsell e cross-sell)** já vem com a opção
+ligada, assim como o de Renovação. A IA que monta o playbook a partir do texto
+do time também marca a opção quando o material fala em venda para a carteira.
+
 ## Onde está no código
 
 | O quê | Onde |
 |---|---|
 | Banco: `analysis_templates.mode` e `.playbook`, `analysis_results.playbook_result` | `supabase/migrations/20261028090000_playbooks_atendimento.sql` |
+| Banco: área dos documentos da base | `supabase/migrations/20261029090000_base_por_area.sql` |
 | Prompt da análise por playbook | `supabase/functions/_shared/analysis-template.ts` (`buildPlaybookPrompt`) |
 | Análise | `supabase/functions/analyze-meeting` |
 | Coach ao vivo | `supabase/functions/live-coach` |
@@ -52,7 +83,7 @@ ao cliente batem com os documentos da empresa.
 | Tela de configuração | `src/components/settings/PlaybookSettings.tsx` |
 | Resultado da reunião | `src/components/MeetingAnalysisView.tsx` |
 | Painel por área | `src/pages/Dashboard.tsx`, `meetingArea` e `isAtRisk` em `src/lib/methodology.ts` |
-| Testes | `src/test/playbook.test.ts` |
+| Testes | `src/test/playbook.test.ts`, `src/test/base-area.test.ts` |
 
 O playbook mora na mesma tabela das metodologias e reaproveita as colunas:
 etapas em `qualification_criteria` e faixas de saúde em `temperature_levels`.

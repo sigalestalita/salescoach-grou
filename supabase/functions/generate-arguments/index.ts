@@ -6,7 +6,7 @@
 
 import { json, preflight } from "../_shared/cors.ts";
 import { assertQuota, getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
-import { loadTemplate } from "../_shared/analysis-template.ts";
+import { docMatchesArea, loadTemplate } from "../_shared/analysis-template.ts";
 
 const ARGUMENTS_MODEL = Deno.env.get("ARGUMENTS_MODEL") ?? "google/gemini-3-flash-preview";
 
@@ -26,7 +26,8 @@ Deno.serve(async (req) => {
 
     // Contexto da organização: base de conhecimento, ofertas, público e persona.
     const [docsRes, itemsRes, offerRes, settingsRes, orgRes, template] = await Promise.all([
-      supabase.from("knowledge_documents").select("title, extracted_content, category").eq("org_id", orgId).limit(20),
+      // "*" para trazer a área quando a migração já rodou (sem ela, a coluna não existe).
+      supabase.from("knowledge_documents").select("*").eq("org_id", orgId).limit(40),
       supabase.from("knowledge_items").select("name, description, category, item_type, metadata").eq("org_id", orgId).limit(50),
       supabase.from("offer_types").select("key, label, instructions, allows_item_selection").eq("org_id", orgId).eq("is_active", true).order("sort_order"),
       supabase.from("org_settings").select("argument_audiences").eq("org_id", orgId).maybeSingle(),
@@ -35,7 +36,8 @@ Deno.serve(async (req) => {
     ]);
 
     const knowledgeContext = [
-      ...(docsRes.data || []).map((d: any) => `[${d.category || "doc"}] ${d.title}: ${(d.extracted_content || "").slice(0, 500)}`),
+      // Argumentos de venda: documentos de Vendas e de "ambos", sem os só de atendimento.
+      ...(docsRes.data || []).filter((d: any) => docMatchesArea(d.area, "vendas")).slice(0, 20).map((d: any) => `[${d.category || "doc"}] ${d.title}: ${(d.extracted_content || "").slice(0, 500)}`),
       ...(itemsRes.data || []).map((i: any) => `[${i.item_type}/${i.category || ""}] ${i.name}: ${i.description || ""}`),
     ].join("\n");
 

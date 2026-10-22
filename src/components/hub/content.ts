@@ -238,7 +238,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Base de conhecimento",
     steps: [
       { route: "/conhecimento", target: "kb-abas", title: "Documentos e Produtos & Serviços", body: "Documentos: materiais da empresa. Produtos & Serviços: o catálogo, com descrição e categoria." },
-      { route: "/conhecimento", target: "kb-adicionar", title: "Adicionar", body: "Envie PDF, Word, TXT, CSV ou planilha, cole um link (inclusive Google Sheets) ou escreva o texto." },
+      { route: "/conhecimento", target: "kb-adicionar", title: "Adicionar", body: "Envie PDF, Word, TXT, CSV ou planilha, cole um link (inclusive Google Sheets) ou escreva o texto. Escolha também a área: Vendas, Atendimento ou as duas." },
       { route: "/conhecimento", target: "kb-treinar", title: "Treinar IA", body: "Depois de adicionar, clique em Treinar IA para processar os documentos. A análise das reuniões passa a usar esse conteúdo." },
     ],
   },
@@ -271,7 +271,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Coach de atendimento",
     steps: [
       { route: "/configuracoes", target: "cfg-playbooks", title: "Playbooks de atendimento", body: "Times de CS, suporte e onboarding não são avaliados por BANT ou SPICED: cada conversa segue um playbook da empresa. A IA mede a aderência ao playbook, a saúde do cliente e os sinais de risco e de oportunidade." },
-      { route: "/configuracoes", target: "cfg-playbooks-novo", title: "1. Comece por um modelo", body: "Novo playbook traz modelos prontos: Onboarding, Check-in de acompanhamento, Revisão de resultados (QBR), Renovação, Atendimento de suporte e Recuperação de cliente em risco." },
+      { route: "/configuracoes", target: "cfg-playbooks-novo", title: "1. Comece por um modelo", body: "Novo playbook traz modelos prontos: Onboarding, Check-in de acompanhamento, Revisão de resultados (QBR), Renovação, Expansão de conta (upsell e cross-sell), Atendimento de suporte e Recuperação de cliente em risco." },
       { route: "/configuracoes", target: "cfg-playbooks-ia", title: "…ou monte a partir do playbook de vocês", body: "Cole o texto do playbook do time (roteiro, checklist, política de atendimento). A IA estrutura em etapas, sinais e faixas de saúde. Nada é salvo antes da sua revisão." },
       { route: "/configuracoes", target: "cfg-playbooks-etapas", title: "2. Ajuste as etapas", body: "Na ordem em que acontecem, com peso (o ideal é somar 100) e a marca de obrigatória. A aderência ao playbook é a soma dos pontos das etapas." },
       { route: "/configuracoes", target: "cfg-playbooks-sinais", title: "3. Sinais e informações a registrar", body: "Sinais: o que o cliente diz que indica risco (cancelar, insatisfação), oportunidade (expansão, indicação) ou atenção. Informações a registrar: o que a IA anota quando aparece (data de go-live, responsável no cliente) e que pode ir para o CRM." },
@@ -447,6 +447,15 @@ export const ARTICLES: HelpArticle[] = [
           "Depois de adicionar, o admin clica em Treinar IA para processar.",
         ],
       },
+      {
+        title: "Vendas, Atendimento ou os dois",
+        items: [
+          "Cada documento tem uma área, escolhida ao adicionar e alterável na lista: Só Vendas, Só Atendimento (CS) ou Vendas e Atendimento (o padrão, e o que os documentos antigos ficaram).",
+          "Reuniões de venda usam os documentos de Vendas e os das duas áreas; conversas de atendimento (avaliadas por playbook), os de Atendimento e os das duas.",
+          "Se o CS também faz upsell e cross-sell numa carteira, ligue no playbook \"Nesta conversa o time também vende\": essas conversas usam os documentos das duas áreas. Preços e portfólio que os dois times usam podem ficar em Vendas e Atendimento.",
+          "Produtos & Serviços valem para as duas áreas.",
+        ],
+      },
     ],
   },
   {
@@ -597,7 +606,7 @@ export const ARTICLES: HelpArticle[] = [
       {
         title: "O que é",
         items: [
-          "A versão do coach para times que não vendem: Customer Success, suporte, onboarding, renovação.",
+          "A versão do coach para times que não vendem: Customer Success, suporte, onboarding, renovação. E para o CS que faz upsell e cross-sell na carteira.",
           "Em vez de critérios de qualificação, a IA avalia a conversa pelo playbook da empresa: as etapas cumpridas (com o trecho que comprova), a saúde do cliente (crítico, em risco, atenção, saudável, promotor) e os sinais de risco e de oportunidade.",
           "O coach ao vivo da extensão orienta pela etapa que falta, pelo sinal de risco que apareceu, pela dúvida do cliente e pelo compromisso a combinar.",
         ],
@@ -605,8 +614,8 @@ export const ARTICLES: HelpArticle[] = [
       {
         title: "Configurar (admin), em 5 passos",
         items: [
-          "1. Configurações → Playbooks de atendimento → Novo playbook, a partir de um modelo (Onboarding, Check-in, QBR, Renovação, Suporte, Recuperação de cliente em risco). Ou \"Montar a partir do nosso playbook\": cole o playbook do time e a IA estrutura.",
-          "2. Ajuste o objetivo da conversa e as etapas, com peso (somando 100) e quais são obrigatórias.",
+          "1. Configurações → Playbooks de atendimento → Novo playbook, a partir de um modelo (Onboarding, Check-in, QBR, Renovação, Expansão de conta, Suporte, Recuperação de cliente em risco). Ou \"Montar a partir do nosso playbook\": cole o playbook do time e a IA estrutura.",
+          "2. Ajuste o objetivo da conversa e as etapas, com peso (somando 100) e quais são obrigatórias. Se o time também vende nessa conversa (upsell, cross-sell), ligue \"Nesta conversa o time também vende\": a IA usa os materiais de Vendas da base e avalia a oferta.",
           "3. Revise boas práticas, o que não pode acontecer, os sinais a detectar, as informações a registrar e as faixas de saúde.",
           "4. Salve. O tipo de reunião com o mesmo nome nasce ligado ao playbook. Para ligar um tipo que já existe: Tipos de reunião → abra o tipo → Metodologia ou playbook de análise.",
           "5. Com o CRM conectado: Integração com CRM → Criar campos do atendimento.",
@@ -650,6 +659,8 @@ export const FAQ: { q: string; a: string }[] = [
   { q: "O título ou o lead da reunião vieram errados.", a: "Conecte sua agenda em Agendas para virem do convite. Dá para corrigir a qualquer momento no menu ⋮ → Editar da agenda." },
   { q: "Como mudar os critérios da análise?", a: "Admins: Configurações → Metodologia de análise. As próximas análises seguem os novos critérios; para uma antiga, use Refazer análise." },
   { q: "Temos um time de CS. Dá para usar?", a: "Sim. Crie um playbook em Configurações → Playbooks de atendimento e ligue-o ao tipo de reunião do CS. As conversas desse tipo são avaliadas pelo playbook, com saúde do cliente e sinais de risco. Veja a ajuda \"Coach de atendimento\"." },
+  { q: "Material de CS na base de conhecimento entra na análise de vendas?", a: "Não, se o documento estiver marcado como Só Atendimento. Na Base de conhecimento, cada documento tem a área: Só Vendas, Só Atendimento ou Vendas e Atendimento. Reuniões de venda usam Vendas e as duas; conversas de atendimento, Atendimento e as duas. Playbook com \"o time também vende\" (upsell, cross-sell) usa tudo." },
+  { q: "O CS também faz upsell e cross-sell. Como fica?", a: "Use o modelo de playbook Expansão de conta, ou ligue \"Nesta conversa o time também vende\" em qualquer playbook. A IA avalia se a oferta veio na hora certa e ligada a uma necessidade do cliente, confere preços e condições com os materiais de Vendas, e o coach ao vivo sugere a oferta quando o cliente abre espaço. O sinal Oportunidade de expansão vai para o CRM." },
   { q: "Como o Sales Coach sabe se a conversa é de venda ou de atendimento?", a: "Pelo tipo de reunião escolhido na gravação: cada tipo aponta para uma metodologia (venda) ou para um playbook (atendimento). Sem playbook ligado, vale a metodologia padrão." },
   { q: "Quem vê as minhas reuniões?", a: "Você, os gestores e os admins da sua empresa. Fora dela, só quem receber um link de compartilhamento que você criar." },
 ];

@@ -61,11 +61,12 @@ Regras:
 - "objetivo": o que a conversa precisa alcançar, em 1-2 frases.
 - "persona": quem a IA é ao avaliar (ex.: "Você é o head de Customer Success da X.").
 - "extra_instructions": regras da operação tiradas do material (SLAs, políticas, o que pode ou não ser prometido). Em tópicos curtos.
+- "expansao_comercial": true se, nesta conversa, o time também vende para a carteira (upsell, cross-sell, renovação com proposta comercial); false se não.
 - "rationale": 2 a 3 frases explicando a estrutura, citando o material.
 - Português do Brasil. Não invente políticas, prazos ou produtos que não estejam no material.
 
 Responda APENAS com JSON:
-{"nome": "...", "persona": "...", "rationale": "...", "objetivo": "...", "etapas": [{"label": "...", "description": "...", "max_score": 0, "required": false}], "boas_praticas": ["..."], "evitar": ["..."], "sinais": [{"label": "...", "description": "...", "tipo": "risco"}], "campos": [{"label": "...", "description": "..."}], "temperature_levels": [{"label": "...", "criteria": "..."}], "extra_instructions": "..."}
+{"nome": "...", "persona": "...", "rationale": "...", "objetivo": "...", "etapas": [{"label": "...", "description": "...", "max_score": 0, "required": false}], "boas_praticas": ["..."], "evitar": ["..."], "sinais": [{"label": "...", "description": "...", "tipo": "risco"}], "campos": [{"label": "...", "description": "..."}], "temperature_levels": [{"label": "...", "criteria": "..."}], "extra_instructions": "...", "expansao_comercial": false}
 
 === PLAYBOOK DA EMPRESA (colado pelo admin) ===
 ${texto || "(não enviado)"}

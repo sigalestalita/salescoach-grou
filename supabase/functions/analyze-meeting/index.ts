@@ -11,6 +11,7 @@ import {
 import {
   buildAnalysisPrompt,
   fetchKnowledgeContext,
+  knowledgeAreaFor,
   loadMeetingTypeContext,
   analysisSystemMessage,
   loadTemplate,
@@ -446,11 +447,12 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
 
     // Template, tipo de reunião e base de conhecimento — tudo da organização
     // dona da reunião.
-    const [template, knowledgeContext, meetingTypeContext] = await Promise.all([
+    const [template, meetingTypeContext] = await Promise.all([
       loadTemplate(supabase, orgId, meeting.meeting_type),
-      fetchKnowledgeContext(supabase, orgId),
       loadMeetingTypeContext(supabase, orgId, meeting.meeting_type),
     ]);
+    // Só os documentos da área da reunião (vendas ou atendimento) e os de "ambos".
+    const knowledgeContext = await fetchKnowledgeContext(supabase, orgId, knowledgeAreaFor(template));
 
     const { data: meetingTypeRow } = await supabase
       .from("meeting_types")
