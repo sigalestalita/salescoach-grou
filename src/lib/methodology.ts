@@ -131,7 +131,10 @@ export interface MethodologySnapshot {
   id?: string | null;
   key?: string;
   label: string;
-  criteria: QualificationCriterion[];
+  /** "playbook" = análise de atendimento (ver migração 20261028090000). */
+  mode?: "vendas" | "playbook";
+  criteria: (QualificationCriterion & { required?: boolean })[];
+  levels?: { key: string; label: string }[];
   frameworks?: { meddic?: boolean; spin?: boolean; talk_ratio?: boolean };
 }
 
@@ -143,9 +146,41 @@ export function methodologyOf(analysis: { methodology?: unknown } | null | undef
   const snap = analysis?.methodology as MethodologySnapshot | null | undefined;
   if (snap && Array.isArray(snap.criteria) && snap.criteria.length) {
     const max = Math.max(...snap.criteria.map((c) => c.max_score ?? 25));
-    return { label: snap.label || config.methodologyLabel, criteria: snap.criteria, maxCriterionScore: max };
+    return {
+      label: snap.label || config.methodologyLabel,
+      criteria: snap.criteria,
+      maxCriterionScore: max,
+      mode: snap.mode === "playbook" ? "playbook" as const : "vendas" as const,
+      levels: Array.isArray(snap.levels) && snap.levels.length ? snap.levels : config.temperatureLevels,
+    };
   }
-  return { label: config.methodologyLabel, criteria: config.criteria, maxCriterionScore: config.maxCriterionScore };
+  return {
+    label: config.methodologyLabel, criteria: config.criteria, maxCriterionScore: config.maxCriterionScore,
+    mode: "vendas" as const, levels: config.temperatureLevels,
+  };
+}
+
+/** Área da reunião no painel: Vendas (metodologia) ou Atendimento (playbook). */
+export type MeetingArea = "vendas" | "atendimento";
+
+/**
+ * Área de uma reunião: a da análise mais recente; sem análise, a do template
+ * ligado ao tipo de reunião (typeArea: chave do tipo → área).
+ */
+export function meetingArea(
+  analysis: { methodology?: unknown } | null | undefined,
+  meetingType: string | null | undefined,
+  typeArea: Map<string, MeetingArea>,
+  config: OrgConfig,
+): MeetingArea {
+  if (analysis) return methodologyOf(analysis, config).mode === "playbook" ? "atendimento" : "vendas";
+  return (meetingType && typeArea.get(meetingType)) || "vendas";
+}
+
+/** A faixa de saúde está na metade pior da escala (cliente em risco)? */
+export function isAtRisk(levels: { key: string }[], key: string | null | undefined): boolean {
+  const idx = levels.findIndex((l) => l.key === key);
+  return idx >= 0 && idx < Math.floor(levels.length / 2);
 }
 
 /** Grade dos cards de metodologia, conforme quantos aparecem (1 a 3). */

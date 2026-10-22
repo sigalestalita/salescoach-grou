@@ -31,6 +31,12 @@ export interface MeetingType {
 
 export interface OrgConfig {
   meetingTypes: MeetingType[];
+  /**
+   * Rótulo de todas as faixas das metodologias e playbooks da empresa: uma
+   * reunião de atendimento tem "Em risco" no lugar da temperatura, e as listas
+   * mostram o rótulo certo para cada uma.
+   */
+  allLevelLabels: Record<string, string>;
   methodologyLabel: string;
   criteria: QualificationCriterion[];
   temperatureLevels: TemperatureLevel[];
@@ -54,6 +60,7 @@ const DEFAULT_LEVELS: TemperatureLevel[] = [
 
 export const FALLBACK_CONFIG: OrgConfig = {
   meetingTypes: [],
+  allLevelLabels: {},
   methodologyLabel: "BANT",
   criteria: DEFAULT_CRITERIA,
   temperatureLevels: DEFAULT_LEVELS,
@@ -73,7 +80,7 @@ export function useOrgConfig() {
     queryKey: ["org-config"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const [typesRes, templateRes] = await Promise.all([
+      const [typesRes, templateRes, allRes] = await Promise.all([
         supabase
           .from("meeting_types")
           .select("id, key, label, sort_order")
@@ -84,6 +91,7 @@ export function useOrgConfig() {
           .select("methodology_label, qualification_criteria, temperature_levels")
           .eq("is_default", true)
           .maybeSingle(),
+        supabase.from("analysis_templates").select("temperature_levels"),
       ]);
 
       const criteria = Array.isArray(templateRes.data?.qualification_criteria)
@@ -94,8 +102,15 @@ export function useOrgConfig() {
         ? (templateRes.data!.temperature_levels as unknown as TemperatureLevel[])
         : DEFAULT_LEVELS;
 
+      const allLevelLabels: Record<string, string> = {};
+      for (const t of allRes.data ?? []) {
+        const ls = Array.isArray(t.temperature_levels) ? (t.temperature_levels as unknown as TemperatureLevel[]) : [];
+        Object.assign(allLevelLabels, temperatureLabels(ls));
+      }
+
       return {
         meetingTypes: (typesRes.data ?? []) as MeetingType[],
+        allLevelLabels,
         methodologyLabel: templateRes.data?.methodology_label || "BANT",
         criteria: criteria.length ? criteria : DEFAULT_CRITERIA,
         temperatureLevels: levels.length ? levels : DEFAULT_LEVELS,

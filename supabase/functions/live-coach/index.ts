@@ -167,10 +167,43 @@ Deno.serve(async (req) => {
       .join("\n");
 
     const criteriaKeys = template.qualification_criteria.map((c) => c.key);
-    const categorias = [...criteriaKeys, "objecao", "oferta", "proxima_pergunta", "fechamento", "rapport", "talk_ratio"];
+    const playbook = template.mode === "playbook" ? template.playbook ?? {} : null;
+    const categorias = playbook
+      ? [...criteriaKeys, "risco", "oportunidade", "duvida", "reclamacao", "compromisso", "postura"]
+      : [...criteriaKeys, "objecao", "oferta", "proxima_pergunta", "fechamento", "rapport", "talk_ratio"];
 
     // ── Prompt ────────────────────────────────────────────────────────────
-    const system = `${template.persona} Você acompanha uma reunião comercial AO VIVO, em português do Brasil, e orienta o vendedor em tempo real.
+    // Playbook de atendimento: guia a conversa pelas etapas do playbook e
+    // pelos sinais que ele manda detectar, em vez de qualificar uma venda.
+    const lista = (xs?: string[]) => (xs ?? []).map((x) => `- ${x}`).join("\n");
+    const systemPlaybook = playbook ? `${template.persona} Você acompanha AO VIVO uma conversa de atendimento com um cliente (não é uma venda), em português do Brasil, e orienta em tempo real a pessoa do time que está atendendo.
+
+PLAYBOOK "${template.methodology_label}"
+${playbook.objetivo ? `Objetivo da conversa: ${playbook.objetivo}\n` : ""}ETAPAS:
+${template.qualification_criteria.map((c) => `- ${c.key}: ${c.label}${c.required ? " (obrigatória)" : ""}${c.description ? ` — ${c.description}` : ""}`).join("\n")}
+${playbook.boas_praticas?.length ? `\nBOAS PRÁTICAS:\n${lista(playbook.boas_praticas)}\n` : ""}${playbook.evitar?.length ? `\nO QUE NÃO PODE ACONTECER:\n${lista(playbook.evitar)}\n` : ""}${playbook.sinais?.length ? `\nSINAIS A DETECTAR NA FALA DO CLIENTE:\n${playbook.sinais.map((x) => `- ${x.label} [${x.tipo}]${x.description ? ` — ${x.description}` : ""}`).join("\n")}\n` : ""}
+${template.extra_instructions ? `REGRAS DESTA OPERAÇÃO:\n${template.extra_instructions}\n` : ""}
+SUA TAREFA A CADA CHAMADA:
+1. Veja quais etapas do playbook já foram feitas e quais faltam.
+2. Identifique o momento: o cliente acabou de mostrar um sinal de risco, uma insatisfação, uma dúvida, uma oportunidade, ou a conversa está sem direção?
+3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) tratar um sinal de risco ou reclamação que acabou de surgir; (b) responder uma dúvida com a informação certa da base de conhecimento; (c) puxar uma etapa obrigatória que ainda não aconteceu; (d) registrar um compromisso com prazo; (e) corrigir postura (ouvir mais, confirmar entendimento).
+4. Escreva a frase EXATA que a pessoa deve dizer, em primeira pessoa, natural, como se fosse falada. Use só informações da base de conhecimento; nunca invente prazo, preço, política ou funcionalidade.
+5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}.
+
+FORMATO (JSON puro):
+{
+  "should_emit": true,
+  "categoria": "<uma de: ${categorias.join(" | ")}>",
+  "urgencia": "<baixa | media | alta>",
+  "titulo": "<por que agora, em até 70 caracteres. Ex.: 'Cliente citou que vai rever o contrato — sinal de risco'>",
+  "acao": "<a frase exata para falar, em até 240 caracteres>",
+  "fonte": "<título do documento da base usado, ou null>",
+  "criterios_cobertos": ["<keys das etapas já feitas até agora>"]
+}
+
+Urgência alta = sinal de risco, reclamação ou o cliente fazendo uma pergunta direta. Não repita orientação já dada. Seja específico ao que foi dito; nada genérico.` : "";
+
+    const system = systemPlaybook || `${template.persona} Você acompanha uma reunião comercial AO VIVO, em português do Brasil, e orienta o vendedor em tempo real.
 
 METODOLOGIA DE QUALIFICAÇÃO (${template.methodology_label}):
 ${criteriaStr}
@@ -202,7 +235,7 @@ Urgência alta = objeção, sinal de compra ou o lead fazendo uma pergunta diret
 
     const user = `## Reunião
 Título: ${meeting.title}
-Lead: ${meeting.lead_name ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
+${playbook ? "Cliente" : "Lead"}: ${meeting.lead_name ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
 Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}${typeContext ? `\n${typeContext.trim()}` : ""}
 
 ## Conversa recente (do mais antigo ao mais novo; a transcrição não separa quem fala — deduza pelo conteúdo)

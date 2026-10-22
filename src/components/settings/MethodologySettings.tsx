@@ -117,6 +117,8 @@ export const MethodologySettings = () => {
     const [{ data }, { data: types }] = await Promise.all([
       supabase.from("analysis_templates")
         .select("id, is_default, methodology_label, persona, extra_instructions, qualification_criteria, temperature_levels, frameworks")
+        // Playbooks de atendimento têm a tela própria (PlaybookSettings).
+        .eq("mode", "vendas")
         .order("is_default", { ascending: false }).order("created_at"),
       supabase.from("meeting_types").select("key, label, analysis_template_id").eq("is_active", true).order("sort_order"),
     ]);

@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrgConfig } from "@/hooks/useOrgConfig";
-import { methodologyOf } from "@/lib/methodology";
+import { isAtRisk, meetingArea, methodologyOf, type MeetingArea } from "@/lib/methodology";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
-import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare } from "lucide-react";
+import { Calendar, TrendingUp, Thermometer, Users, Target, BarChart3, MessageSquare, HeartPulse, AlertTriangle } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface DashboardData {
   totalMeetings: number;
@@ -26,7 +27,28 @@ interface DashboardData {
   avgSpin: { key: string; label: string; avg: number }[];
   avgTalkRatio: { seller: number; lead: number } | null;
   activeSellers: number;
+  /** Só em Atendimento: sinais detectados nas conversas, por tipo e os mais frequentes. */
+  signals: { byType: Record<string, number>; top: { label: string; tipo: string; count: number }[] } | null;
 }
+
+/**
+ * Área da reunião: Vendas (metodologia de qualificação) ou Atendimento
+ * (playbook de CS, suporte, onboarding). Vem da análise; sem análise ainda,
+ * do tipo de reunião.
+ */
+type Area = MeetingArea;
+
+const SIGNAL_LABEL: Record<string, string> = { risco: "Risco", oportunidade: "Oportunidade", atencao: "Atenção" };
+const SIGNAL_COLOR: Record<string, string> = { risco: "text-destructive", oportunidade: "text-success", atencao: "text-warning" };
+
+// Saúde do cliente, da pior para a melhor.
+const HEALTH_PALETTE: string[] = [
+  "hsl(0 68% 38%)",
+  "hsl(var(--destructive))",
+  "hsl(var(--warning))",
+  "hsl(150 50% 40%)",
+  "hsl(150 60% 30%)",
+];
 
 interface SellerOption {
   id: string;
@@ -71,25 +93,44 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [sellers, setSellers] = useState<SellerOption[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>("all");
+  const [area, setArea] = useState<Area>("vendas");
+  // A aba de Atendimento só aparece quando a empresa tem playbook ou conversa de atendimento.
+  const [hasAtendimento, setHasAtendimento] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
   // Refaz o cálculo quando a configuração da organização chega, para que os
   // critérios e faixas usados sejam os do cliente e não os padrões.
-  }, [selectedSeller, config]);
+  }, [selectedSeller, config, area]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [meetingsRes, analysisRes, profilesRes] = await Promise.all([
-        supabase.from("meetings").select("id, status, temperature, overall_score, seller_id, meeting_date"),
-        supabase.from("analysis_results").select("meeting_id, overall_score, temperature, bant_score, meddic_score, spin_score, talk_ratio, methodology, created_at"),
+      const [meetingsRes, analysisRes, profilesRes, typesRes, templatesRes] = await Promise.all([
+        supabase.from("meetings").select("id, status, temperature, overall_score, seller_id, meeting_date, meeting_type"),
+        supabase.from("analysis_results").select("meeting_id, overall_score, temperature, bant_score, meddic_score, spin_score, talk_ratio, methodology, playbook_result, created_at"),
         supabase.from("profiles").select("user_id, full_name"),
+        supabase.from("meeting_types").select("key, analysis_template_id"),
+        supabase.from("analysis_templates").select("id, mode"),
       ]);
 
-      const allMeetings = meetingsRes.data || [];
       const analyses = analysisRes.data || [];
       const profiles = profilesRes.data || [];
+
+      // Área de cada reunião: a da análise mais recente; sem análise, a do
+      // template ligado ao tipo de reunião.
+      const playbookIds = new Set((templatesRes.data ?? []).filter((t) => t.mode === "playbook").map((t) => t.id));
+      const typeArea = new Map((typesRes.data ?? []).map((t) => [t.key, t.analysis_template_id && playbookIds.has(t.analysis_template_id) ? "atendimento" as Area : "vendas" as Area]));
+      const lastByMeeting = new Map<string, typeof analyses[0]>();
+      for (const a of analyses) {
+        const cur = lastByMeeting.get(a.meeting_id);
+        if (!cur || a.created_at > cur.created_at) lastByMeeting.set(a.meeting_id, a);
+      }
+      const areaOf = (m: { id: string; meeting_type: string | null }): Area =>
+        meetingArea(lastByMeeting.get(m.id), m.meeting_type, typeArea, config);
+      const everyMeeting = meetingsRes.data || [];
+      setHasAtendimento(playbookIds.size > 0 || everyMeeting.some((m) => areaOf(m) === "atendimento"));
+      const allMeetings = everyMeeting.filter((m) => areaOf(m) === area);
 
       const profileMap = new Map(profiles.map(p => [p.user_id, p.full_name || "Sem nome"]));
 
@@ -133,27 +174,53 @@ const Dashboard = () => {
       const scores = uniqueAnalyses.filter(a => a.overall_score != null).map(a => Number(a.overall_score));
       const avgScore = scores.length > 0 ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : null;
 
-      // Temperature distribution
-      const levels = config.temperatureLevels;
-      const tempCounts: Record<string, number> = {};
-      for (const level of levels) tempCounts[level.key] = 0;
-      for (const m of completed) {
-        if (m.temperature && m.temperature in tempCounts) {
-          tempCounts[m.temperature]++;
+      let hotRate: number;
+      let tempDistribution: DashboardData["tempDistribution"];
+      if (area === "vendas") {
+        // Temperature distribution
+        const levels = config.temperatureLevels;
+        const tempCounts: Record<string, number> = {};
+        for (const level of levels) tempCounts[level.key] = 0;
+        for (const m of completed) {
+          if (m.temperature && m.temperature in tempCounts) {
+            tempCounts[m.temperature]++;
+          }
         }
+
+        // "Quente" = faixas da metade superior da escala configurada.
+        const hotKeys = levels.slice(Math.ceil(levels.length / 2)).map((l) => l.key);
+        const hotCount = hotKeys.reduce((sum, key) => sum + (tempCounts[key] ?? 0), 0);
+        hotRate = completedMeetings > 0 ? Math.round((hotCount / completedMeetings) * 100) : 0;
+
+        // Da faixa mais quente para a mais fria, com a paleta na mesma ordem.
+        tempDistribution = [...levels].reverse().map((level, idx) => ({
+          name: level.label,
+          value: tempCounts[level.key] ?? 0,
+          color: TEMP_PALETTE[Math.min(idx, TEMP_PALETTE.length - 1)] ?? TEMP_PALETTE[TEMP_PALETTE.length - 1],
+        })).filter(t => t.value > 0);
+      } else {
+        // Saúde do cliente: as faixas vêm do playbook de cada análise (da pior
+        // para a melhor). "Em risco" = metade inferior da escala.
+        const byLabel = new Map<string, { value: number; pos: number }>();
+        let risk = 0;
+        for (const m of completed) {
+          const a = lastByMeeting.get(m.id);
+          if (!a || !m.temperature) continue;
+          const lv = methodologyOf(a, config).levels;
+          const idx = lv.findIndex((l) => l.key === m.temperature);
+          if (idx < 0) continue;
+          if (isAtRisk(lv, m.temperature)) risk++;
+          const label = lv[idx].label;
+          const pos = lv.length > 1 ? idx / (lv.length - 1) : 1;
+          const cur = byLabel.get(label) ?? { value: 0, pos };
+          cur.value++;
+          byLabel.set(label, cur);
+        }
+        hotRate = completedMeetings > 0 ? Math.round((risk / completedMeetings) * 100) : 0;
+        tempDistribution = [...byLabel.entries()]
+          .sort((x, y) => x[1].pos - y[1].pos)
+          .map(([name, { value, pos }]) => ({ name, value, color: HEALTH_PALETTE[Math.round(pos * (HEALTH_PALETTE.length - 1))] }));
       }
-
-      // "Quente" = faixas da metade superior da escala configurada.
-      const hotKeys = levels.slice(Math.ceil(levels.length / 2)).map((l) => l.key);
-      const hotCount = hotKeys.reduce((sum, key) => sum + (tempCounts[key] ?? 0), 0);
-      const hotRate = completedMeetings > 0 ? Math.round((hotCount / completedMeetings) * 100) : 0;
-
-      // Da faixa mais quente para a mais fria, com a paleta na mesma ordem.
-      const tempDistribution = [...levels].reverse().map((level, idx, arr) => ({
-        name: level.label,
-        value: tempCounts[level.key] ?? 0,
-        color: TEMP_PALETTE[Math.min(idx, TEMP_PALETTE.length - 1)] ?? TEMP_PALETTE[TEMP_PALETTE.length - 1],
-      })).filter(t => t.value > 0);
 
       // Seller ranking (only when viewing all)
       const sellerData = new Map<string, { scores: number[]; count: number }>();
@@ -278,9 +345,29 @@ const Dashboard = () => {
           }
         : null;
 
+      // Sinais detectados nas conversas de atendimento.
+      let signals: DashboardData["signals"] = null;
+      if (area === "atendimento") {
+        const byType: Record<string, number> = { risco: 0, oportunidade: 0, atencao: 0 };
+        const counts = new Map<string, { label: string; tipo: string; count: number }>();
+        for (const a of uniqueAnalyses) {
+          const sinais = (a.playbook_result as { sinais?: { key?: string; label?: string; tipo?: string; detectado?: boolean }[] } | null)?.sinais;
+          for (const sg of Array.isArray(sinais) ? sinais : []) {
+            if (!sg?.detectado) continue;
+            const tipo = sg.tipo && sg.tipo in byType ? sg.tipo : "atencao";
+            byType[tipo]++;
+            const label = sg.label || String(sg.key ?? "").replace(/_/g, " ");
+            const cur = counts.get(label) ?? { label, tipo, count: 0 };
+            cur.count++;
+            counts.set(label, cur);
+          }
+        }
+        signals = { byType, top: [...counts.values()].sort((x, y) => y.count - x.count).slice(0, 6) };
+      }
+
       setData({
         totalMeetings, completedMeetings, avgScore, hotRate, tempDistribution,
-        sellerRanking, scoreEvolution, scoreEvolutionSellers, avgMethods, avgMeddic, avgSpin, avgTalkRatio, activeSellers,
+        sellerRanking, scoreEvolution, scoreEvolutionSellers, avgMethods, avgMeddic, avgSpin, avgTalkRatio, activeSellers, signals,
       });
     } catch (err) {
       console.error("Dashboard fetch error:", err);
@@ -303,6 +390,8 @@ const Dashboard = () => {
 
   const isFiltered = selectedSeller !== "all";
   const selectedSellerName = sellers.find(s => s.id === selectedSeller)?.name;
+  // Rótulos de cada área: em atendimento não há vendedor nem lead.
+  const cs = area === "atendimento";
 
   return (
     <div className="space-y-6">
@@ -312,33 +401,45 @@ const Dashboard = () => {
           <p className="text-muted-foreground">
             {isFiltered
               ? `Métricas individuais de ${selectedSellerName}`
-              : "Visão geral do desempenho das reuniões comerciais"}
+              : cs ? "Visão geral das conversas de atendimento, pelos playbooks" : "Visão geral do desempenho das reuniões comerciais"}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+        {hasAtendimento && (
+          <Tabs value={area} onValueChange={(v) => { setArea(v as Area); setSelectedSeller("all"); }}>
+            <TabsList>
+              <TabsTrigger value="vendas">Vendas</TabsTrigger>
+              <TabsTrigger value="atendimento">Atendimento</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
         <Select value={selectedSeller} onValueChange={setSelectedSeller}>
           <SelectTrigger className="w-[220px]" data-tour="dash-filtro">
-            <SelectValue placeholder="Filtrar vendedor" />
+            <SelectValue placeholder={cs ? "Filtrar pessoa" : "Filtrar vendedor"} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os vendedores</SelectItem>
+            <SelectItem value="all">{cs ? "Todo o time" : "Todos os vendedores"}</SelectItem>
             {sellers.map(s => (
               <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
+        </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 animate-stagger" data-tour="dash-stats">
-        <StatCard tone="navy" icon={Calendar} label="Total de Agendas" value={data.totalMeetings} hint={`${data.completedMeetings} analisadas`} />
-        <StatCard tone="blue" icon={Target} label="Score Médio" value={data.avgScore ?? "--"} hint="de 100 pontos" />
-        <StatCard tone="coral" icon={Thermometer} label="Reuniões Quentes" value={`${data.hotRate}%`} hint="Taxa de agendas quentes" />
+        <StatCard tone="navy" icon={Calendar} label={cs ? "Total de Conversas" : "Total de Agendas"} value={data.totalMeetings} hint={`${data.completedMeetings} analisadas`} />
+        <StatCard tone="blue" icon={Target} label={cs ? "Aderência Média" : "Score Médio"} value={data.avgScore ?? "--"} hint={cs ? "ao playbook, de 100" : "de 100 pontos"} />
+        {cs
+          ? <StatCard tone="coral" icon={HeartPulse} label="Clientes em Risco" value={`${data.hotRate}%`} hint="Conversas na metade pior da saúde" />
+          : <StatCard tone="coral" icon={Thermometer} label="Reuniões Quentes" value={`${data.hotRate}%`} hint="Taxa de agendas quentes" />}
         <StatCard
           tone="teal"
           icon={Users}
-          label={isFiltered ? "Agendas Analisadas" : "Vendedores Ativos"}
+          label={isFiltered ? (cs ? "Conversas Analisadas" : "Agendas Analisadas") : (cs ? "Pessoas Ativas" : "Vendedores Ativos")}
           value={isFiltered ? data.completedMeetings : data.activeSellers}
-          hint={isFiltered ? "deste vendedor" : "Com agendas analisadas"}
+          hint={isFiltered ? (cs ? "desta pessoa" : "deste vendedor") : (cs ? "Com conversas analisadas" : "Com agendas analisadas")}
         />
       </div>
 
@@ -349,9 +450,9 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <TrendingUp className="h-4 w-4" />
-              Evolução de Scores
+              {cs ? "Evolução da Aderência" : "Evolução de Scores"}
             </CardTitle>
-            <CardDescription>{isFiltered ? "Score mensal individual" : "Comparativo de scores médios por executivo"}</CardDescription>
+            <CardDescription>{isFiltered ? (cs ? "Aderência mensal individual" : "Score mensal individual") : (cs ? "Aderência média ao playbook por pessoa" : "Comparativo de scores médios por executivo")}</CardDescription>
           </CardHeader>
           <CardContent className="h-64">
             {data.scoreEvolution.length > 0 ? (
@@ -372,7 +473,7 @@ const Dashboard = () => {
                       })}
                     </>
                   ) : (
-                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name="Score Médio" />
+                    <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} name={cs ? "Aderência Média" : "Score Médio"} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -391,11 +492,13 @@ const Dashboard = () => {
         <Card className="glass-card card-hover-glow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
-              <Thermometer className="h-4 w-4" />
-              Temperatura das Agendas
+              {cs ? <HeartPulse className="h-4 w-4" /> : <Thermometer className="h-4 w-4" />}
+              {cs ? "Saúde dos Clientes" : "Temperatura das Agendas"}
             </CardTitle>
             <CardDescription>
-              Distribuição {config.methodologyLabel}: {config.temperatureLevels[0]?.label} → {config.temperatureLevels[config.temperatureLevels.length - 1]?.label}
+              {cs
+                ? "Como os clientes saíram das conversas, da pior para a melhor faixa"
+                : `Distribuição ${config.methodologyLabel}: ${config.temperatureLevels[0]?.label} → ${config.temperatureLevels[config.temperatureLevels.length - 1]?.label}`}
             </CardDescription>
           </CardHeader>
           <CardContent className="h-64">
@@ -425,7 +528,7 @@ const Dashboard = () => {
       {/* Framework Averages */}
       <div className="grid gap-4 md:grid-cols-3 animate-stagger">
         {data.avgMethods.map((m) => (
-          <FrameworkCard key={m.label} title={`${m.label} ${isFiltered ? "Individual" : "Médio"}`} items={m.items} maxValue={m.max} />
+          <FrameworkCard key={m.label} title={cs ? `Etapas · ${m.label}` : `${m.label} ${isFiltered ? "Individual" : "Médio"}`} items={m.items} maxValue={m.max} />
         ))}
         {/* MEDDIC e SPIN podem estar desligados na metodologia: sem dados, o card some. */}
         {data.avgMeddic.length > 0 && (
@@ -433,6 +536,34 @@ const Dashboard = () => {
         )}
         {data.avgSpin.length > 0 && (
           <FrameworkCard title={isFiltered ? "SPIN Individual" : "SPIN Médio"} items={data.avgSpin} maxValue={25} />
+        )}
+        {data.signals && (
+          <Card className="glass-card card-hover-glow">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4" /> Sinais nas conversas</CardTitle>
+              <CardDescription>Detectados pelos playbooks</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {(["risco", "oportunidade", "atencao"] as const).map((t) => (
+                  <div key={t} className="rounded-md border border-border p-2">
+                    <div className={`text-xl font-bold ${SIGNAL_COLOR[t]}`}>{data.signals!.byType[t] ?? 0}</div>
+                    <div className="text-xs text-muted-foreground">{SIGNAL_LABEL[t]}</div>
+                  </div>
+                ))}
+              </div>
+              {data.signals.top.length > 0 ? (
+                <ul className="space-y-1 text-sm">
+                  {data.signals.top.map((sg) => (
+                    <li key={sg.label} className="flex items-center justify-between gap-2">
+                      <span className="truncate capitalize"><span className={SIGNAL_COLOR[sg.tipo] ?? ""}>●</span> {sg.label}</span>
+                      <Badge variant="secondary" className="text-xs">{sg.count}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="text-sm text-muted-foreground">Nenhum sinal detectado ainda.</p>}
+            </CardContent>
+          </Card>
         )}
       </div>
 
@@ -445,23 +576,23 @@ const Dashboard = () => {
               <MessageSquare className="h-4 w-4" />
               Talk Ratio {isFiltered ? "Individual" : "Médio"}
             </CardTitle>
-            <CardDescription>{isFiltered ? "Proporção de fala deste vendedor" : "Proporção média de fala vendedor vs lead"}</CardDescription>
+            <CardDescription>{cs ? (isFiltered ? "Proporção de fala desta pessoa" : "Proporção média de fala do time vs cliente") : (isFiltered ? "Proporção de fala deste vendedor" : "Proporção média de fala vendedor vs lead")}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.avgTalkRatio ? (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Vendedor: {data.avgTalkRatio.seller}%</span>
-                    <span>Lead: {data.avgTalkRatio.lead}%</span>
+                    <span>{cs ? "Time" : "Vendedor"}: {data.avgTalkRatio.seller}%</span>
+                    <span>{cs ? "Cliente" : "Lead"}: {data.avgTalkRatio.lead}%</span>
                   </div>
                   <Progress value={data.avgTalkRatio.seller} />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {data.avgTalkRatio.seller > 60
-                    ? "⚠️ Vendedor está falando mais que o recomendado. O ideal é ouvir mais o lead."
+                    ? (cs ? "⚠️ O time está falando mais que o cliente. Vale ouvir mais." : "⚠️ Vendedor está falando mais que o recomendado. O ideal é ouvir mais o lead.")
                     : data.avgTalkRatio.seller < 40
-                    ? "✅ Boa escuta ativa! Dando espaço para o lead."
+                    ? (cs ? "✅ Boa escuta: o cliente tem espaço para falar." : "✅ Boa escuta ativa! Dando espaço para o lead.")
                     : "👍 Proporção equilibrada de fala."}
                 </p>
               </div>
@@ -476,9 +607,9 @@ const Dashboard = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
               <Users className="h-4 w-4" />
-              {isFiltered ? "Resumo do Vendedor" : "Ranking de Vendedores"}
+              {isFiltered ? (cs ? "Resumo da Pessoa" : "Resumo do Vendedor") : (cs ? "Aderência por Pessoa" : "Ranking de Vendedores")}
             </CardTitle>
-            <CardDescription>{isFiltered ? "Performance individual" : "Performance por vendedor"}</CardDescription>
+            <CardDescription>{isFiltered ? "Performance individual" : (cs ? "Aderência média ao playbook" : "Performance por vendedor")}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.sellerRanking.length > 0 ? (
@@ -490,7 +621,7 @@ const Dashboard = () => {
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-sm font-medium truncate">{seller.name}</span>
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-xs">{seller.meetings} agendas</Badge>
+                          <Badge variant="secondary" className="text-xs">{seller.meetings} {cs ? "conversas" : "agendas"}</Badge>
                           <span className="text-sm font-bold text-primary">{seller.avgScore}</span>
                         </div>
                       </div>

@@ -5,6 +5,7 @@ import {
   buildNote,
   buildTask,
   convertValue,
+  healthOptions,
   sourceCatalog,
   sourceValues,
   type SourceContext,
@@ -151,5 +152,89 @@ describe("anotação e tarefa", () => {
 
   it("dias úteis pulam o fim de semana", () => {
     expect(addBusinessDays("2026-10-16", 1)).toBe("2026-10-19");
+  });
+});
+
+describe("conversas de atendimento (playbook)", () => {
+  const playbooks = [
+    { label: "Onboarding", levels: [{ key: "em_risco", label: "Em risco" }, { key: "saudavel", label: "Saudável" }],
+      campos: [{ key: "data_go_live", label: "Data de go-live" }, { key: "responsavel_cliente", label: "Responsável no cliente" }] },
+    { label: "Check-in", levels: [{ key: "saudavel", label: "Saudável" }, { key: "promotor", label: "Promotor" }],
+      campos: [{ key: "responsavel_cliente", label: "Responsável no cliente" }] },
+  ];
+  const etapas = [{ key: "objetivos", label: "Objetivos", max_score: 50 }, { key: "plano", label: "Plano", max_score: 50 }];
+  const atd: SourceContext = {
+    analysis: {
+      overall_score: 72,
+      temperature: "em_risco",
+      bant_score: { objetivos: { score: 50, reason: "Metas claras." }, plano: { score: 20, reason: "Sem datas." } },
+      talk_ratio: { seller: 40, lead: 60 },
+      sales_coach: { next_steps: ["Enviar plano com datas"], next_step_date: "2026-10-30" },
+      raw_analysis: { overall_score_reason: "Faltou fechar o plano.", meeting_summary: { identified_pains: ["Atraso na integração"] } },
+      playbook_result: {
+        etapas: [{ key: "objetivos", status: "cumprida" }, { key: "plano", status: "parcial" }],
+        sinais: [
+          { key: "cancelamento", label: "Fala em cancelar", tipo: "risco", detectado: true, evidencia: "vamos rever o contrato" },
+          { key: "expansao", label: "Expansão", tipo: "oportunidade", detectado: false },
+        ],
+        campos: { data_go_live: "2026-11-15", responsavel_cliente: "Carla (RH)", outro: null },
+        compromissos: [{ quem: "time", o_que: "Enviar plano", prazo: "2026-10-30" }],
+        pendencias: ["Acesso ao sistema"],
+        sentimento_cliente: "Saiu preocupada com prazos.",
+      },
+    },
+    meeting: { title: "Kickoff · Acme", meeting_date: "2026-10-22T14:00:00Z" },
+    criteria: etapas,
+    temperatureLevels: playbooks[0].levels,
+    analysisUrl: "https://app.exemplo.com/agendas/2",
+    mode: "playbook",
+    playbookLabel: "Onboarding",
+  };
+
+  it("o catálogo ganha os dados de atendimento e uma informação por chave", () => {
+    const cat = sourceCatalog(criteria, playbooks);
+    const keys = cat.map((s) => s.key);
+    expect(keys).toContain("atd:saude");
+    expect(keys.filter((k) => k === "atd:campo:responsavel_cliente")).toHaveLength(1);
+    expect(cat.find((s) => s.key === "atd:aderencia")?.area).toBe("atendimento");
+    expect(cat.find((s) => s.key === "nota")?.area).toBe("vendas");
+    expect(cat.find((s) => s.key === "proximo_passo")?.area).toBe("ambos");
+    expect(sourceCatalog(criteria).some((s) => s.key.startsWith("atd:"))).toBe(false);
+    expect(healthOptions(playbooks)).toEqual(["Em risco", "Saudável", "Promotor"]);
+  });
+
+  it("conversa de atendimento manda os dados de atendimento, não os de venda", () => {
+    const v = sourceValues(atd);
+    expect(v.nota).toBeNull();
+    expect(v.temperatura).toBeNull();
+    expect(v.dores).toBeNull();
+    expect(v["criterio:objetivos"]).toBeUndefined();
+    expect(v["atd:aderencia"]).toBe(72);
+    expect(v["atd:saude"]).toBe("Em risco");
+    expect(v["atd:playbook"]).toBe("Onboarding");
+    expect(v["atd:sinais_risco"]).toBe("Fala em cancelar: vamos rever o contrato");
+    expect(v["atd:sinais_oportunidade"]).toBeNull();
+    expect(v["atd:etapas_pendentes"]).toBe("Plano (parcial)");
+    expect(v["atd:compromissos"]).toBe("Enviar plano (time, 30/10/2026)");
+    expect(v["atd:campo:data_go_live"]).toBe("2026-11-15");
+    expect(v["atd:campo:outro"]).toBeNull();
+    // Os comuns saem das duas.
+    expect(v.proximo_passo).toBe("Enviar plano com datas");
+    expect(v.fala_vendedor).toBe(40);
+  });
+
+  it("reunião de venda não manda dados de atendimento", () => {
+    const v = sourceValues(ctx);
+    expect(Object.keys(v).some((k) => k.startsWith("atd:"))).toBe(false);
+  });
+
+  it("a anotação e a tarefa também saem nas conversas de atendimento", () => {
+    const note = buildNote({ ...atd, methodologyLabel: "Onboarding" });
+    expect(note).toContain("Aderência ao playbook 72/100 · Saúde do cliente: Em risco");
+    expect(note).toContain("Etapas do playbook (Onboarding):");
+    expect(note).toContain("Sinais de risco: Fala em cancelar");
+    expect(note).toContain("Compromissos: Enviar plano");
+    expect(note).not.toContain("Temperatura");
+    expect(buildTask(atd, "2026-10-22")).toMatchObject({ name: "Enviar plano com datas", dueDate: "2026-10-30" });
   });
 });

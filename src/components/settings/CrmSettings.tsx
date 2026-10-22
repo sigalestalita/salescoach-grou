@@ -39,6 +39,15 @@ const SO_TOKEN: CrmProvider[] = ["nexa"];
 
 /** Dados que valem um campo próprio no CRM; o resto já vai na anotação. */
 const SUGERIDOS = ["nota", "temperatura", "proximo_passo", "data_proximo_passo", "link_analise"];
+/** O mesmo para as conversas de atendimento, mais cada informação a registrar dos playbooks. */
+const SUGERIDOS_ATENDIMENTO = ["atd:aderencia", "atd:saude", "atd:sinais_risco", "atd:sinais_oportunidade", "atd:compromissos"];
+
+/** Grupos da tabela de mapeamento, na ordem em que aparecem. */
+const GRUPOS: { area: NonNullable<CrmSource["area"]>; titulo: string; dica: string }[] = [
+  { area: "ambos", titulo: "Vendas e atendimento", dica: "Saem de toda reunião analisada." },
+  { area: "vendas", titulo: "Reuniões de venda", dica: "Saem das reuniões avaliadas por metodologia." },
+  { area: "atendimento", titulo: "Conversas de atendimento", dica: "Saem das conversas avaliadas por playbook (CS, suporte, onboarding…)." },
+];
 
 export function CrmSettings() {
   const { toast } = useToast();
@@ -171,8 +180,12 @@ export function CrmSettings() {
       setMappings(s.mappings);
     });
 
-  const createFields = () => run("create", async () => {
-    const wanted = catalog.filter((s) => SUGERIDOS.includes(s.key) || s.key.startsWith("criterio:")).map((s) => s.key);
+  const temAtendimento = catalog.some((s) => s.area === "atendimento");
+
+  const createFields = (area: "vendas" | "atendimento" = "vendas") => run(`create:${area}`, async () => {
+    const wanted = catalog.filter((s) => area === "atendimento"
+      ? SUGERIDOS_ATENDIMENTO.includes(s.key) || s.key.startsWith("atd:campo:")
+      : SUGERIDOS.includes(s.key) || s.key.startsWith("criterio:")).map((s) => s.key);
     const { created } = await crmApi.createFields(wanted);
     toast({ title: `${created.length} campos prontos no ${connection ? CRM_NAME[connection.provider] : "CRM"}`, description: "O mapeamento já foi preenchido." });
     await load();
@@ -193,7 +206,7 @@ export function CrmSettings() {
         </CardTitle>
         <CardDescription>
           Ao fim de cada análise, o Sales Coach grava nota, temperatura, critérios e próximos passos no negócio do CRM (RD Station CRM, HubSpot, Pipedrive ou Kommo),
-          cria uma anotação com o resumo e uma tarefa com o próximo passo.
+          cria uma anotação com o resumo e uma tarefa com o próximo passo. Conversas de atendimento (playbooks) gravam aderência, saúde do cliente, sinais, compromissos e as informações registradas.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -321,10 +334,31 @@ export function CrmSettings() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={createFields}>Criar campos</AlertDialogAction>
+                        <AlertDialogAction onClick={() => createFields("vendas")}>Criar campos</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  {temAtendimento && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="secondary" disabled={!!busy}>Criar campos do atendimento</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Criar campos do atendimento no {CRM_NAME[connection.provider]}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Cria no negócio os campos "Sales Coach · Aderência ao playbook", "Saúde do cliente", "Sinais de risco",
+                            "Oportunidades", "Compromissos" e um para cada informação a registrar dos playbooks, e já liga cada um.
+                            Campos com o mesmo nome são reaproveitados.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => createFields("atendimento")}>Criar campos</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </div>
               </div>
 
@@ -340,7 +374,20 @@ export function CrmSettings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {catalog.map((src) => {
+                    {GRUPOS.filter((g) => temAtendimento || g.area !== "atendimento").map((g) => {
+                      // Sem playbooks, a tabela fica como sempre foi: sem divisão por área.
+                      const itens = catalog.filter((src) => (src.area ?? "vendas") === g.area || (!temAtendimento && g.area === "vendas" && src.area === "ambos"));
+                      if (!itens.length || (!temAtendimento && g.area === "ambos")) return null;
+                      return [
+                        temAtendimento ? (
+                          <TableRow key={`grupo:${g.area}`} className="bg-muted/40 hover:bg-muted/40">
+                            <TableCell colSpan={3} className="py-2">
+                              <span className="text-xs font-semibold uppercase tracking-wide">{g.titulo}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">{g.dica}</span>
+                            </TableCell>
+                          </TableRow>
+                        ) : null,
+                        ...itens.map((src) => {
                       const m = mappings.find((x) => x.source_key === src.key);
                       const options = fields.filter((f) => compatible(src.type, f.type));
                       const current = m?.target_field ?? NAO_ENVIAR;
@@ -383,6 +430,8 @@ export function CrmSettings() {
                           </TableCell>
                         </TableRow>
                       );
+                        }),
+                      ];
                     })}
                   </TableBody>
                 </Table>

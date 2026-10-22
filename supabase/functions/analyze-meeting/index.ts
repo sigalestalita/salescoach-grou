@@ -12,6 +12,7 @@ import {
   buildAnalysisPrompt,
   fetchKnowledgeContext,
   loadMeetingTypeContext,
+  analysisSystemMessage,
   loadTemplate,
   methodologySnapshot,
 } from "../_shared/analysis-template.ts";
@@ -472,7 +473,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
     const attendeeList = Array.isArray(meeting.attendees) ? meeting.attendees as { name?: string | null; email?: string; externo?: boolean }[] : [];
     const attendeesContext = attendeeList.length
       ? `\n\nParticipantes do convite da agenda:\n` + attendeeList.slice(0, 30).map((a) =>
-          `- ${a.name ? `${a.name} ` : ""}<${a.email}> (${a.externo ? "cliente / de fora" : "equipe do vendedor"})`).join("\n")
+          `- ${a.name ? `${a.name} ` : ""}<${a.email}> (${a.externo ? "cliente / de fora" : "equipe da empresa"})`).join("\n")
       : "";
 
     const analysisPrompt = buildAnalysisPrompt({
@@ -496,7 +497,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       body: JSON.stringify({
         model: ANALYSIS_MODEL,
         messages: [
-          { role: "system", content: "Você é um analista de vendas B2B experiente. Responda APENAS com JSON válido, sem markdown." },
+          { role: "system", content: analysisSystemMessage(template) },
           { role: "user", content: analysisPrompt + attendeesContext + leadInstruction },
         ],
       }),
@@ -550,8 +551,10 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       overall_score: analysisData.overall_score,
       temperature: analysisData.temperature,
       bant_score: analysisData.bant_score,
-      meddic_score: analysisData.meddic_score,
-      spin_score: analysisData.spin_score,
+      // Playbook de atendimento não tem MEDDIC nem SPIN.
+      meddic_score: template.mode === "playbook" ? null : analysisData.meddic_score,
+      spin_score: template.mode === "playbook" ? null : analysisData.spin_score,
+      playbook_result: template.mode === "playbook" ? analysisData.playbook ?? null : null,
       talk_ratio: analysisData.talk_ratio,
       conversation_metrics: analysisData.conversation_metrics,
       insights: analysisData.insights,
