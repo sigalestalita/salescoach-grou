@@ -1,5 +1,5 @@
 import {
-  BarChart3, BookOpen, Bot, CalendarCheck, CalendarDays, Dumbbell, FileSearch, MonitorSmartphone, Plug, Settings,
+  BarChart3, BookOpen, Bot, CalendarCheck, CalendarDays, ClipboardList, Dumbbell, FileSearch, MonitorSmartphone, Plug, Settings,
   Sparkles, Users,
 } from "lucide-react";
 
@@ -54,7 +54,7 @@ export const JOURNEY: JourneyDef[] = [
     id: "metodologia",
     title: "Configure a metodologia, os tipos de reunião e a marca",
     description:
-      "Em Configurações, ajuste os tipos de reunião (com instruções para a análise de cada um), a metodologia (critérios de qualificação, faixas de temperatura e regras da operação) e a identidade visual: logo, cores e e-mail de suporte. É o que faz a análise falar a língua da sua empresa.",
+      "Em Configurações, ajuste os tipos de reunião (com instruções para a análise de cada um), a metodologia (critérios de qualificação, faixas de temperatura e regras da operação) e a identidade visual: logo, cores e e-mail de suporte. É o que faz a análise falar a língua da sua empresa. Tem time de CS, suporte ou onboarding? Crie também os playbooks de atendimento (veja a ajuda \"Coach de atendimento\").",
     cta: "Abrir Configurações",
     route: "/configuracoes",
     tour: "configuracoes",
@@ -263,7 +263,22 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
       { route: "/configuracoes", target: "cfg-marca", title: "Identidade visual", body: "Nome do produto, logo, cores, e-mail de suporte e textos da tela de login." },
       { route: "/configuracoes", target: "cfg-tipos", title: "Tipos de reunião", body: "Diagnóstico, proposta, follow-up... Crie, ordene, desative e escreva instruções para a análise de cada tipo." },
       { route: "/configuracoes", target: "cfg-metodologia", title: "Metodologias de análise", body: "Crie metodologias a partir de modelos prontos (BANT, SPICED, MEDDIC...), escolha a padrão e ligue ou desligue MEDDIC e SPIN. Cada tipo de reunião pode usar uma diferente." },
+      { route: "/configuracoes", target: "cfg-playbooks", title: "Playbooks de atendimento", body: "Para times que não vendem (CS, suporte, onboarding): a conversa é avaliada pelo playbook da empresa, com saúde do cliente e sinais de risco. Veja o tour \"Coach de atendimento\" na ajuda." },
       { route: "/configuracoes", target: "cfg-crm", title: "Integração com CRM", body: "Conecte RD Station CRM, HubSpot, Pipedrive ou Kommo e escolha o que enviar ao fim de cada análise." },
+    ],
+  },
+  atendimento: {
+    title: "Coach de atendimento",
+    steps: [
+      { route: "/configuracoes", target: "cfg-playbooks", title: "Playbooks de atendimento", body: "Times de CS, suporte e onboarding não são avaliados por BANT ou SPICED: cada conversa segue um playbook da empresa. A IA mede a aderência ao playbook, a saúde do cliente e os sinais de risco e de oportunidade." },
+      { route: "/configuracoes", target: "cfg-playbooks-novo", title: "1. Comece por um modelo", body: "Novo playbook traz modelos prontos: Onboarding, Check-in de acompanhamento, Revisão de resultados (QBR), Renovação, Atendimento de suporte e Recuperação de cliente em risco." },
+      { route: "/configuracoes", target: "cfg-playbooks-ia", title: "…ou monte a partir do playbook de vocês", body: "Cole o texto do playbook do time (roteiro, checklist, política de atendimento). A IA estrutura em etapas, sinais e faixas de saúde. Nada é salvo antes da sua revisão." },
+      { route: "/configuracoes", target: "cfg-playbooks-etapas", title: "2. Ajuste as etapas", body: "Na ordem em que acontecem, com peso (o ideal é somar 100) e a marca de obrigatória. A aderência ao playbook é a soma dos pontos das etapas." },
+      { route: "/configuracoes", target: "cfg-playbooks-sinais", title: "3. Sinais e informações a registrar", body: "Sinais: o que o cliente diz que indica risco (cancelar, insatisfação), oportunidade (expansão, indicação) ou atenção. Informações a registrar: o que a IA anota quando aparece (data de go-live, responsável no cliente) e que pode ir para o CRM." },
+      { route: "/configuracoes", target: "cfg-playbooks-salvar", title: "4. Salve", body: "Ao salvar um playbook novo, o tipo de reunião com o mesmo nome já é criado e ligado a ele. O time de CS grava pela extensão escolhendo esse tipo, e a conversa é avaliada pelo playbook." },
+      { route: "/configuracoes", target: "cfg-tipos", title: "Tipos de reunião", body: "Para ligar um tipo que já existe a um playbook, abra o tipo e escolha o playbook em \"Metodologia ou playbook de análise\"." },
+      { route: "/configuracoes", target: "cfg-crm-atendimento", title: "5. CRM", body: "Com o CRM conectado, o botão \"Criar campos do atendimento\" cria no negócio aderência, saúde do cliente, sinais, compromissos e cada informação a registrar, e já faz o mapeamento. A anotação e a tarefa também saem." },
+      { route: "/", target: "dash-area", title: "Painel de atendimento", body: "Na Visão geral, a aba Atendimento mostra aderência média, clientes em risco, saúde dos clientes, etapas por playbook e os sinais mais frequentes." },
     ],
   },
   equipe: {
@@ -410,6 +425,7 @@ export const ARTICLES: HelpArticle[] = [
           "Total de agendas, score médio, reuniões quentes e vendedores ativos.",
           "Evolução de scores, temperatura das agendas, médias da metodologia, MEDDIC, SPIN e talk ratio.",
           "Ranking de vendedores. Com o filtro, o resumo de uma pessoa só.",
+          "Com playbooks de atendimento, as abas Vendas e Atendimento separam os números. Em Atendimento: aderência ao playbook, clientes em risco, saúde dos clientes, etapas e sinais.",
         ],
       },
     ],
@@ -532,6 +548,12 @@ export const ARTICLES: HelpArticle[] = [
         ],
       },
       {
+        title: "Playbooks de atendimento",
+        items: [
+          "Para CS, suporte e onboarding: Configurações → Playbooks de atendimento. Veja a ajuda \"Coach de atendimento\" para o passo a passo.",
+        ],
+      },
+      {
         title: "Identidade visual",
         items: ["Nome do produto, logo, cores, e-mail de suporte e textos da tela de login."],
       },
@@ -552,6 +574,50 @@ export const ARTICLES: HelpArticle[] = [
           "Ao fim de cada análise: anotação com o resumo e tarefa do próximo passo no negócio.",
           "Campos do negócio (ex.: temperatura, score), escolhendo se sempre ou só quando vazios.",
           "Se o negócio não for achado pelo e-mail do lead, escolha-o no card do CRM da reunião.",
+        ],
+      },
+      {
+        title: "Conversas de atendimento",
+        items: [
+          "Conversas avaliadas por playbook mandam os próprios dados: aderência, saúde do cliente, sinais de risco, oportunidades, etapas não cumpridas, compromissos, pendências e cada informação a registrar dos playbooks.",
+          "\"Criar campos do atendimento\" cria esses campos no negócio e já faz o mapeamento. Dados de venda (nota, temperatura, critérios) não saem dessas conversas.",
+        ],
+      },
+    ],
+  },
+  {
+    id: "atendimento",
+    title: "Coach de atendimento (CS, suporte, onboarding)",
+    icon: ClipboardList,
+    summary: "Playbooks no lugar da metodologia de vendas: aderência, saúde do cliente e sinais de risco.",
+    route: "/configuracoes",
+    tour: "atendimento",
+    roles: ALL,
+    sections: [
+      {
+        title: "O que é",
+        items: [
+          "A versão do coach para times que não vendem: Customer Success, suporte, onboarding, renovação.",
+          "Em vez de critérios de qualificação, a IA avalia a conversa pelo playbook da empresa: as etapas cumpridas (com o trecho que comprova), a saúde do cliente (crítico, em risco, atenção, saudável, promotor) e os sinais de risco e de oportunidade.",
+          "O coach ao vivo da extensão orienta pela etapa que falta, pelo sinal de risco que apareceu, pela dúvida do cliente e pelo compromisso a combinar.",
+        ],
+      },
+      {
+        title: "Configurar (admin), em 5 passos",
+        items: [
+          "1. Configurações → Playbooks de atendimento → Novo playbook, a partir de um modelo (Onboarding, Check-in, QBR, Renovação, Suporte, Recuperação de cliente em risco). Ou \"Montar a partir do nosso playbook\": cole o playbook do time e a IA estrutura.",
+          "2. Ajuste o objetivo da conversa e as etapas, com peso (somando 100) e quais são obrigatórias.",
+          "3. Revise boas práticas, o que não pode acontecer, os sinais a detectar, as informações a registrar e as faixas de saúde.",
+          "4. Salve. O tipo de reunião com o mesmo nome nasce ligado ao playbook. Para ligar um tipo que já existe: Tipos de reunião → abra o tipo → Metodologia ou playbook de análise.",
+          "5. Com o CRM conectado: Integração com CRM → Criar campos do atendimento.",
+        ],
+      },
+      {
+        title: "No dia a dia (time de atendimento)",
+        items: [
+          "Grave pela extensão como numa reunião de venda e escolha o tipo da conversa (ex.: Onboarding). É o tipo que define o playbook usado.",
+          "Na análise: aderência ao playbook, saúde do cliente, etapas com status, sinais detectados, condução, compromissos e pendências.",
+          "Gestores: Visão geral → aba Atendimento, com clientes em risco e os sinais mais frequentes do time.",
         ],
       },
     ],
@@ -579,10 +645,12 @@ export const FAQ: { q: string; a: string }[] = [
   { q: "Quanto tempo leva a análise?", a: "Alguns minutos depois de a gravação chegar. Acompanhe o status em Agendas: Transcrevendo, Analisando e Completo." },
   { q: "A reunião ficou com Erro. E agora?", a: "Abra a reunião e clique em Tentar novamente. Se persistir, confira se o arquivo tem áudio e menos de 20 MB, ou se o link do Drive está aberto para qualquer pessoa com o link." },
   { q: "O cliente percebe que estou gravando?", a: "Pela extensão, o Chrome mostra que a aba está sendo compartilhada só para você. Avise o cliente no início, como pede a LGPD." },
-  { q: "A gravação veio sem o áudio do cliente.", a: "Na janela do Chrome, deixe ligado Compartilhar áudio da guia antes de clicar em Compartilhar." },
+  { q: "A gravação veio sem o áudio do cliente.", a: "Atualize a extensão (1.11 ou mais nova): ela grava a voz do cliente direto da chamada, mesmo com fone. Nas versões antigas, deixe ligado Compartilhar áudio da guia e use o alto-falante padrão no Meet." },
   { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e o áudio da aba (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
   { q: "O título ou o lead da reunião vieram errados.", a: "Conecte sua agenda em Agendas para virem do convite. Dá para corrigir a qualquer momento no menu ⋮ → Editar da agenda." },
   { q: "Como mudar os critérios da análise?", a: "Admins: Configurações → Metodologia de análise. As próximas análises seguem os novos critérios; para uma antiga, use Refazer análise." },
+  { q: "Temos um time de CS. Dá para usar?", a: "Sim. Crie um playbook em Configurações → Playbooks de atendimento e ligue-o ao tipo de reunião do CS. As conversas desse tipo são avaliadas pelo playbook, com saúde do cliente e sinais de risco. Veja a ajuda \"Coach de atendimento\"." },
+  { q: "Como o Sales Coach sabe se a conversa é de venda ou de atendimento?", a: "Pelo tipo de reunião escolhido na gravação: cada tipo aponta para uma metodologia (venda) ou para um playbook (atendimento). Sem playbook ligado, vale a metodologia padrão." },
   { q: "Quem vê as minhas reuniões?", a: "Você, os gestores e os admins da sua empresa. Fora dela, só quem receber um link de compartilhamento que você criar." },
 ];
 

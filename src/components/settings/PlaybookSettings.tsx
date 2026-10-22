@@ -324,10 +324,10 @@ export const PlaybookSettings = () => {
               {draft.methodology_label || "Novo playbook"} (não salvo)
             </span>
           )}
-          <Button type="button" variant="outline" size="sm" onClick={() => setNewOpen(true)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => setNewOpen(true)} data-tour="cfg-playbooks-novo">
             <Plus className="mr-1 h-3.5 w-3.5" /> Novo playbook
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => { setSuggestion(null); setAiOpen(true); }}>
+          <Button type="button" variant="outline" size="sm" onClick={() => { setSuggestion(null); setAiOpen(true); }} data-tour="cfg-playbooks-ia">
             <Sparkles className="mr-1 h-3.5 w-3.5" /> Montar a partir do nosso playbook
           </Button>
         </div>
@@ -369,7 +369,7 @@ export const PlaybookSettings = () => {
             </div>
 
             {/* Etapas */}
-            <div className="space-y-3">
+            <div className="space-y-3" data-tour="cfg-playbooks-etapas">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <Label>Etapas do playbook</Label>
@@ -413,7 +413,7 @@ export const PlaybookSettings = () => {
             </div>
 
             {/* Sinais */}
-            <div className="space-y-3">
+            <div className="space-y-3" data-tour="cfg-playbooks-sinais">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <Label>Sinais a detectar</Label>
@@ -511,7 +511,7 @@ export const PlaybookSettings = () => {
                   <Trash2 className="mr-1 h-4 w-4" /> Excluir
                 </Button>
               ) : <span />}
-              <Button type="button" onClick={handleSave} disabled={saving}>
+              <Button type="button" onClick={handleSave} disabled={saving} data-tour="cfg-playbooks-salvar">
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar playbook
               </Button>
             </div>

@@ -341,7 +341,7 @@ export function CrmSettings() {
                   {temAtendimento && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="secondary" disabled={!!busy}>Criar campos do atendimento</Button>
+                        <Button size="sm" variant="secondary" disabled={!!busy} data-tour="cfg-crm-atendimento">Criar campos do atendimento</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
