@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     await assertQuota(ctx.admin, ctx.orgId, "analise", 1);
 
     const [knowledge, { data: org }, { data: types }, { data: pains }, { data: existing }, { data: analyses }] = await Promise.all([
-      fetchKnowledgeContext(ctx.admin, ctx.orgId),
+      fetchKnowledgeContext(ctx.admin, ctx.orgId, "vendas"),
       ctx.admin.from("organizations").select("name").eq("id", ctx.orgId).maybeSingle(),
       ctx.admin.from("meeting_types").select("label, prompt_context").eq("org_id", ctx.orgId).eq("is_active", true).order("sort_order"),
       ctx.admin.from("pain_items").select("label").eq("org_id", ctx.orgId).limit(40),

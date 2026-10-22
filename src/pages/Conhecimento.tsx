@@ -46,6 +46,18 @@ const typeIcons: Record<string, any> = {
   case: Award,
 };
 
+/**
+ * Área de cada documento: a análise e o coach ao vivo de uma reunião de venda
+ * usam os de Vendas e os de "Ambos"; os de atendimento, os de Atendimento e os
+ * de "Ambos" (ou tudo, quando o playbook tem expansão comercial).
+ */
+const AREAS = [
+  { value: "ambos", label: "Vendas e Atendimento", short: "Vendas e Atendimento" },
+  { value: "vendas", label: "Só Vendas", short: "Vendas" },
+  { value: "atendimento", label: "Só Atendimento (CS)", short: "Atendimento" },
+] as const;
+const areaLabel = (v: string | null | undefined) => AREAS.find((a) => a.value === v)?.short ?? "Vendas e Atendimento";
+
 const docTypeLabels: Record<string, string> = {
   pdf: "PDF",
   doc: "DOC",
@@ -58,6 +70,7 @@ const Conhecimento = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [search, setSearch] = useState("");
+  const [areaFilter, setAreaFilter] = useState("todas");
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -67,7 +80,7 @@ const Conhecimento = () => {
   const isAdmin = role === "admin";
 
   const [sourceTab, setSourceTab] = useState("file");
-  const [newDoc, setNewDoc] = useState({ title: "", category: "", link_url: "", text_content: "" });
+  const [newDoc, setNewDoc] = useState({ title: "", category: "", area: "ambos", link_url: "", text_content: "" });
   const [docFile, setDocFile] = useState<File | null>(null);
   const [newItem, setNewItem] = useState({ name: "", item_type: "produto" as string, description: "", category: "" });
 
@@ -85,7 +98,7 @@ const Conhecimento = () => {
   };
 
   const resetDocForm = () => {
-    setNewDoc({ title: "", category: "", link_url: "", text_content: "" });
+    setNewDoc({ title: "", category: "", area: "ambos", link_url: "", text_content: "" });
     setDocFile(null);
     setSourceTab("file");
   };
@@ -138,6 +151,7 @@ const Conhecimento = () => {
         title: newDoc.title,
         doc_type: docType,
         category: newDoc.category || null,
+        area: newDoc.area,
         file_url: fileUrl,
         extracted_content: extractedContent,
         uploaded_by: user.id,
@@ -170,6 +184,22 @@ const Conhecimento = () => {
       setUploading(false);
     }
   };
+
+  const handleAreaChange = async (docId: string, area: string) => {
+    const before = docs;
+    setDocs((ds) => ds.map((d) => (d.id === docId ? { ...d, area } : d)));
+    const { error } = await supabase.from("knowledge_documents").update({ area }).eq("id", docId);
+    if (error) {
+      setDocs(before);
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Área atualizada", description: `Usado em: ${areaLabel(area)}.` });
+    }
+  };
+
+  const visibleDocs = docs.filter((d) =>
+    d.title.toLowerCase().includes(search.toLowerCase()) &&
+    (areaFilter === "todas" || (d.area ?? "ambos") === areaFilter));
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -345,6 +375,19 @@ const Conhecimento = () => {
                       placeholder="Ex: Portfólio, Proposta, Manual"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>Usar em</Label>
+                    <Select value={newDoc.area} onValueChange={(v) => setNewDoc({ ...newDoc, area: v })}>
+                      <SelectTrigger data-tour="kb-area"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {AREAS.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Reuniões de venda usam os documentos de Vendas; conversas de atendimento, os de Atendimento.
+                      Preços e portfólio que o CS usa em upsell podem ficar em "Vendas e Atendimento".
+                    </p>
+                  </div>
 
                   <div className="space-y-2">
                     <Label>Conteúdo</Label>
@@ -407,7 +450,16 @@ const Conhecimento = () => {
             </Dialog>
           )}
 
-          {docs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase())).length === 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Área:</span>
+            {[{ value: "todas", short: "Todas" }, ...AREAS].map((a) => (
+              <Button key={a.value} type="button" size="sm" variant={areaFilter === a.value ? "secondary" : "ghost"} onClick={() => setAreaFilter(a.value)}>
+                {a.short}
+              </Button>
+            ))}
+          </div>
+
+          {visibleDocs.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-20" />
@@ -416,7 +468,7 @@ const Conhecimento = () => {
             </Card>
           ) : (
             <div className="grid gap-3">
-              {docs.filter((d) => d.title.toLowerCase().includes(search.toLowerCase())).map((doc) => {
+              {visibleDocs.map((doc) => {
                 const DocIcon = getDocIcon(doc.doc_type);
                 return (
                   <Card key={doc.id}>
@@ -443,6 +495,16 @@ const Conhecimento = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         {doc.category && <Badge variant="secondary">{doc.category}</Badge>}
+                        {isAdmin ? (
+                          <Select value={doc.area ?? "ambos"} onValueChange={(v) => handleAreaChange(doc.id, v)}>
+                            <SelectTrigger className="h-8 w-[190px] text-xs" aria-label="Área do documento"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {AREAS.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Badge variant="outline">{areaLabel(doc.area)}</Badge>
+                        )}
                         {isAdmin && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>

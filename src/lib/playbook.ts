@@ -37,6 +37,8 @@ export interface PlaybookBody {
   evitar?: string[];
   sinais?: PlaybookSignal[];
   campos?: PlaybookField[];
+  /** O time também vende nesta conversa (upsell, cross-sell): usa os materiais de Vendas da base. */
+  expansao_comercial?: boolean;
 }
 
 export interface PlaybookPreset {
@@ -160,6 +162,33 @@ export const PLAYBOOK_PRESETS: PlaybookPreset[] = [
       evitar: ["Dar desconto antes de entender a objeção", "Sair sem data de decisão"],
       sinais: SINAIS_BASE,
       campos: [...CAMPOS_BASE, { key: "data_decisao", label: "Data de decisão da renovação" }, { key: "objecao_principal", label: "Principal objeção" }],
+      expansao_comercial: true,
+    },
+  },
+  {
+    id: "expansao",
+    label: "Expansão de conta (upsell e cross-sell)",
+    summary: "CS que vende para a carteira: resultado atual, nova necessidade, oferta ligada a ela, condições e decisão.",
+    steps: [
+      { key: "saude_atual", label: "Situação atual do cliente", description: "Confere uso, resultados e se há algum problema em aberto antes de falar em oferta", max_score: 15, required: true },
+      { key: "necessidade", label: "Nova necessidade ou objetivo", description: "Descobre, com perguntas, uma dor, meta ou área que o contratado hoje não cobre", max_score: 20, required: true },
+      { key: "conexao", label: "Oferta ligada à necessidade", description: "Apresenta o produto, plano ou serviço adicional a partir do que o cliente disse", max_score: 20, required: true },
+      { key: "valor", label: "Valor e retorno esperado", description: "Mostra o ganho para o cliente, com números ou casos parecidos", max_score: 15 },
+      { key: "objecoes", label: "Objeções tratadas", description: "Entende e responde dúvidas de preço, prazo, momento e prioridade", max_score: 10 },
+      { key: "decisao", label: "Decisores e prazo de decisão", description: "Confirma quem aprova a compra e até quando", max_score: 10 },
+      { key: "proximos_passos", label: "Próximos passos com dono e prazo", description: "Fecha com proposta, reunião ou teste combinado e datas", max_score: 10, required: true },
+    ],
+    body: {
+      objetivo: "Ampliar a conta a partir de uma necessidade real do cliente, sem comprometer a relação nem a saúde da carteira.",
+      boas_praticas: ["Começar pelos resultados que o cliente já tem", "Ligar a oferta a algo que o cliente disse", "Usar preços e condições oficiais", "Envolver quem decide no cliente"],
+      evitar: ["Oferecer com o cliente insatisfeito ou com problema em aberto", "Empurrar produto sem necessidade levantada", "Inventar preço, desconto ou funcionalidade"],
+      sinais: [
+        ...SINAIS_BASE,
+        { key: "orcamento", label: "Orçamento disponível ou previsto", tipo: "oportunidade", description: "Fala em verba aprovada, novo ciclo de orçamento ou investimento planejado" },
+        { key: "concorrente", label: "Usa ou avalia concorrente para a nova necessidade", tipo: "atencao", description: "Cita outro fornecedor para o que a oferta resolveria" },
+      ],
+      campos: [...CAMPOS_BASE, { key: "produto_oferecido", label: "Produto ou plano oferecido" }, { key: "valor_estimado", label: "Valor estimado da expansão" }, { key: "data_decisao", label: "Data de decisão" }],
+      expansao_comercial: true,
     },
   },
   {

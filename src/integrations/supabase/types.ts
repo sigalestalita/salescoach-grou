@@ -678,6 +678,7 @@ export type Database = {
       }
       knowledge_documents: {
         Row: {
+          area: string
           category: string | null
           created_at: string
           doc_type: string
@@ -690,6 +691,7 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          area?: string
           category?: string | null
           created_at?: string
           doc_type: string
@@ -702,6 +704,7 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          area?: string
           category?: string | null
           created_at?: string
           doc_type?: string
@@ -1976,7 +1979,7 @@ export type Database = {
       }
       is_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
       knowledge_docs_preview: {
-        Args: { _chars?: number; _org_id: string }
+        Args: { _area?: string; _chars?: number; _org_id: string }
         Returns: {
           category: string
           preview: string

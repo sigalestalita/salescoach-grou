@@ -70,5 +70,6 @@ export function parsePlaybookSuggestion(raw: string) {
     campos: unicas(campos),
     temperature_levels: unicas(niveis),
     extra_instructions: clean(s.extra_instructions, 2000),
+    expansao_comercial: s.expansao_comercial === true,
   };
 }

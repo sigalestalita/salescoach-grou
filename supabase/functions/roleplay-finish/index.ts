@@ -5,7 +5,7 @@
 
 import { json, preflight } from "../_shared/cors.ts";
 import { getCaller, HttpError, logUsage } from "../_shared/tenant.ts";
-import { buildAnalysisPrompt, fetchKnowledgeContext, loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
+import { buildAnalysisPrompt, fetchKnowledgeContext, knowledgeAreaFor, loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
 import { achaCenario } from "../_shared/roleplay-scenarios.ts";
 
 const ROLEPLAY_MODEL = Deno.env.get("ROLEPLAY_MODEL") ?? "google/gemini-2.5-flash";
@@ -55,14 +55,14 @@ Deno.serve(async (req) => {
       .map((m: { role: string; content: string }) => `${m.role === "seller" ? "Vendedor" : persona.name}: ${m.content}`)
       .join("\n");
 
-    const [template, meetingTypeContext, knowledgeContext, meetingTypeLabelRes] = await Promise.all([
+    const [template, meetingTypeContext, meetingTypeLabelRes] = await Promise.all([
       loadTemplate(ctx.admin, ctx.orgId, session.meeting_type),
       loadMeetingTypeContext(ctx.admin, ctx.orgId, session.meeting_type),
-      fetchKnowledgeContext(ctx.admin, ctx.orgId),
       session.meeting_type
         ? ctx.admin.from("meeting_types").select("label").eq("org_id", ctx.orgId).eq("key", session.meeting_type).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
+    const knowledgeContext = await fetchKnowledgeContext(ctx.admin, ctx.orgId, knowledgeAreaFor(template));
 
     const prompt = buildAnalysisPrompt({
       template,
