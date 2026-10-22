@@ -27,7 +27,6 @@ export type Database = {
           model_used: string | null
           org_id: string
           overall_score: number | null
-          playbook_result: Json | null
           rag_results: Json | null
           raw_analysis: Json | null
           sales_coach: Json | null
@@ -47,7 +46,6 @@ export type Database = {
           model_used?: string | null
           org_id: string
           overall_score?: number | null
-          playbook_result?: Json | null
           rag_results?: Json | null
           raw_analysis?: Json | null
           sales_coach?: Json | null
@@ -67,7 +65,6 @@ export type Database = {
           model_used?: string | null
           org_id?: string
           overall_score?: number | null
-          playbook_result?: Json | null
           rag_results?: Json | null
           raw_analysis?: Json | null
           sales_coach?: Json | null
@@ -101,12 +98,10 @@ export type Database = {
           is_default: boolean
           methodology_key: string
           methodology_label: string
-          mode: string
           name: string
           org_id: string
           output_language: string
           persona: string
-          playbook: Json | null
           qualification_criteria: Json
           temperature_levels: Json
           updated_at: string
@@ -119,12 +114,10 @@ export type Database = {
           is_default?: boolean
           methodology_key?: string
           methodology_label?: string
-          mode?: string
           name: string
           org_id: string
           output_language?: string
           persona?: string
-          playbook?: Json | null
           qualification_criteria?: Json
           temperature_levels?: Json
           updated_at?: string
@@ -137,12 +130,10 @@ export type Database = {
           is_default?: boolean
           methodology_key?: string
           methodology_label?: string
-          mode?: string
           name?: string
           org_id?: string
           output_language?: string
           persona?: string
-          playbook?: Json | null
           qualification_criteria?: Json
           temperature_levels?: Json
           updated_at?: string
