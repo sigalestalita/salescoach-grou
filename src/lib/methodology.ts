@@ -131,7 +131,10 @@ export interface MethodologySnapshot {
   id?: string | null;
   key?: string;
   label: string;
-  criteria: QualificationCriterion[];
+  /** "playbook" = análise de atendimento (ver migração 20261028090000). */
+  mode?: "vendas" | "playbook";
+  criteria: (QualificationCriterion & { required?: boolean })[];
+  levels?: { key: string; label: string }[];
   frameworks?: { meddic?: boolean; spin?: boolean; talk_ratio?: boolean };
 }
 
@@ -143,9 +146,18 @@ export function methodologyOf(analysis: { methodology?: unknown } | null | undef
   const snap = analysis?.methodology as MethodologySnapshot | null | undefined;
   if (snap && Array.isArray(snap.criteria) && snap.criteria.length) {
     const max = Math.max(...snap.criteria.map((c) => c.max_score ?? 25));
-    return { label: snap.label || config.methodologyLabel, criteria: snap.criteria, maxCriterionScore: max };
+    return {
+      label: snap.label || config.methodologyLabel,
+      criteria: snap.criteria,
+      maxCriterionScore: max,
+      mode: snap.mode === "playbook" ? "playbook" as const : "vendas" as const,
+      levels: Array.isArray(snap.levels) && snap.levels.length ? snap.levels : config.temperatureLevels,
+    };
   }
-  return { label: config.methodologyLabel, criteria: config.criteria, maxCriterionScore: config.maxCriterionScore };
+  return {
+    label: config.methodologyLabel, criteria: config.criteria, maxCriterionScore: config.maxCriterionScore,
+    mode: "vendas" as const, levels: config.temperatureLevels,
+  };
 }
 
 /** Grade dos cards de metodologia, conforme quantos aparecem (1 a 3). */

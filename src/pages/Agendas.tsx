@@ -94,7 +94,8 @@ const Agendas = () => {
   const { config } = useOrgConfig();
   const meetingTypes = config.meetingTypes;
   const defaultMeetingType = meetingTypes[0]?.key ?? "";
-  const tempLabels = temperatureLabels(config.temperatureLevels);
+  // Faixas de todas as metodologias e playbooks; as da padrão prevalecem.
+  const tempLabels = { ...config.allLevelLabels, ...temperatureLabels(config.temperatureLevels) };
   const typeLabel = (key: string | null) =>
     meetingTypes.find((t) => t.key === key)?.label ?? key ?? "—";
 

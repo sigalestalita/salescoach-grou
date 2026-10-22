@@ -36,9 +36,12 @@ interface MeetingTypeRow {
   analysis_template_id: string | null;
 }
 
-interface TemplateOption { id: string; methodology_label: string; is_default: boolean }
+interface TemplateOption { id: string; methodology_label: string; is_default: boolean; mode: string }
 
 const DEFAULT_METHOD = "padrao";
+
+/** Metodologia de vendas pelo nome; playbook de atendimento marcado como tal. */
+const optionLabel = (t: TemplateOption) => (t.mode === "playbook" ? `Playbook: ${t.methodology_label}` : t.methodology_label);
 
 const slugify = (value: string) =>
   value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
@@ -60,7 +63,7 @@ export function MeetingTypesSettings() {
     const [{ data, error }, { data: tpls }] = await Promise.all([
       supabase.from("meeting_types")
         .select("id, key, label, prompt_context, sort_order, is_active, analysis_template_id").order("sort_order").order("label"),
-      supabase.from("analysis_templates").select("id, methodology_label, is_default").order("is_default", { ascending: false }).order("created_at"),
+      supabase.from("analysis_templates").select("id, methodology_label, is_default, mode").order("is_default", { ascending: false }).order("created_at"),
     ]);
     if (error) toast({ title: "Não foi possível carregar os tipos", description: error.message, variant: "destructive" });
     setRows(data ?? []);
@@ -169,7 +172,7 @@ export function MeetingTypesSettings() {
                     <button type="button" onClick={() => openRow(r)} className="flex flex-1 items-center gap-2 text-left" aria-expanded={isOpen}>
                       <span className="font-medium">{r.label}</span>
                       {r.analysis_template_id && templates.find((t) => t.id === r.analysis_template_id) && (
-                        <Badge variant="outline" className="text-[10px]">{templates.find((t) => t.id === r.analysis_template_id)!.methodology_label}</Badge>
+                        <Badge variant="outline" className="text-[10px]">{optionLabel(templates.find((t) => t.id === r.analysis_template_id)!)}</Badge>
                       )}
                       {r.prompt_context && <Badge variant="secondary" className="text-[10px]">com instruções</Badge>}
                       {!r.is_active && <Badge variant="outline" className="text-[10px]">inativo</Badge>}
@@ -184,7 +187,7 @@ export function MeetingTypesSettings() {
                         <Input value={d.label} onChange={(e) => setDraft({ ...draft, [r.id]: { ...d, label: e.target.value } })} />
                       </div>
                       <div className="space-y-1.5">
-                        <Label>Metodologia de análise</Label>
+                        <Label>Metodologia ou playbook de análise</Label>
                         <Select value={d.template} onValueChange={(v) => setDraft({ ...draft, [r.id]: { ...d, template: v } })}
                           onOpenChange={(o) => { if (o) load(); }}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
@@ -193,11 +196,11 @@ export function MeetingTypesSettings() {
                               Padrão da empresa{templates.find((t) => t.is_default) ? ` (${templates.find((t) => t.is_default)!.methodology_label})` : ""}
                             </SelectItem>
                             {templates.filter((t) => !t.is_default).map((t) => (
-                              <SelectItem key={t.id} value={t.id}>{t.methodology_label}</SelectItem>
+                              <SelectItem key={t.id} value={t.id}>{optionLabel(t)}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Crie outras metodologias em Metodologias de análise, logo abaixo.</p>
+                        <p className="text-xs text-muted-foreground">Crie outras metodologias em Metodologias de análise e playbooks de atendimento em Playbooks de atendimento, logo abaixo.</p>
                       </div>
                       <div className="space-y-1.5">
                         <Label>Instruções para a análise (opcional)</Label>

@@ -194,7 +194,8 @@ const MeetingDetail = () => {
   const ragResults = analysis?.rag_results as any;
   const rawAnalysis = analysis?.raw_analysis as any;
 
-  const tempLabels = temperatureLabels(config.temperatureLevels);
+  // Faixas de todas as metodologias e playbooks; as da padrão prevalecem.
+  const tempLabels = { ...config.allLevelLabels, ...temperatureLabels(config.temperatureLevels) };
 
   // Cartão de temperatura em cor cheia, do frio ao quente.
   const tempColors: Record<string, string> = {
