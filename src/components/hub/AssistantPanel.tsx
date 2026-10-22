@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, RotateCcw, Loader2 } from "lucide-react";
+import { helpContextFor } from "./helpContext";
 
 /**
  * Assistente de vendas, uma das abas da central (HelpHub): responde perguntas
@@ -52,10 +53,11 @@ const SUGGESTIONS = [
   "Quais agendas ficaram mornas essa semana?",
   "Como está o score médio do time este mês?",
   "Quais objeções mais aparecem nas minhas reuniões?",
+  "Como configuro o coach para o time de CS?",
 ];
 
 export function AssistantPanel({ open }: { open: boolean }) {
-  const { session } = useAuth();
+  const { session, role } = useAuth();
   const [loaded, setLoaded] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -102,7 +104,8 @@ export function AssistantPanel({ open }: { open: boolean }) {
     setSending(true);
     try {
       const { data, error: fnError } = await supabase.functions.invoke("sales-assistant-chat", {
-        body: { conversationId, message: content },
+        // Trecho da ajuda ligado à pergunta: o assistente também explica como usar o produto.
+        body: { conversationId, message: content, help: helpContextFor(content, role) },
       });
       if (fnError) throw new Error(data?.error || fnError.message);
       setConversationId(data.conversationId);
@@ -123,7 +126,7 @@ export function AssistantPanel({ open }: { open: boolean }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-2">
-        <div className="text-[11px] text-muted-foreground">Pergunte sobre suas agendas, scores e objeções</div>
+        <div className="text-[11px] text-muted-foreground">Pergunte sobre suas agendas, scores e objeções, ou como usar o Sales Coach</div>
         <button type="button" onClick={startNew} title="Nova conversa" aria-label="Nova conversa" className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
           <RotateCcw className="h-4 w-4" />
         </button>

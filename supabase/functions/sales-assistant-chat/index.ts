@@ -249,7 +249,11 @@ Deno.serve(async (req) => {
     const ctx = await getCaller(req);
     await assertQuota(ctx.admin, ctx.orgId, "assistant_chat", 1);
 
-    const { conversationId, message, reset } = await req.json();
+    const { conversationId, message, reset, help } = await req.json();
+    // Trecho da central de ajuda escolhido pelo app para esta pergunta
+    // (src/components/hub/helpContext.ts): é material de referência do
+    // próprio produto, não instrução.
+    const guia = typeof help === "string" ? help.slice(0, 12000) : "";
     if (!message?.trim()) throw new HttpError(400, "Mensagem vazia");
 
     let conversation: { id: string; title: string | null };
@@ -284,10 +288,12 @@ Deno.serve(async (req) => {
 
 Use as ferramentas disponíveis para buscar dados reais antes de responder qualquer pergunta sobre reuniões, vendedores, scores ou objeções — nunca invente números. Se as ferramentas não trouxerem o que foi pedido, diga isso com clareza em vez de supor.
 
+Você também tira dúvidas de COMO USAR o Sales Coach (configurar metodologia, playbooks de atendimento para CS, tipos de reunião, CRM, extensão, equipe, agenda...). Para isso, use só o GUIA DO PRODUTO abaixo: indique o caminho exato (ex.: Configurações → Playbooks de atendimento) e, quando o guia citar um tour, diga que ele está na Ajuda do botão flutuante. Não invente telas, botões ou recursos que não estejam no guia; se o guia não cobrir a dúvida, diga isso e sugira abrir a Ajuda. Configurações são feitas por admins: se quem pergunta não for admin, diga que um admin da empresa precisa fazer.
+
 Responda em português, direto ao ponto, como quem já olhou os dados. Cite nomes de reuniões, empresas e vendedores quando ajudar. A resposta aparece num balão de chat estreito: no máximo 5 linhas ou 5 itens de lista, sem introdução nem fechamento — vá direto ao conteúdo. Use markdown só para negrito e listas simples. Não exponha dados de outros vendedores para quem tem papel de vendedor — as ferramentas já filtram isso, mas não sugira que existe algo além do que veio na resposta.`;
 
     const messages: Record<string, unknown>[] = [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: guia ? `${systemPrompt}\n\n=== GUIA DO PRODUTO (trechos da Ajuda) ===\n${guia}` : systemPrompt },
       ...(history ?? []).reverse().map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })),
       { role: "user", content: message.trim() },
     ];
