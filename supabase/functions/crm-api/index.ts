@@ -21,7 +21,7 @@ import { loadTemplate } from "../_shared/analysis-template.ts";
 import { accountLabel, activeConnection, connectorFor, saveConnection } from "../_shared/crm/connection.ts";
 import { kommoAccountName, kommoBase, tokenExpiry } from "../_shared/crm/kommo.ts";
 import { nexaAccountName, nexaBase, nexaDisponivel } from "../_shared/crm/nexa.ts";
-import { sourceCatalog } from "../_shared/crm/mapping.ts";
+import { healthOptions, type PlaybookCatalog, sourceCatalog } from "../_shared/crm/mapping.ts";
 import { enqueueMeeting, processJob } from "../_shared/crm/sync.ts";
 import { CrmError } from "../_shared/crm/types.ts";
 
@@ -42,6 +42,25 @@ async function requireConnection(ctx: CallerContext) {
 }
 
 /** Tipo do campo a criar no CRM para cada dado do Sales Coach. */
+/** Playbooks de atendimento da organização: as faixas de saúde e as informações a registrar. */
+async function playbookCatalog(admin: CallerContext["admin"], orgId: string): Promise<PlaybookCatalog[]> {
+  const { data } = await admin.from("analysis_templates")
+    .select("methodology_label, temperature_levels, playbook").eq("org_id", orgId).eq("mode", "playbook").order("created_at");
+  return (data ?? []).map((t) => ({
+    label: t.methodology_label,
+    levels: Array.isArray(t.temperature_levels) ? t.temperature_levels as { key: string; label: string }[] : [],
+    campos: Array.isArray((t.playbook as { campos?: unknown } | null)?.campos)
+      ? ((t.playbook as { campos: { key: string; label: string; description?: string }[] }).campos)
+      : [],
+  }));
+}
+
+/** Catálogo de dados da organização: metodologia padrão e playbooks. */
+async function orgCatalog(admin: CallerContext["admin"], orgId: string) {
+  const [template, playbooks] = await Promise.all([loadTemplate(admin, orgId), playbookCatalog(admin, orgId)]);
+  return { template, playbooks, catalog: sourceCatalog(template.qualification_criteria, playbooks) };
+}
+
 const FIELD_TYPE: Record<string, "number" | "text" | "date" | "option" | "hyperlink"> = {
   number: "number", text: "text", date: "date", option: "option", url: "hyperlink",
 };
@@ -67,9 +86,9 @@ Deno.serve(async (req) => {
           .select("id, provider, status, account_label, connected_at, last_error, settings")
           .eq("org_id", ctx.orgId).neq("status", "desconectado").maybeSingle();
         const { data: mappings } = await ctx.admin.from("crm_field_mappings").select("*").eq("org_id", ctx.orgId);
-        const template = await loadTemplate(ctx.admin, ctx.orgId);
+        const { catalog } = await orgCatalog(ctx.admin, ctx.orgId);
         return json(req, {
-          connection: conn ?? null, mappings: mappings ?? [], catalog: sourceCatalog(template.qualification_criteria),
+          connection: conn ?? null, mappings: mappings ?? [], catalog,
           extra_providers: nexaDisponivel(ctx.email) ? ["nexa"] : [],
         });
       }
@@ -84,16 +103,16 @@ Deno.serve(async (req) => {
         requireRole(ctx, "admin");
         const conn = await requireConnection(ctx);
         const crm = await connectorFor(ctx.admin, conn);
-        const template = await loadTemplate(ctx.admin, ctx.orgId);
-        const catalog = sourceCatalog(template.qualification_criteria);
+        const { template, playbooks, catalog } = await orgCatalog(ctx.admin, ctx.orgId);
         const wanted: string[] = Array.isArray(body.sources) ? body.sources : [];
         const existing = await crm.listDealFields();
         const created: string[] = [];
         for (const key of wanted) {
           const src = catalog.find((s) => s.key === key);
           if (!src) continue;
-          const label = `Sales Coach · ${src.label.replace(/^Critério: /, "")}`;
-          const options = src.key === "temperatura" ? template.temperature_levels.map((l) => l.label) : undefined;
+          const label = `Sales Coach · ${src.label.replace(/^(Critério|Info): /, "")}`;
+          const options = src.key === "temperatura" ? template.temperature_levels.map((l) => l.label)
+            : src.key === "atd:saude" ? healthOptions(playbooks) : undefined;
           const field = existing.find((f) => f.label === label) ??
             await crm.createDealField(label, FIELD_TYPE[src.type], options);
           await ctx.admin.from("crm_field_mappings").upsert({
@@ -109,9 +128,9 @@ Deno.serve(async (req) => {
       case "save_mapping": {
         requireRole(ctx, "admin");
         const conn = await requireConnection(ctx);
-        const template = await loadTemplate(ctx.admin, ctx.orgId);
+        const { catalog } = await orgCatalog(ctx.admin, ctx.orgId);
         const sourceKey = String(body.source_key ?? "");
-        if (!sourceCatalog(template.qualification_criteria).some((s) => s.key === sourceKey)) {
+        if (!catalog.some((s) => s.key === sourceKey)) {
           throw new HttpError(400, "Dado desconhecido.");
         }
         if (!body.target_field) {

@@ -40,6 +40,10 @@ A análise passou a pedir à IA a data do próximo passo combinada
 (`sales_coach.next_step_date`), usada como prazo da tarefa. Sem data combinada,
 a tarefa vence em 2 dias úteis.
 
+Conversas de atendimento, avaliadas por playbook, mandam os próprios dados
+(aderência, saúde do cliente, sinais, compromissos e as informações a registrar
+de cada playbook), além da anotação e da tarefa. Ver `docs/playbooks-atendimento.md`.
+
 ## Colocar no ar
 
 1. **App no RD Station** — em <https://appstore.rdstation.com/pt-BR/publisher>,

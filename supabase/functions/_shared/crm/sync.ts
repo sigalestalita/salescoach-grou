@@ -161,6 +161,11 @@ export async function processJob(admin: SupabaseClient, job: JobRow): Promise<Jo
       criteria: template.qualification_criteria,
       temperatureLevels: template.temperature_levels,
       analysisUrl: appUrl() ? `${appUrl()}/agendas/${meeting.id}` : null,
+      // A análise guarda com que régua foi feita; vale mais que o tipo de reunião
+      // atual, que pode ter mudado de metodologia ou playbook depois.
+      mode: (analysis.methodology as { mode?: string } | null)?.mode === "playbook" || (!analysis.methodology && template.mode === "playbook")
+        ? "playbook" : "vendas",
+      playbookLabel: (analysis.methodology as { label?: string } | null)?.label ?? template.methodology_label,
     };
 
     return await withAuthRetry(admin, conn, async (crm) => {

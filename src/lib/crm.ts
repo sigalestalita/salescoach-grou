@@ -34,6 +34,8 @@ export interface CrmSource {
   label: string;
   type: "number" | "text" | "date" | "option" | "url";
   description: string;
+  /** De quais reuniões o dado sai: vendas, atendimento (playbook) ou das duas. */
+  area?: "vendas" | "atendimento" | "ambos";
 }
 
 export interface CrmMapping {

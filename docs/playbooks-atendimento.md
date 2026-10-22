@@ -67,7 +67,16 @@ tipo de reunião. Em Atendimento: aderência média, clientes em risco (metade
 pior das faixas de saúde), saúde dos clientes, etapas médias por playbook,
 sinais detectados (risco, oportunidade, atenção) e aderência por pessoa.
 
-## Ainda não coberto
+## CRM
 
-- O envio ao CRM manda os campos de venda; para atendimento, o mapeamento
-  ainda precisa ser definido (ex.: saúde do cliente num campo da empresa).
+As conversas de atendimento vão para o negócio do CRM como as de venda, com os
+próprios dados (Configurações → Integração com CRM, grupo "Conversas de
+atendimento"): aderência ao playbook, saúde do cliente, playbook usado, sinais
+de risco, oportunidades, etapas não cumpridas, compromissos, pendências do
+cliente, como o cliente saiu e cada **informação a registrar** dos playbooks
+(ex.: data de go-live, responsável no cliente). O botão "Criar campos do
+atendimento" cria esses campos no CRM e já faz o mapeamento. A anotação e a
+tarefa também são criadas, com o texto de atendimento (aderência, saúde,
+etapas, sinais, compromissos). Dados de venda (nota, temperatura, critérios,
+dores) não saem de conversa de atendimento, e vice-versa; resumo, próximo
+passo, datas, fala e link saem das duas.
