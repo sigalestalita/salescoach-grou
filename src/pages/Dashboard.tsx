@@ -406,7 +406,7 @@ const Dashboard = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
         {hasAtendimento && (
-          <Tabs value={area} onValueChange={(v) => { setArea(v as Area); setSelectedSeller("all"); }}>
+          <Tabs value={area} onValueChange={(v) => { setArea(v as Area); setSelectedSeller("all"); }} data-tour="dash-area">
             <TabsList>
               <TabsTrigger value="vendas">Vendas</TabsTrigger>
               <TabsTrigger value="atendimento">Atendimento</TabsTrigger>
