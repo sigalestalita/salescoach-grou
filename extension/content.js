@@ -335,7 +335,9 @@
   async function pedirTela() {
     try {
       return await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
+        // 720p a 8 quadros/s: basta para ver a tela e pesa bem menos no
+        // processador, que já está ocupado com o próprio Meet.
+        video: { width: { max: 1280 }, height: { max: 720 }, frameRate: { max: 8 } },
         audio: true,
         // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
         // em "Compartilhar".
@@ -426,7 +428,10 @@
     const combinedStream = new MediaStream(tracks);
 
     const isVideo = hasScreen && screenStream.getVideoTracks().length > 0;
-    const mimeType = isVideo ? 'video/webm;codecs=vp8,opus' : 'audio/webm;codecs=opus';
+    // H.264 costuma ser comprimido pelo chip de vídeo; VP8 vai todo para o processador.
+    const mimeType = isVideo
+      ? (['video/webm;codecs=h264,opus', 'video/webm;codecs=vp8,opus'].find((t) => MediaRecorder.isTypeSupported(t)) || 'video/webm')
+      : 'audio/webm;codecs=opus';
     const mode = isVideo ? 'screen_audio' : 'audio_only';
 
     // Os pedaços ficam presos a ESTA gravação. Antes eram empurrados para uma
@@ -436,7 +441,7 @@
     const chunks = [];
     recordedChunks = chunks;
     mediaRecorder = new MediaRecorder(combinedStream, {
-      mimeType, ...(isVideo ? { videoBitsPerSecond: 1_000_000 } : {}),
+      mimeType, ...(isVideo ? { videoBitsPerSecond: 600_000 } : {}),
     });
     const meuRecorder = mediaRecorder;
     mediaRecorder.ondataavailable = (e) => {
@@ -838,19 +843,7 @@
       ch.ctx = new AudioContext({ sampleRate: 16000 });
       ch.ctx.resume().catch(() => {});
       ch.source = ch.ctx.createMediaStreamSource(stream);
-      ch.processor = ch.ctx.createScriptProcessor(4096, 1, 1);
-      ch.source.connect(ch.processor);
-      ch.processor.connect(ch.ctx.destination);
-      ch.processor.onaudioprocess = (e) => {
-        if (!ch.ws || ch.ws.readyState !== 1) return;
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const v = Math.max(-1, Math.min(1, input[i]));
-          pcm[i] = v < 0 ? v * 0x8000 : v * 0x7FFF;
-        }
-        ch.ws.send(pcm.buffer);
-      };
+      ligarPcm(ch);
     }
 
     const ws = new WebSocket(`${AAI_WS}&token=${encodeURIComponent(token)}`);
@@ -897,6 +890,37 @@
         }
       }, delay);
     };
+  }
+
+  // A conversão para PCM roda num AudioWorklet, na thread de áudio, fora da
+  // thread do Meet. Se o worklet não carregar, volta ao ScriptProcessorNode
+  // (obsoleto, roda na thread da página, mas funciona).
+  const enviar = (ch, buf) => { if (ch.ws && ch.ws.readyState === 1) ch.ws.send(buf); };
+  async function ligarPcm(ch) {
+    try {
+      await ch.ctx.audioWorklet.addModule(chrome.runtime.getURL('pcm-worklet.js'));
+      if (!ch.ctx || ch.ctx.state === 'closed') return;
+      ch.processor = new AudioWorkletNode(ch.ctx, 'salescoach-pcm', { numberOfInputs: 1, numberOfOutputs: 0 });
+      ch.processor.port.onmessage = (e) => enviar(ch, e.data);
+      ch.source.connect(ch.processor);
+    } catch (e) {
+      console.warn('Sales Coach: AudioWorklet indisponível, usando ScriptProcessor', e);
+      if (!ch.ctx || ch.ctx.state === 'closed') return;
+      try {
+        ch.processor = ch.ctx.createScriptProcessor(4096, 1, 1);
+        ch.source.connect(ch.processor);
+        ch.processor.connect(ch.ctx.destination);
+        ch.processor.onaudioprocess = (ev) => {
+          const input = ev.inputBuffer.getChannelData(0);
+          const pcm = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const v = Math.max(-1, Math.min(1, input[i]));
+            pcm[i] = v < 0 ? v * 0x8000 : v * 0x7FFF;
+          }
+          enviar(ch, pcm.buffer);
+        };
+      } catch (e2) { console.warn('Sales Coach: trilha sem transcrição ao vivo', e2); }
+    }
   }
 
   async function startLive(token, mid, streams) {
