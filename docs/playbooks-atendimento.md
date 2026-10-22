@@ -51,6 +51,7 @@ ao cliente batem com os documentos da empresa.
 | Modelos prontos | `src/lib/playbook.ts` |
 | Tela de configuração | `src/components/settings/PlaybookSettings.tsx` |
 | Resultado da reunião | `src/components/MeetingAnalysisView.tsx` |
+| Painel por área | `src/pages/Dashboard.tsx`, `meetingArea` e `isAtRisk` em `src/lib/methodology.ts` |
 | Testes | `src/test/playbook.test.ts` |
 
 O playbook mora na mesma tabela das metodologias e reaproveita as colunas:
@@ -58,9 +59,15 @@ etapas em `qualification_criteria` e faixas de saúde em `temperature_levels`.
 Por isso o resto do sistema (temperatura na lista de agendas, filtros,
 compartilhamento) funciona sem mudança, com os rótulos de saúde.
 
+## Painel por área
+
+O Dashboard separa **Vendas** e **Atendimento** (a aba aparece quando a empresa
+tem playbook). A área de cada reunião vem da análise; sem análise ainda, do
+tipo de reunião. Em Atendimento: aderência média, clientes em risco (metade
+pior das faixas de saúde), saúde dos clientes, etapas médias por playbook,
+sinais detectados (risco, oportunidade, atenção) e aderência por pessoa.
+
 ## Ainda não coberto
 
-- O painel (Dashboard) mistura a nota de vendas com a aderência dos playbooks
-  na média geral; separar por área é o próximo passo.
 - O envio ao CRM manda os campos de venda; para atendimento, o mapeamento
   ainda precisa ser definido (ex.: saúde do cliente num campo da empresa).

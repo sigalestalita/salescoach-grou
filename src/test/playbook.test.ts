@@ -4,6 +4,8 @@ import {
 } from "../../supabase/functions/_shared/analysis-template";
 import { parsePlaybookSuggestion, pesos100 } from "../../supabase/functions/_shared/playbook-suggestion";
 import { HEALTH_LEVELS, PLAYBOOK_PRESETS } from "@/lib/playbook";
+import { isAtRisk, meetingArea } from "@/lib/methodology";
+import { FALLBACK_CONFIG } from "@/hooks/useOrgConfig";
 
 // Coach de atendimento: a mesma tabela de templates, com mode = 'playbook'.
 // Estes testes garantem que o prompt muda de régua (playbook, não qualificação
@@ -94,5 +96,23 @@ describe("sugestão de playbook pela IA", () => {
 
   it("pesos inválidos viram divisão igual", () => {
     expect(pesos100([0, -1, Number.NaN, 5]).reduce((a, b) => a + b, 0)).toBe(100);
+  });
+});
+
+describe("painel por área", () => {
+  const typeArea = new Map([["onboarding", "atendimento" as const], ["demo", "vendas" as const]]);
+  it("a área vem da análise; sem análise, do tipo de reunião", () => {
+    const playbookAnalysis = { methodology: { label: "Onboarding", mode: "playbook", criteria: [{ key: "a", label: "A" }] } };
+    const salesAnalysis = { methodology: { label: "BANT", criteria: [{ key: "budget", label: "Budget" }] } };
+    expect(meetingArea(playbookAnalysis, "demo", typeArea, FALLBACK_CONFIG)).toBe("atendimento");
+    expect(meetingArea(salesAnalysis, "onboarding", typeArea, FALLBACK_CONFIG)).toBe("vendas");
+    expect(meetingArea(null, "onboarding", typeArea, FALLBACK_CONFIG)).toBe("atendimento");
+    expect(meetingArea(null, null, typeArea, FALLBACK_CONFIG)).toBe("vendas");
+    // Análise antiga, sem o resumo da metodologia: conta como vendas.
+    expect(meetingArea({ methodology: null }, "onboarding", typeArea, FALLBACK_CONFIG)).toBe("vendas");
+  });
+  it("cliente em risco = metade pior das faixas de saúde", () => {
+    expect(HEALTH_LEVELS.filter((l) => isAtRisk(HEALTH_LEVELS, l.key)).map((l) => l.key)).toEqual(["critico", "em_risco"]);
+    expect(isAtRisk(HEALTH_LEVELS, "inexistente")).toBe(false);
   });
 });

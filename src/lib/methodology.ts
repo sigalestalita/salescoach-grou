@@ -160,6 +160,29 @@ export function methodologyOf(analysis: { methodology?: unknown } | null | undef
   };
 }
 
+/** Área da reunião no painel: Vendas (metodologia) ou Atendimento (playbook). */
+export type MeetingArea = "vendas" | "atendimento";
+
+/**
+ * Área de uma reunião: a da análise mais recente; sem análise, a do template
+ * ligado ao tipo de reunião (typeArea: chave do tipo → área).
+ */
+export function meetingArea(
+  analysis: { methodology?: unknown } | null | undefined,
+  meetingType: string | null | undefined,
+  typeArea: Map<string, MeetingArea>,
+  config: OrgConfig,
+): MeetingArea {
+  if (analysis) return methodologyOf(analysis, config).mode === "playbook" ? "atendimento" : "vendas";
+  return (meetingType && typeArea.get(meetingType)) || "vendas";
+}
+
+/** A faixa de saúde está na metade pior da escala (cliente em risco)? */
+export function isAtRisk(levels: { key: string }[], key: string | null | undefined): boolean {
+  const idx = levels.findIndex((l) => l.key === key);
+  return idx >= 0 && idx < Math.floor(levels.length / 2);
+}
+
 /** Grade dos cards de metodologia, conforme quantos aparecem (1 a 3). */
 export const FRAMEWORK_GRID: Record<number, string> = {
   1: "grid gap-4",
