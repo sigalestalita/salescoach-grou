@@ -20,6 +20,8 @@
   let screenStream = null;
   let micStream = null;
   let audioContext = null;
+  // Voz do cliente: chamada (remote-audio.js) ou aba compartilhada, a que tiver som.
+  let clienteMix = null;
   // Trilhas do live: { vendedor, cliente } → { ws, ctx, source, processor, ... }
   let liveChannels = {};
   let liveStartedAt = 0;
@@ -333,7 +335,9 @@
   async function pedirTela() {
     try {
       return await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { max: 1920 }, height: { max: 1080 }, frameRate: { max: 15 } },
+        // 720p a 8 quadros/s: basta para ver a tela e pesa bem menos no
+        // processador, que já está ocupado com o próprio Meet.
+        video: { width: { max: 1280 }, height: { max: 720 }, frameRate: { max: 8 } },
         audio: true,
         // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
         // em "Compartilhar".
@@ -349,7 +353,9 @@
   function escolherSemTela() {
     return new Promise((resolve) => {
       initEl.className = 'sc-status error';
-      initEl.textContent = 'A tela não foi compartilhada. Sem ela, a gravação fica sem vídeo e sem a voz do cliente.';
+      initEl.textContent = temAudioDaChamada()
+        ? 'A tela não foi compartilhada. Sem ela, a gravação fica sem vídeo.'
+        : 'A tela não foi compartilhada. Sem ela, a gravação fica sem vídeo e sem a voz do cliente.';
       const tela = document.createElement('button');
       tela.type = 'button';
       tela.className = 'sc-btn sc-btn-primary';
@@ -357,7 +363,7 @@
       const audio = document.createElement('button');
       audio.type = 'button';
       audio.className = 'sc-btn';
-      audio.textContent = 'Gravar só o meu áudio';
+      audio.textContent = temAudioDaChamada() ? 'Gravar só o áudio' : 'Gravar só o meu áudio';
       const hint = document.createElement('div');
       hint.className = 'sc-hint';
       hint.textContent = 'Escolha a aba da reunião e deixe "Compartilhar áudio da guia" ligado.';
@@ -408,18 +414,24 @@
     }
 
     audioContext = new AudioContext();
+    // Criado depois do seletor de tela, o contexto pode nascer suspenso e
+    // gravar silêncio: retoma já.
+    audioContext.resume().catch(() => {});
     const mixedDest = audioContext.createMediaStreamDestination();
     if (micStream) audioContext.createMediaStreamSource(micStream).connect(mixedDest);
-    if (hasSystemAudio) {
-      audioContext.createMediaStreamSource(new MediaStream(screenStream.getAudioTracks())).connect(mixedDest);
-    }
+    clienteMix = montarCliente(audioContext, hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null);
+    if (clienteMix) clienteMix.saida.connect(mixedDest);
+    const clienteStream = clienteMix ? clienteMix.stream : null;
 
     const tracks = [...mixedDest.stream.getAudioTracks()];
     if (hasScreen) tracks.unshift(...screenStream.getVideoTracks());
     const combinedStream = new MediaStream(tracks);
 
     const isVideo = hasScreen && screenStream.getVideoTracks().length > 0;
-    const mimeType = isVideo ? 'video/webm;codecs=vp8,opus' : 'audio/webm;codecs=opus';
+    // H.264 costuma ser comprimido pelo chip de vídeo; VP8 vai todo para o processador.
+    const mimeType = isVideo
+      ? (['video/webm;codecs=h264,opus', 'video/webm;codecs=vp8,opus'].find((t) => MediaRecorder.isTypeSupported(t)) || 'video/webm')
+      : 'audio/webm;codecs=opus';
     const mode = isVideo ? 'screen_audio' : 'audio_only';
 
     // Os pedaços ficam presos a ESTA gravação. Antes eram empurrados para uma
@@ -429,7 +441,7 @@
     const chunks = [];
     recordedChunks = chunks;
     mediaRecorder = new MediaRecorder(combinedStream, {
-      mimeType, ...(isVideo ? { videoBitsPerSecond: 1_000_000 } : {}),
+      mimeType, ...(isVideo ? { videoBitsPerSecond: 600_000 } : {}),
     });
     const meuRecorder = mediaRecorder;
     mediaRecorder.ondataavailable = (e) => {
@@ -489,8 +501,8 @@
     stopBtn.hidden = false;
     recEl.title = isVideo ? 'Gravando tela e áudio' : 'Gravando só o áudio';
     startTimer();
-    startMeters(micStream, hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null);
-    if (!hasSystemAudio) {
+    startMeters(micStream, clienteStream);
+    if (!clienteStream) {
       setAlert('sem-cliente', {
         kind: 'warn', title: 'Não estou ouvindo o cliente',
         text: 'Só a sua voz entra. Pare e compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
@@ -518,7 +530,7 @@
         // só a trilha do vendedor entra.
         await startLive(token, meetingId, {
           vendedor: micStream,
-          cliente: hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null,
+          cliente: clienteStream,
         });
       } else {
         throw new Error('não foi possível criar a reunião.');
@@ -650,8 +662,96 @@
     stopMeters();
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+    if (clienteMix) { clienteMix.parar(); clienteMix = null; }
     if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
     recordedChunks = [];
+  }
+
+  // ── Voz do cliente ──
+  //
+  // Duas fontes possíveis: o áudio que chega pela chamada (remote-audio.js,
+  // não depende do alto-falante: funciona com o vendedor de fone) e o áudio
+  // da aba compartilhada. Grava UMA delas por vez, para a voz não sair
+  // duplicada: a chamada tem preferência; a aba só entra se a chamada não
+  // trouxer som nenhum (por exemplo, extensão atualizada no meio da reunião).
+  function audioDaChamada() {
+    const el = document.getElementById('sc-remote-audio');
+    const s = el && el.srcObject;
+    return s && typeof s.getAudioTracks === 'function' ? s : null;
+  }
+  function temAudioDaChamada() { return !!audioDaChamada(); }
+
+  const CLIENTE_TROCA_MS = 12000;
+  function montarCliente(ctx, aba) {
+    const chamada = audioDaChamada();
+    if (!chamada && !aba) return null;
+    const dest = ctx.createMediaStreamDestination();
+    const saida = ctx.createGain();
+    saida.connect(dest);
+    const fontes = {};
+    const nova = (nome) => {
+      const soma = ctx.createGain();
+      const ganho = ctx.createGain();
+      const a = ctx.createAnalyser();
+      a.fftSize = 1024;
+      soma.connect(a);
+      soma.connect(ganho);
+      ganho.connect(saida);
+      ganho.gain.value = 0;
+      return (fontes[nome] = { soma, ganho, a, buf: new Float32Array(1024), ultimoSom: 0 });
+    };
+    if (aba) ctx.createMediaStreamSource(aba).connect(nova('aba').soma);
+    const ligadas = new Map();
+    if (chamada) nova('chamada');
+    // As trilhas da chamada mudam (gente entra e sai): liga as novas a cada segundo.
+    const ligar = () => {
+      if (!chamada) return;
+      for (const t of chamada.getAudioTracks()) {
+        if (t.readyState !== 'live' || ligadas.has(t.id)) continue;
+        try {
+          const src = ctx.createMediaStreamSource(new MediaStream([t]));
+          src.connect(fontes.chamada.soma);
+          ligadas.set(t.id, src);
+        } catch (e) { console.warn('Sales Coach: trilha da chamada não ligou', e); }
+      }
+      for (const [id, src] of ligadas) {
+        const t = chamada.getTrackById(id);
+        if (!t || t.readyState === 'ended') { try { src.disconnect(); } catch {} ligadas.delete(id); }
+      }
+    };
+    let atual = chamada ? 'chamada' : 'aba';
+    const inicio = Date.now();
+    const usar = (nome) => {
+      atual = nome;
+      for (const [n, f] of Object.entries(fontes)) f.ganho.gain.setTargetAtTime(n === nome ? 1 : 0, ctx.currentTime, 0.05);
+      console.info(`Sales Coach: voz do cliente vindo da ${nome === 'chamada' ? 'chamada' : 'aba compartilhada'}`);
+    };
+    usar(atual);
+    const timer = setInterval(() => {
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      ligar();
+      const agora = Date.now();
+      for (const f of Object.values(fontes)) {
+        f.a.getFloatTimeDomainData(f.buf);
+        let soma = 0;
+        for (let i = 0; i < f.buf.length; i++) soma += f.buf[i] * f.buf[i];
+        if (Math.sqrt(soma / f.buf.length) > 0.01) f.ultimoSom = agora;
+      }
+      // A chamada tem preferência: com som, volta para ela na hora. A aba só
+      // assume se a chamada nunca teve som e a aba tem.
+      if (atual === 'aba' && fontes.chamada && agora - fontes.chamada.ultimoSom < 1500) usar('chamada');
+      else if (atual === 'chamada' && fontes.aba && !fontes.chamada.ultimoSom
+        && agora - inicio > CLIENTE_TROCA_MS && agora - fontes.aba.ultimoSom < 2000) usar('aba');
+    }, 1000);
+    ligar();
+    return {
+      stream: dest.stream, saida,
+      parar() {
+        clearInterval(timer);
+        for (const src of ligadas.values()) { try { src.disconnect(); } catch {} }
+        ligadas.clear();
+      },
+    };
   }
 
   // ── Live: AssemblyAI direto, uma conexão por trilha, + dicas em tempo real ──
@@ -741,20 +841,9 @@
     // Áudio: PCM16 16 kHz mono, só desta trilha.
     if (!ch.ctx) {
       ch.ctx = new AudioContext({ sampleRate: 16000 });
+      ch.ctx.resume().catch(() => {});
       ch.source = ch.ctx.createMediaStreamSource(stream);
-      ch.processor = ch.ctx.createScriptProcessor(4096, 1, 1);
-      ch.source.connect(ch.processor);
-      ch.processor.connect(ch.ctx.destination);
-      ch.processor.onaudioprocess = (e) => {
-        if (!ch.ws || ch.ws.readyState !== 1) return;
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const v = Math.max(-1, Math.min(1, input[i]));
-          pcm[i] = v < 0 ? v * 0x8000 : v * 0x7FFF;
-        }
-        ch.ws.send(pcm.buffer);
-      };
+      ligarPcm(ch);
     }
 
     const ws = new WebSocket(`${AAI_WS}&token=${encodeURIComponent(token)}`);
@@ -801,6 +890,37 @@
         }
       }, delay);
     };
+  }
+
+  // A conversão para PCM roda num AudioWorklet, na thread de áudio, fora da
+  // thread do Meet. Se o worklet não carregar, volta ao ScriptProcessorNode
+  // (obsoleto, roda na thread da página, mas funciona).
+  const enviar = (ch, buf) => { if (ch.ws && ch.ws.readyState === 1) ch.ws.send(buf); };
+  async function ligarPcm(ch) {
+    try {
+      await ch.ctx.audioWorklet.addModule(chrome.runtime.getURL('pcm-worklet.js'));
+      if (!ch.ctx || ch.ctx.state === 'closed') return;
+      ch.processor = new AudioWorkletNode(ch.ctx, 'salescoach-pcm', { numberOfInputs: 1, numberOfOutputs: 0 });
+      ch.processor.port.onmessage = (e) => enviar(ch, e.data);
+      ch.source.connect(ch.processor);
+    } catch (e) {
+      console.warn('Sales Coach: AudioWorklet indisponível, usando ScriptProcessor', e);
+      if (!ch.ctx || ch.ctx.state === 'closed') return;
+      try {
+        ch.processor = ch.ctx.createScriptProcessor(4096, 1, 1);
+        ch.source.connect(ch.processor);
+        ch.processor.connect(ch.ctx.destination);
+        ch.processor.onaudioprocess = (ev) => {
+          const input = ev.inputBuffer.getChannelData(0);
+          const pcm = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const v = Math.max(-1, Math.min(1, input[i]));
+            pcm[i] = v < 0 ? v * 0x8000 : v * 0x7FFF;
+          }
+          enviar(ch, pcm.buffer);
+        };
+      } catch (e2) { console.warn('Sales Coach: trilha sem transcrição ao vivo', e2); }
+    }
   }
 
   async function startLive(token, mid, streams) {
@@ -975,6 +1095,7 @@
     stopMeters();
     try {
       meterCtx = new AudioContext();
+      meterCtx.resume().catch(() => {});
       const analysers = {};
       for (const [who, stream] of Object.entries({ vendedor: mic, cliente: tab })) {
         if (!stream || !stream.getAudioTracks().length) continue;
