@@ -19,8 +19,8 @@ const STORE_URL = "https://chromewebstore.google.com/detail/icabeghcpefeaeklfldp
  * nova: rode o script e atualize MANUAL_VERSION. Quando a loja estiver em dia,
  * MANUAL_VERSION = null esconde a seção.
  */
-// A 1.10.1 foi aprovada na loja: sem versão manual no momento.
-const MANUAL_VERSION: string | null = null;
+// A 1.12.0 (só áudio por padrão) está em análise na loja.
+const MANUAL_VERSION: string | null = "1.12.0";
 const MANUAL_URL = MANUAL_VERSION ? `/downloads/sales-coach-extensao-${MANUAL_VERSION}.zip` : "";
 const EXTENSIONS_PAGE = "chrome://extensions";
 
@@ -439,8 +439,8 @@ function ManualInstall() {
             <Badge variant="secondary">{MANUAL_VERSION}</Badge>
           </CardTitle>
           <CardDescription className="max-w-2xl">
-            A versão {MANUAL_VERSION} está em análise na Chrome Web Store. Ela traz o painel novo na reunião e não perde a
-            gravação se a aba for fechada. Se quiser usá-la agora, instale à mão. Leva uns 3 minutos.
+            A versão {MANUAL_VERSION} está em análise na Chrome Web Store. Ela grava só o áudio por padrão, sem pedir a tela,
+            e não deixa a reunião lenta ao apresentar slides. Se quiser usá-la agora, instale à mão. Leva uns 3 minutos.
           </CardDescription>
         </div>
         <Button asChild variant="outline" className="w-full shrink-0 md:w-auto">
