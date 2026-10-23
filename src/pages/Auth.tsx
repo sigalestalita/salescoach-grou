@@ -131,7 +131,7 @@ const Auth = () => {
         return;
       }
 
-      navigate(roleData.role === "vendedor" ? "/agendas" : "/");
+      navigate("/");
     } catch (error: any) {
       toast({ title: "Não foi possível entrar", description: error.message, variant: "destructive" });
     } finally {

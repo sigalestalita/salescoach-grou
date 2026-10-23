@@ -1,5 +1,5 @@
 import {
-  BarChart3, BookOpen, Bot, CalendarCheck, CalendarDays, ClipboardList, Dumbbell, FileSearch, MonitorSmartphone, Plug, Settings,
+  BarChart3, BookOpen, House, Bot, CalendarCheck, CalendarDays, ClipboardList, Dumbbell, FileSearch, MonitorSmartphone, Plug, Settings,
   Sparkles, Users,
 } from "lucide-react";
 
@@ -151,7 +151,7 @@ export const JOURNEY: JourneyDef[] = [
     description:
       "Evolução dos scores, temperatura das agendas, médias da metodologia, talk ratio e ranking de vendedores. Use o filtro para ver uma pessoa só.",
     cta: "Abrir a Visão geral",
-    route: "/",
+    route: "/visao-geral",
     tour: "visao-geral",
     roles: MGMT,
     minutes: 3,
@@ -193,8 +193,9 @@ export function welcomeTour(role: string | null): TourStep[] {
       title: "Boas-vindas ao Sales Coach",
       body: "Ele grava e analisa as suas reuniões de venda pela metodologia da sua empresa e mostra o que fazer melhor na próxima. Uma volta rápida pelas telas:",
     },
+    { target: "nav-inicio", title: "Início", body: "A sua primeira tela todo dia: as reuniões de hoje, o que está pendente, o seu ritmo e uma dica escrita pela IA a partir das suas reuniões." },
     { target: "nav-agendas", title: "Agendas", body: "Todas as reuniões gravadas, com status, score e temperatura. Clique numa reunião para ver a análise completa." },
-    mgmt && { target: "nav-inicio", title: "Visão geral", body: "Indicadores do time: evolução dos scores, temperatura das agendas, médias da metodologia e ranking de vendedores." },
+    mgmt && { target: "nav-visao-geral", title: "Visão geral", body: "Indicadores do time: evolução dos scores, temperatura das agendas, médias da metodologia e ranking de vendedores." },
     mgmt && { target: "nav-conhecimento", title: "Base de conhecimento", body: "Materiais da empresa (apresentações, propostas, cases). A IA usa para avaliar se a conversa bateu com o que vocês vendem." },
     { target: "nav-argumentos", title: "Gerador de argumentos", body: "Argumentos, ROI, frases prontas e respostas para objeções a partir do contexto do lead." },
     { target: "nav-treino", title: "Modo de treino", body: "Converse com um cliente simulado, por texto ou voz, e receba uma avaliação no fim." },
@@ -230,9 +231,9 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
   "visao-geral": {
     title: "Visão geral",
     steps: [
-      { route: "/", target: "dash-filtro", title: "Filtro de vendedor", body: "Veja o time todo ou uma pessoa só." },
-      { route: "/", target: "dash-stats", title: "Indicadores", body: "Total de agendas, score médio, reuniões quentes e vendedores ativos." },
-      { route: "/", target: "dash-graficos", title: "Gráficos", body: "Evolução dos scores, temperatura das agendas, médias da metodologia, talk ratio e ranking de vendedores." },
+      { route: "/visao-geral", target: "dash-filtro", title: "Filtro de vendedor", body: "Veja o time todo ou uma pessoa só." },
+      { route: "/visao-geral", target: "dash-stats", title: "Indicadores", body: "Total de agendas, score médio, reuniões quentes e vendedores ativos." },
+      { route: "/visao-geral", target: "dash-graficos", title: "Gráficos", body: "Evolução dos scores, temperatura das agendas, médias da metodologia, talk ratio e ranking de vendedores." },
     ],
   },
   conhecimento: {
@@ -279,7 +280,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
       { route: "/configuracoes", target: "cfg-playbooks-salvar", title: "4. Salve", body: "Ao salvar um playbook novo, o tipo de reunião com o mesmo nome já é criado e ligado a ele. O time de CS grava pela extensão escolhendo esse tipo, e a conversa é avaliada pelo playbook." },
       { route: "/configuracoes", target: "cfg-tipos", title: "Tipos de reunião", body: "Para ligar um tipo que já existe a um playbook, abra o tipo e escolha o playbook em \"Metodologia ou playbook de análise\"." },
       { route: "/configuracoes", target: "cfg-crm-atendimento", title: "5. CRM", body: "Com o CRM conectado, o botão \"Criar campos do atendimento\" cria no negócio aderência, saúde do cliente, sinais, compromissos e cada informação a registrar, e já faz o mapeamento. A anotação e a tarefa também saem." },
-      { route: "/", target: "dash-area", title: "Painel de atendimento", body: "Na Visão geral, a aba Atendimento mostra aderência média, clientes em risco, saúde dos clientes, etapas por playbook e os sinais mais frequentes." },
+      { route: "/visao-geral", target: "dash-area", title: "Painel de atendimento", body: "Na Visão geral, a aba Atendimento mostra aderência média, clientes em risco, saúde dos clientes, etapas por playbook e os sinais mais frequentes." },
     ],
   },
   equipe: {
@@ -303,6 +304,36 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
 // ── Ajuda ───────────────────────────────────────────────────────────────────
 
 export const ARTICLES: HelpArticle[] = [
+  {
+    id: "inicio",
+    title: "Início: o seu dia no Sales Coach",
+    icon: House,
+    summary: "Reuniões de hoje, pendências, o seu ritmo, a dica do dia e, para gestores, o time.",
+    route: "/",
+    sections: [
+      {
+        title: "Seu dia",
+        items: [
+          "Hoje: as reuniões da sua agenda, com o botão Entrar e gravar na próxima. Precisa da agenda conectada em Agendas.",
+          "Pendências, sem nada para marcar: análises com erro para tentar de novo, reuniões com cliente da última semana que passaram sem gravação e os primeiros passos que faltam.",
+          "Seu ritmo: score médio dos últimos 30 dias, a tendência contra os 30 dias anteriores e as reuniões gravadas na semana.",
+          "Dica do dia: escrita pela IA uma vez por dia, a partir das suas últimas reuniões analisadas (o critério da metodologia em que você está mais fraco), da metodologia e da base de conhecimento da empresa. Traz uma frase pronta para a próxima reunião.",
+          "Você sabia?: um recurso do Sales Coach por dia.",
+        ],
+      },
+      {
+        title: "Seu time (admin e gestor)",
+        items: [
+          "Admin e gestor também veem o próprio dia, porque gravam as próprias reuniões. Abaixo, o time: o gestor vê a própria equipe; o admin, a empresa toda.",
+          "Atenção: quem caiu 8 pontos ou mais no score, quem não grava há 7 dias ou nunca gravou, e análises do time com erro.",
+          "Destaques: a melhor reunião da semana (vale ouvir com o time), os leads quentes e o critério mais fraco do time, como pauta para o próximo treino.",
+          "Por pessoa: reuniões gravadas na semana e score de 30 dias com a tendência.",
+          "Só reuniões gravadas: a agenda dos vendedores não aparece para ninguém além deles.",
+          "Gestor ou admin com poucas reuniões próprias recebe uma dica de gestão, a partir das reuniões do time.",
+        ],
+      },
+    ],
+  },
   {
     id: "agendas",
     title: "Agendas: suas reuniões",
@@ -458,7 +489,7 @@ export const ARTICLES: HelpArticle[] = [
     title: "Visão geral do time",
     icon: BarChart3,
     summary: "Indicadores, evolução dos scores e ranking de vendedores.",
-    route: "/",
+    route: "/visao-geral",
     tour: "visao-geral",
     roles: MGMT,
     sections: [
@@ -716,3 +747,21 @@ export function articleForPath(path: string): HelpArticle | undefined {
   if (/^\/agendas\/[^/]+/.test(path)) return ARTICLES.find((a) => a.id === "reuniao");
   return ARTICLES.find((a) => a.route === path);
 }
+
+// ── Você sabia? (tela Início) ───────────────────────────────────────────────
+
+/** Uma dica de uso do Sales Coach por dia, na tela Início. */
+export const HINTS: { text: string; route?: string; cta?: string; roles?: string[] }[] = [
+  { text: "A extensão grava só o áudio por padrão: apresentar slides no Meet não deixa a chamada lenta.", route: "/extensao", cta: "Dicas da extensão" },
+  { text: "Em Agendas → Minha agenda, você vê a sua semana com as reuniões gravadas e as que passaram sem gravação.", route: "/agendas?visao=agenda", cta: "Abrir Minha agenda" },
+  { text: "Pode usar fone: a voz do cliente vem direto da chamada, não da caixa de som.", route: "/extensao", cta: "Ver a extensão" },
+  { text: "Antes de uma reunião difícil, treine com um cliente simulado no Modo de treino, por texto ou por voz.", route: "/treino", cta: "Começar um treino" },
+  { text: "O Gerador de argumentos monta argumentos, ROI e respostas para objeções a partir do contexto do lead.", route: "/argumentos", cta: "Abrir o gerador" },
+  { text: "Na análise, Compartilhar gera um link para quem não tem conta ver a reunião, com validade de 1 a 90 dias." },
+  { text: "Se o envio da gravação falhar, o painel oferece Baixar a gravação: nada se perde." },
+  { text: "Com a agenda conectada, a gravação já chega com o título, os participantes e o lead do convite.", route: "/agendas", cta: "Conectar a agenda" },
+  { text: "O assistente do botão de ajuda responde sobre as suas reuniões: \"quais agendas ficaram mornas esta semana?\"" },
+  { text: "Pela Visão geral, você acompanha a evolução dos scores e o ranking do time.", route: "/visao-geral", cta: "Abrir a Visão geral", roles: MGMT },
+  { text: "Materiais novos na Base de conhecimento (propostas, cases, tabelas) deixam a análise e a dica do dia mais certeiras.", route: "/conhecimento", cta: "Abrir a base", roles: MGMT },
+  { text: "Time de CS? Playbooks de atendimento avaliam as conversas por etapa, saúde do cliente e sinais de risco.", route: "/configuracoes", cta: "Ver os playbooks", roles: ["admin"] },
+];

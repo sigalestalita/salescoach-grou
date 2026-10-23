@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BrandingProvider } from "@/contexts/BrandingContext";
 import { AppLayout } from "@/components/AppLayout";
 import Index from "./pages/Index";
+import Inicio from "./pages/Inicio";
 import Auth from "./pages/Auth";
 import Agendas from "./pages/Agendas";
 import MeetingDetail from "./pages/MeetingDetail";
@@ -38,7 +39,7 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode;
   // Usuário autenticado que ainda não pertence a nenhuma organização.
   if (!orgId || !role) return <Navigate to="/sem-organizacao" replace />;
   if (allowedRoles && role && !allowedRoles.includes(role)) {
-    return <Navigate to="/agendas" replace />;
+    return <Navigate to="/" replace />;
   }
   return <AppLayout>{children}</AppLayout>;
 }
@@ -81,7 +82,8 @@ const App = () => (
             <Route path="/convite/:token" element={<AcceptInvite />} />
             <Route path="/sem-organizacao" element={<SemOrganizacao />} />
             <Route path="/plataforma" element={<PlatformRoute><Plataforma /></PlatformRoute>} />
-            <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Index /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Inicio /></ProtectedRoute>} />
+            <Route path="/visao-geral" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Index /></ProtectedRoute>} />
             <Route path="/agendas" element={<ProtectedRoute><Agendas /></ProtectedRoute>} />
             <Route path="/agendas/:id" element={<ProtectedRoute><MeetingDetail /></ProtectedRoute>} />
             <Route path="/conhecimento" element={<ProtectedRoute allowedRoles={["admin", "gestor"]}><Conhecimento /></ProtectedRoute>} />
