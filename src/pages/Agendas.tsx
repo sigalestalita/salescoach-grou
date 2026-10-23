@@ -62,6 +62,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 import { CalendarConnect } from "@/components/CalendarConnect";
+import { recordingLinkProblem } from "@/lib/mediaLink";
 import { MinhaAgenda } from "@/components/MinhaAgenda";
 import type { CalendarConnection } from "@/lib/calendar";
 
@@ -196,6 +197,11 @@ const Agendas = () => {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newMeeting.title) return;
+    const problema = sourceTab === "link" && newMeeting.youtube_url ? recordingLinkProblem(newMeeting.youtube_url) : null;
+    if (problema) {
+      toast({ title: "Esse link não serve para transcrição", description: problema, variant: "destructive" });
+      return;
+    }
     setUploading(true);
 
     try {
@@ -318,14 +324,20 @@ const Agendas = () => {
 
   const handleBulkImport = async () => {
     if (!user) return;
-    const lines = bulkLinks
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && (l.includes("drive.google.com") || l.includes("youtube.com") || l.includes("youtu.be")));
+    const todas = bulkLinks.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    const recusadas = todas.map((l) => recordingLinkProblem(l)).filter((p): p is string => !!p);
+    const lines = todas.filter((l) => !recordingLinkProblem(l));
 
     if (lines.length === 0) {
-      toast({ title: "Nenhum link válido", description: "Cole links do Google Drive ou YouTube, um por linha.", variant: "destructive" });
+      toast({
+        title: "Nenhum link válido",
+        description: recusadas[0] ?? "Cole links do Google Drive (ou links diretos do arquivo), um por linha.",
+        variant: "destructive",
+      });
       return;
+    }
+    if (recusadas.length) {
+      toast({ title: `${recusadas.length} ${recusadas.length === 1 ? "link ignorado" : "links ignorados"}`, description: recusadas[0] });
     }
 
     setBulkImporting(true);
@@ -394,7 +406,7 @@ const Agendas = () => {
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Importar em Lote</DialogTitle>
-                  <DialogDescription>Cole vários links do Google Drive ou YouTube, um por linha</DialogDescription>
+                  <DialogDescription>Cole vários links de gravações no Google Drive (ou links diretos do arquivo), um por linha</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -402,7 +414,7 @@ const Agendas = () => {
                     <Textarea
                       value={bulkLinks}
                       onChange={(e) => setBulkLinks(e.target.value)}
-                      placeholder={"https://drive.google.com/file/d/...\nhttps://drive.google.com/file/d/...\nhttps://youtube.com/watch?v=..."}
+                      placeholder={"https://drive.google.com/file/d/...\nhttps://drive.google.com/file/d/...\nhttps://www.dropbox.com/..."}
                       rows={8}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -557,7 +569,7 @@ const Agendas = () => {
                     </TabsTrigger>
                     <TabsTrigger value="link" className="flex-1">
                       <Link className="h-3 w-3 mr-1" />
-                      Link (Drive / YouTube)
+                      Link (Google Drive)
                     </TabsTrigger>
                   </TabsList>
                   <TabsContent value="file">
@@ -576,9 +588,9 @@ const Agendas = () => {
                     <Input
                       value={newMeeting.youtube_url}
                       onChange={(e) => setNewMeeting({ ...newMeeting, youtube_url: e.target.value })}
-                      placeholder="https://drive.google.com/... ou https://youtube.com/..."
+                      placeholder="https://drive.google.com/file/d/..."
                     />
-                    <p className="text-xs text-muted-foreground mt-2">Cole o link do Google Drive ou YouTube</p>
+                    <p className="text-xs text-muted-foreground mt-2">Link do arquivo no Google Drive, compartilhado com "Qualquer pessoa com o link". Também vale Dropbox ou o link direto do áudio ou vídeo. YouTube não funciona.</p>
                   </TabsContent>
                 </Tabs>
               </div>

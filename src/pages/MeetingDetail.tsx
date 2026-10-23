@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { driveFileId } from "@/lib/mediaLink";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -279,11 +280,8 @@ const MeetingDetail = () => {
       {/* Video/Audio Player — Google Drive link ou link direto para o arquivo */}
       {meeting.youtube_url && (() => {
         const getGoogleDriveEmbedUrl = (url: string): string | null => {
-          let match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-          if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
-          match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-          if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
-          return null;
+          const id = driveFileId(url);
+          return id ? `https://drive.google.com/file/d/${id}/preview` : null;
         };
         const embedUrl = getGoogleDriveEmbedUrl(meeting.youtube_url);
         const directMedia = meeting.youtube_url.match(/\.(mp4|webm|m4a|mp3|ogg)(\?.*)?$/i)?.[1]?.toLowerCase() ?? null;
