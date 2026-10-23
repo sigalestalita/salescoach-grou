@@ -2123,6 +2123,49 @@ export type Database = {
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }
+      platform_activity: {
+        Args: {
+          _ate: string
+          _desde: string
+          _email?: string
+          _limite?: number
+          _offset?: number
+          _org?: string
+          _tipo?: string
+        }
+        Returns: {
+          detalhe: string
+          em: string
+          email: string
+          nome: string
+          org_id: string
+          org_nome: string
+          ref: string
+          tipo: string
+          titulo: string
+          user_id: string
+        }[]
+      }
+      platform_activity_people: {
+        Args: { _ate: string; _desde: string }
+        Returns: {
+          analises: number
+          assistente: number
+          custo: number
+          email: string
+          erros: number
+          logins: number
+          nome: string
+          org_id: string
+          org_nome: string
+          papel: string
+          reunioes: number
+          treinos: number
+          ultima_atividade: string
+          ultimo_login: string
+          user_id: string
+        }[]
+      }
       platform_org_people: {
         Args: never
         Returns: {
