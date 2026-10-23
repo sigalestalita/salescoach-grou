@@ -249,7 +249,9 @@ const Plataforma = () => {
         await supabase.auth.signOut({ scope: "local" });
         throw new Error("Sua sessão expirou. Entre novamente.");
       }
-      throw new Error(error.message);
+      // O motivo vem no corpo da resposta; error.message é só "non-2xx status code".
+      const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      throw new Error(detail?.error ?? error.message);
     }
     if (data?.error) throw new Error(data.error);
     return data;
