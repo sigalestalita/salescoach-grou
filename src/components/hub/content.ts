@@ -126,7 +126,7 @@ export const JOURNEY: JourneyDef[] = [
     id: "primeira-reuniao",
     title: "Grave a sua primeira reunião",
     description:
-      "Entre numa chamada do Meet ou do Teams e clique em Gravar no cartão do Sales Coach. Admins e gestores também podem enviar um arquivo ou um link do Drive ou do YouTube em Agendas → Nova Agenda.",
+      "Entre numa chamada do Meet ou do Teams e clique em Gravar no cartão do Sales Coach. Admins e gestores também podem enviar um arquivo ou um link do Google Drive em Agendas → Nova Agenda.",
     cta: "Abrir Agendas",
     route: "/agendas",
     tour: "agendas",
@@ -212,7 +212,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
       { route: "/agendas", target: "agendas-titulo", title: "Agendas", body: "Cada reunião gravada ou enviada vira uma agenda: transcrição, análise e score. O vendedor vê as próprias; gestores e admins veem as do time." },
       { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead. Se o Google avisar que não verificou o app, abra Ver o passo a passo, logo abaixo do botão." },
       { route: "/agendas", target: "agendas-visao", title: "Minha agenda", body: "Com a agenda conectada, a aba Minha agenda mostra a sua semana como no Google Agenda: reuniões com cliente, as que foram gravadas (com o score) e as que passaram sem gravação. Clique numa reunião para entrar na chamada ou abrir a análise." },
-      { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole um link do Drive ou do YouTube. Para vários links, use Importar em Lote." },
+      { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole o link da gravação no Google Drive. Para vários links, use Importar em Lote." },
       { route: "/agendas", target: "agendas-filtros", title: "Busca e filtros", body: "Ache uma agenda pelo nome, pelo tipo de reunião ou pelo executivo." },
       { route: "/agendas", target: "agendas-lista", title: "Lista de agendas", body: "O status mostra em que ponto está: Enviado, Transcrevendo, Analisando, Completo ou Erro. Clique para abrir a análise. No menu ⋮ dá para editar, refazer a análise ou apagar." },
     ],
@@ -346,8 +346,10 @@ export const ARTICLES: HelpArticle[] = [
         title: "Como uma reunião entra",
         items: [
           "Pela extensão do Chrome: grava a chamada do Meet ou do Teams e envia sozinha.",
-          "Em Nova Agenda (admins e gestores): arquivo MP3, WAV, M4A ou MP4 de até 20 MB, ou link do Drive ou do YouTube.",
-          "Em Importar em Lote: vários links do Drive ou do YouTube, um por linha.",
+          "Em Nova Agenda (admins e gestores): arquivo MP3, WAV, M4A ou MP4 de até 20 MB, ou o link da gravação no Google Drive (compartilhado com \"Qualquer pessoa com o link\"). Também vale Dropbox ou o link direto do arquivo.",
+          "Em Importar em Lote: vários links de gravações, um por linha.",
+          "YouTube não funciona: o vídeo não pode ser baixado para transcrição. Baixe e envie o arquivo, ou suba no Drive. Links de pasta, de documento ou de página (Zoom, Loom) também não: use o link do arquivo da gravação.",
+          "Já tem a transcrição? Abra a agenda, cole em \"Já tem a transcrição? Cole aqui\" e clique em Tentar novamente.",
         ],
       },
       {

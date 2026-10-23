@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { json, preflight } from "../_shared/cors.ts";
+import { classifyLink, LinkError, linkKindError, MSG as MSG_LINK, probeDirect } from "../_shared/media-link.ts";
 import {
   adminClient,
   assertQuota,
@@ -21,14 +22,6 @@ import {
 const ANALYSIS_MODEL = Deno.env.get("ANALYSIS_MODEL") ?? "google/gemini-2.5-flash";
 
 // ── Google Drive helpers ──
-
-function extractGoogleDriveFileId(url: string): string | null {
-  const match1 = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (match1) return match1[1];
-  const match2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (match2) return match2[1];
-  return null;
-}
 
 function getGoogleDriveDirectUrl(fileId: string): string {
   return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
@@ -241,6 +234,8 @@ async function repararWebm(blob: Blob): Promise<Blob | null> {
 }
 
 function mensagemAmigavel(msg: string): string {
+  // Link que a AssemblyAI não consegue baixar (página, vídeo do YouTube...).
+  if (/disallowed address|audio_url is invalid|direct download link/i.test(msg)) return MSG_LINK.pagina;
   if (/Transcoding failed|may be unsupported|octet-stream/i.test(msg)) return GRAVACAO_CORROMPIDA;
   if (/does not appear to contain audio|no spoken audio|audio duration/i.test(msg)) {
     return "Não encontramos áudio na gravação. Confira se o microfone e o áudio da aba estavam liberados para a extensão e grave novamente.";
@@ -336,18 +331,16 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         throw new Error("ASSEMBLYAI_API_KEY não configurada. Necessária para transcrever arquivos externos.");
       }
 
-      const driveFileId = extractGoogleDriveFileId(meeting.youtube_url);
+      // Reconhece o link (Drive em qualquer formato, Dropbox, OneDrive...) e
+      // testa antes: a AssemblyAI só aceita o endereço direto do arquivo.
+      const link = classifyLink(meeting.youtube_url);
+      // Valida o acesso e entrega a URL direto para a AssemblyAI, que baixa o
+      // arquivo nos servidores dela — evita carregar centenas de MB na função.
       let assemblyAudioUrl: string;
-
-      if (driveFileId) {
-        // Valida o acesso e entrega a URL direto para a AssemblyAI, que baixa o
-        // arquivo nos servidores dela — evita carregar centenas de MB na função.
-        assemblyAudioUrl = await validateGoogleDriveUrl(driveFileId);
-        await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-      } else {
-        await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
-        assemblyAudioUrl = meeting.youtube_url;
-      }
+      if (link.kind === "drive") assemblyAudioUrl = await validateGoogleDriveUrl(link.id);
+      else if (link.kind === "direct") assemblyAudioUrl = await probeDirect(link.url, link.host);
+      else throw new LinkError(linkKindError(link) ?? MSG_LINK.pagina);
+      await supabase.from("meetings").update({ status: "transcrevendo" }).eq("id", meetingId);
 
       const result = await transcribeWithAssemblyAI(assemblyAudioUrl);
       transcript = result.text;
