@@ -134,6 +134,13 @@
       "when": 1792776527665,
       "tag": "0018_novidades",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792789171150,
+      "tag": "0019_atividade_plataforma",
+      "breakpoints": true
     }
   ]
 }
