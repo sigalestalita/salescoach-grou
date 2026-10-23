@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +41,7 @@ import {
   RotateCcw,
   MoreVertical,
   FileStack,
+  CalendarDays,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -61,6 +62,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 import { CalendarConnect } from "@/components/CalendarConnect";
+import { MinhaAgenda } from "@/components/MinhaAgenda";
+import type { CalendarConnection } from "@/lib/calendar";
 
 type Meeting = Tables<"meetings">;
 type Profile = Tables<"profiles">;
@@ -99,6 +102,15 @@ const Agendas = () => {
   const typeLabel = (key: string | null) =>
     meetingTypes.find((t) => t.key === key)?.label ?? key ?? "—";
 
+  // Com a agenda conectada, a página ganha a visão "Minha agenda" (?visao=agenda).
+  const [calConn, setCalConn] = useState<CalendarConnection | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const visao = calConn && searchParams.get("visao") === "agenda" ? "agenda" : "lista";
+  const setVisao = (v: string) => {
+    const q = new URLSearchParams(searchParams);
+    if (v === "agenda") q.set("visao", "agenda"); else q.delete("visao");
+    setSearchParams(q, { replace: true });
+  };
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -581,8 +593,24 @@ const Agendas = () => {
         )}
       </div>
 
-      <CalendarConnect />
+      <CalendarConnect onStatus={setCalConn} />
 
+      {calConn && (
+        <Tabs value={visao} onValueChange={setVisao}>
+          <TabsList data-tour="agendas-visao">
+            <TabsTrigger value="lista">Reuniões gravadas</TabsTrigger>
+            <TabsTrigger value="agenda">
+              <CalendarDays className="mr-1.5 h-4 w-4" />
+              Minha agenda
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {visao === "agenda" && calConn ? (
+        <MinhaAgenda provider={calConn.provider} statusLabels={statusLabels} tempLabels={tempLabels} />
+      ) : (
+      <>
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3" data-tour="agendas-filtros">
         <div className="relative flex-1 max-w-md">
@@ -746,6 +774,8 @@ const Agendas = () => {
             </Card>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* Edit Dialog */}

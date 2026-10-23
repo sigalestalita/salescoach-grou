@@ -12,7 +12,7 @@ import { GoogleCalendarGuide } from "@/components/GoogleCalendarGuide";
  * grava já com o título da agenda, os participantes e o lead. Fica no topo da
  * página Agendas, para todos os papéis.
  */
-export function CalendarConnect() {
+export function CalendarConnect({ onStatus }: { onStatus?: (conn: CalendarConnection | null) => void } = {}) {
   const { toast } = useToast();
   const [conn, setConn] = useState<CalendarConnection | null>(null);
   const [providers, setProviders] = useState<CalendarProvider[]>([]);
@@ -26,13 +26,14 @@ export function CalendarConnect() {
       const r = await calendarApi.status();
       setConn(r.connection);
       setProviders(r.providers);
+      onStatus?.(r.connection);
     } catch {
       // Função ainda não publicada ou agenda não configurada: o cartão some.
       setProviders([]);
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [onStatus]);
   useEffect(() => { load(); }, [load]);
 
   // Volta do OAuth: ?agenda=conectada ou ?agenda=erro&motivo=...
@@ -66,6 +67,7 @@ export function CalendarConnect() {
     try {
       await calendarApi.disconnect();
       setConn(null);
+      onStatus?.(null);
       toast({ title: "Agenda desconectada" });
     } catch (e) {
       toast({ title: "Não foi possível desconectar", description: (e as Error).message, variant: "destructive" });

@@ -6,6 +6,9 @@
 //   { action: "disconnect" }                  remove a conexão e os tokens
 //   { action: "lookup", meetingUrl, title }   evento da reunião aberta agora
 //                                             (usado pela extensão)
+//   { action: "events", from, to }            eventos da agenda principal no
+//                                             período, com a gravação de cada
+//                                             um (tela Minha agenda)
 // GET ?code&state: volta do Google/Microsoft depois da autorização.
 //
 // verify_jwt = false (config.toml): o GET vem do navegador, sem token do
@@ -17,7 +20,8 @@ import { adminClient, getCaller, HttpError } from "../_shared/tenant.ts";
 import { signState, verifyState } from "../_shared/crm/crypto.ts";
 import { backTo, safeReturn } from "../_shared/redirect.ts";
 import {
-  authorizeUrl, availableProviders, CalendarError, CalendarProvider, exchangeCode, lookupMeeting, saveAccount,
+  AGENDA_MAX_DAYS, agendaEvents, authorizeUrl, availableProviders, CalendarError, CalendarProvider, exchangeCode,
+  lookupMeeting, saveAccount,
 } from "../_shared/calendar.ts";
 
 Deno.serve(async (req) => {
@@ -91,10 +95,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === "events") {
+      // Só a agenda de quem pede: ninguém vê a agenda de outra pessoa.
+      const from = new Date(String(body.from ?? ""));
+      const to = new Date(String(body.to ?? ""));
+      if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) throw new HttpError(400, "Período inválido.");
+      if (to.getTime() - from.getTime() > AGENDA_MAX_DAYS * 86400_000) throw new HttpError(400, "Período longo demais.");
+      const events = await agendaEvents(ctx.admin, ctx.userId, ctx.email, from, to);
+      return json(req, { connected: events !== null, events: events ?? [] });
+    }
+
     throw new HttpError(400, "Ação desconhecida.");
   } catch (e) {
     if (e instanceof HttpError) return json(req, { error: e.message, code: e.code }, e.status);
-    if (e instanceof CalendarError) return json(req, { error: e.message }, e.status);
+    if (e instanceof CalendarError) return json(req, { error: e.message, reconnect: e.reconnect }, e.status);
     console.error("calendar:", e);
     return json(req, { error: "Erro inesperado." }, 500);
   }

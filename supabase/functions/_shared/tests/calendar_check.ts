@@ -1,7 +1,7 @@
 // Verificação da agenda (Google e Outlook simulados).
 // CRM_TOKEN_KEY=uma-chave-de-teste-com-32-caracteres deno run --allow-env --allow-read _shared/tests/calendar_check.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, lookupMeeting, meetingKeys, pickEvent, saveAccount } from "../calendar.ts";
+import { agendaEvents, describe, lookupMeeting, matchMeetings, meetingKeys, pickEvent, saveAccount } from "../calendar.ts";
 import { decryptToken } from "../crm/crypto.ts";
 import { fakeDb } from "../crm/tests/fakedb.ts";
 
@@ -69,6 +69,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     return j({ items: [{
       id: "evt1", status: "confirmed", summary: "Diagnóstico · Clínica Sorriso",
       description: "<b>Pauta</b><br>Entender a operação", hangoutLink: "https://meet.google.com/abc-defg-hij",
+      htmlLink: "https://www.google.com/calendar/event?eid=evt1",
       start: { dateTime: "2026-10-20T14:00:00-03:00" }, end: { dateTime: "2026-10-20T15:00:00-03:00" },
       attendees: [{ email: "vend@nexa.com.br", self: true, organizer: true }, { email: "Ana@ClinicaSorriso.com.br", displayName: "Ana Souza" }],
     }] });
@@ -87,7 +88,7 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   return j({}, 404);
 }) as typeof fetch;
 
-const db: any = fakeDb({ calendar_accounts: [], calendar_tokens: [] });
+const db: any = fakeDb({ calendar_accounts: [], calendar_tokens: [], meetings: [] });
 await saveAccount(db, { orgId: "org1", userId: "u1", provider: "google", email: "vend@nexa.com.br",
   tokens: { access_token: "g-acc-old", refresh_token: "g-ref", expires_in: -10 } });
 const tok = (await db.from("calendar_tokens").select("*").maybeSingle()).data;
@@ -116,6 +117,33 @@ let threw = false;
 try { await lookupMeeting(db, "u3", null, { meetingUrl: "https://meet.google.com/abc-defg-hij" }); } catch (e: any) { threw = e.reconnect === true; }
 const acc3 = (await db.from("calendar_accounts").select("*").eq("user_id", "u3").maybeSingle()).data;
 ok(threw && acc3.status === "erro", "acesso revogado: pede para reconectar");
+
+// ── Minha agenda ──
+const semana = (id: string, start: string, end: string): any => ({ id, title: "Follow-up semanal", description: null, start, end, keys: ["meet:abc-defg-hij"], attendees: [] });
+const rec1 = semana("r_1", "2026-10-13T17:00:00Z", "2026-10-13T17:30:00Z");
+const rec2 = semana("r_2", "2026-10-20T17:00:00Z", "2026-10-20T17:30:00Z");
+const linhas: any[] = [
+  { id: "g1", title: "a", status: "completo", overall_score: 80, temperature: "quente", meeting_url: "https://meet.google.com/abc-defg-hij", calendar_event_id: null, created_at: "2026-10-20T17:40:00Z" },
+  { id: "g2", title: "b", status: "erro", overall_score: null, temperature: null, meeting_url: "https://meet.google.com/abc-defg-hij", calendar_event_id: null, created_at: "2026-10-20T17:45:00Z" },
+  { id: "g3", title: "c", status: "analisando", overall_score: null, temperature: null, meeting_url: "https://meet.google.com/xyz-abcd-efg", calendar_event_id: "r_1", created_at: "2026-10-13T18:00:00Z" },
+];
+const lig = matchMeetings([rec1, rec2], linhas);
+ok(lig.get("r_2")?.id === "g1", "agenda: gravação pelo link e pelo horário, a completa antes da com erro");
+ok(lig.get("r_1")?.id === "g3", "agenda: gravação pelo id do evento guardado pela extensão");
+ok(!matchMeetings([rec1], [linhas[0]]).has("r_1"), "agenda: reunião recorrente não pega a gravação de outra semana");
+
+await db.from("meetings").insert({ id: "mt1", seller_id: "u1", title: "Diagnóstico", status: "completo", overall_score: 72, temperature: "morno",
+  meeting_url: "https://meet.google.com/abc-defg-hij?authuser=0", calendar_event_id: null, created_at: "2026-10-20T17:55:00.000Z" });
+await db.from("meetings").insert({ id: "mt2", seller_id: "outro", title: "De outra pessoa", status: "completo", overall_score: 90, temperature: "quente",
+  meeting_url: "https://meet.google.com/abc-defg-hij", calendar_event_id: "evt1", created_at: "2026-10-20T17:50:00.000Z" });
+const ag = await agendaEvents(db, "u1", "vend@nexa.com.br", new Date("2026-10-18T03:00:00Z"), new Date("2026-10-25T03:00:00Z"));
+const e1 = ag?.[0];
+ok(e1?.id === "evt1" && e1.externo && e1.lead?.email === "ana@clinicasorriso.com.br", "agenda: evento com cliente e lead");
+ok(e1?.joinUrl === "https://meet.google.com/abc-defg-hij" && e1.webLink?.includes("eid=evt1"), "agenda: link para entrar e para abrir no Google");
+ok(e1?.meeting?.id === "mt1" && e1.meeting.overall_score === 72, "agenda: gravação do próprio vendedor ligada, nunca a de outra pessoa");
+ok(!("description" in (e1 ?? {})), "agenda: descrição do evento não sai");
+ok(calls.some((u) => u.includes("maxResults=250")), "agenda: pede a semana inteira ao Google");
+ok(await agendaEvents(db, "sem-agenda", null, new Date(), new Date(Date.now() + 86400_000)) === null, "agenda: sem agenda conectada, null");
 
 globalThis.fetch = realFetch;
 console.log(fails ? `\n${fails} falha(s)` : "\nTudo certo.");
