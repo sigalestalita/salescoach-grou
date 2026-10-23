@@ -353,32 +353,50 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Boas-vindas de uma empresa já criada: usa o convite de admin pendente
-    // para o e-mail informado (ou o mais recente); sem convite, ou vencido,
-    // gera um novo.
+    // Boas-vindas de uma empresa já criada. Só pode haver um convite pendente
+    // por e-mail na empresa (índice idx_invites_pending_email), e um convite
+    // vencido sem aceite continua "pendente": o de admin válido é reaproveitado;
+    // qualquer outro desse e-mail (vencido ou de outro papel) é revogado antes
+    // de gerar o novo.
     if (action === "send_welcome") {
       const { org_id, admin_name } = body;
-      const email = typeof body.email === "string" && body.email.trim() ? body.email.trim().toLowerCase() : null;
-      let q = admin.from("organization_invites")
-        .select("id, email, token, expires_at")
-        .eq("org_id", org_id).eq("role", "admin").is("accepted_at", null).is("revoked_at", null)
-        .order("created_at", { ascending: false }).limit(1);
-      if (email) q = q.eq("email", email);
-      const { data: convites } = await q;
-      let convite = convites?.[0] ?? null;
-      const vencido = convite?.expires_at && new Date(convite.expires_at) < new Date();
-      if (!convite || vencido) {
-        const para = email ?? convite?.email ?? null;
-        if (!para) return json(req, { error: "Informe o e-mail do administrador." }, 400);
+      const { data: pendentes } = await admin.from("organization_invites")
+        .select("id, email, role, token, expires_at")
+        .eq("org_id", org_id).is("accepted_at", null).is("revoked_at", null)
+        .order("created_at", { ascending: false });
+      const informado = typeof body.email === "string" && body.email.trim() ? body.email.trim().toLowerCase() : null;
+      const alvo = informado ?? pendentes?.find((i) => i.role === "admin")?.email?.toLowerCase() ?? null;
+      if (!alvo) return json(req, { error: "Informe o e-mail do administrador." }, 400);
+
+      // Quem já tem conta não precisa de convite.
+      const { data: contaId } = await admin.rpc("platform_user_id_by_email", { _email: alvo });
+      if (contaId) {
+        const { data: prof } = await admin.from("profiles").select("org_id").eq("user_id", contaId as string).maybeSingle();
+        if (prof?.org_id === org_id) {
+          return json(req, { error: `${alvo} já tem acesso a esta empresa e entra com a própria senha. Se esqueceu, use "Esqueci minha senha" no login ou gere uma senha nova em "Acesso do admin".` }, 400);
+        }
+        if (prof?.org_id) {
+          return json(req, { error: `${alvo} já usa o Sales Coach em outra empresa. Use outro e-mail para o admin desta.` }, 400);
+        }
+      }
+
+      const doEmail = (pendentes ?? []).filter((i) => i.email.toLowerCase() === alvo);
+      let convite = doEmail.find((i) => i.role === "admin" && (!i.expires_at || new Date(i.expires_at) > new Date())) ?? null;
+      if (!convite) {
+        if (doEmail.length) {
+          const { error: revErr } = await admin.from("organization_invites")
+            .update({ revoked_at: new Date().toISOString() }).in("id", doEmail.map((i) => i.id));
+          if (revErr) return json(req, { error: `Não foi possível trocar o convite antigo: ${revErr.message}` }, 400);
+        }
         const { data: novo, error: novoErr } = await admin.from("organization_invites")
-          .insert({ org_id, email: para, role: "admin", invited_by: user.id })
-          .select("id, email, token, expires_at").single();
+          .insert({ org_id, email: alvo, role: "admin", invited_by: user.id })
+          .select("id, email, role, token, expires_at").single();
         if (novoErr || !novo) return json(req, { error: `Não foi possível criar o convite: ${novoErr?.message ?? ""}` }, 400);
         convite = novo;
       }
       try {
         const welcome = await sendDemoWelcome(admin, req, {
-          orgId: org_id, invite: { token: convite.token, expires_at: convite.expires_at, email: convite.email },
+          orgId: org_id, invite: { token: convite.token, expires_at: convite.expires_at, email: convite.email.toLowerCase() },
           adminName: admin_name ?? null, operador: user,
         });
         return json(req, { success: true, welcome });
