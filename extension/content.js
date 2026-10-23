@@ -219,10 +219,16 @@
     kind: 'info', title: 'Dicas pausadas, reconectando…', text: 'A gravação continua normalmente. Nada se perde.',
   };
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  // O painel some no fim de cada gravação, mas este script continua vivo na
+  // aba. Se a pessoa grava de novo pelo botão da extensão, entra um gravador
+  // novo e o popup manda "startRecording": sem tirar este ouvinte, o gravador
+  // antigo também respondia e abria um segundo seletor de tela e uma segunda
+  // reunião, invisível. Ver encerrarInstancia().
+  const onMessage = (msg) => {
     if (msg.action === 'startRecording') startRecording();
     if (msg.action === 'stopRecording') stopRecording();
-  });
+  };
+  chrome.runtime.onMessage.addListener(onMessage);
   window.__salescoachStartRecording = startRecording;
   // Usado pelo autodetect.js para parar quando a pessoa sai da chamada.
   window.__salescoachStopRecording = stopRecording;
@@ -318,6 +324,8 @@
 
   // ── Recording ──
   async function startRecording() {
+    // Painel já fechado: esta instância terminou; quem grava é a nova.
+    if (!overlay.isConnected) return;
     // Duas gravações ao mesmo tempo produzem um arquivo ilegível. Se já há uma
     // em curso, mantém a que está rodando.
     if (starting || (mediaRecorder && mediaRecorder.state === 'recording')) {
@@ -944,16 +952,24 @@
     tipsWS.send(JSON.stringify({ topic, event, payload, ref: nextRealtimeRef() }));
   }
 
+  // Canal das dicas (Supabase Realtime). Antes, se a conexão caía (rede
+  // instável) ou o login vencia (1 hora), as dicas paravam até o fim da
+  // reunião, com o aviso "reconectando" parado na tela. Agora reconecta com
+  // espera crescente e renova o login no canal antes de ele vencer.
+  const TIPS_TOKEN_MS = 20 * 60 * 1000;
+  let tipsTentativas = 0;
+  let tipsTokenTimer = null;
+
   function startTipsRealtime(token, mid) {
     try {
       const topic = `realtime:tips-${mid}`;
       const url = `${SUPABASE_REALTIME_WS}?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
-      tipsWS = new WebSocket(url);
+      const ws = tipsWS = new WebSocket(url);
       let joinRef = null;
 
-      tipsWS.onopen = () => {
+      ws.onopen = () => {
         joinRef = nextRealtimeRef();
-        tipsWS.send(JSON.stringify({
+        ws.send(JSON.stringify({
           topic, event: 'phx_join',
           payload: {
             access_token: token,
@@ -967,14 +983,21 @@
           },
           ref: joinRef,
         }));
+        if (tipsHeartbeatInterval) clearInterval(tipsHeartbeatInterval);
         tipsHeartbeatInterval = setInterval(() => sendRealtime('phoenix', 'heartbeat', {}), 25000);
+        if (tipsTokenTimer) clearInterval(tipsTokenTimer);
+        tipsTokenTimer = setInterval(async () => {
+          const fresh = await getValidToken();
+          if (fresh && tipsWS === ws) sendRealtime(topic, 'access_token', { access_token: fresh });
+        }, TIPS_TOKEN_MS);
       };
 
-      tipsWS.onmessage = (ev) => {
+      ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
           if (msg.event === 'phx_reply' && msg.ref === joinRef) {
             if (msg.payload?.status === 'ok') {
+              tipsTentativas = 0;
               setTipsStatus(null); // pronto, aguardando dicas
               setAlert('dicas', null);
             } else {
@@ -984,9 +1007,11 @@
             }
             return;
           }
-          if (msg.event === 'phx_error') {
-            setAlert('dicas', RECONNECTING);
-            console.error('phx_error', msg);
+          if (msg.event === 'phx_error' || msg.event === 'phx_close') {
+            // Canal derrubado pelo servidor (por exemplo, login vencido):
+            // fecha a conexão e o onclose reconecta.
+            console.error(msg.event, msg);
+            try { ws.close(); } catch {}
             return;
           }
           const tip = extractRealtimeTip(msg);
@@ -996,14 +1021,26 @@
         }
       };
 
-      tipsWS.onerror = (event) => {
+      ws.onerror = (event) => {
+        // O onclose vem logo depois e cuida da reconexão.
         console.error('Sales Coach tips Realtime WS error:', event);
-        setAlert('dicas', RECONNECTING);
       };
-      tipsWS.onclose = (event) => {
-        console.error('Sales Coach tips Realtime WS closed:', event.code, event.reason);
+      ws.onclose = (event) => {
+        if (tipsWS !== ws) return;
         if (tipsHeartbeatInterval) clearInterval(tipsHeartbeatInterval);
+        if (tipsTokenTimer) clearInterval(tipsTokenTimer);
         tipsHeartbeatInterval = null;
+        tipsTokenTimer = null;
+        if (liveStopping) return;
+        console.warn('Sales Coach: canal das dicas caiu; reconectando', event.code, event.reason);
+        setAlert('dicas', RECONNECTING);
+        const delay = Math.min(30000, 1000 * 2 ** tipsTentativas);
+        tipsTentativas += 1;
+        setTimeout(async () => {
+          if (liveStopping || tipsWS !== ws) return;
+          const fresh = await getValidToken();
+          startTipsRealtime(fresh || token, mid);
+        }, delay);
       };
     } catch (e) {
       console.warn('Realtime fail:', e);
@@ -1036,10 +1073,13 @@
       try { ch.ctx && ch.ctx.close(); } catch {}
     }
     liveChannels = {};
-    try { tipsWS && tipsWS.close(); } catch {}
-    try { tipsHeartbeatInterval && clearInterval(tipsHeartbeatInterval); } catch {}
+    const ws = tipsWS;
     tipsWS = null;
+    try { ws && ws.close(); } catch {}
+    try { tipsHeartbeatInterval && clearInterval(tipsHeartbeatInterval); } catch {}
+    try { tipsTokenTimer && clearInterval(tipsTokenTimer); } catch {}
     tipsHeartbeatInterval = null;
+    tipsTokenTimer = null;
     // Registra os minutos de transcrição ao vivo (consumo da empresa).
     if (meetingId && channels.length && liveStartedAt) {
       const seconds = Math.round((Date.now() - liveStartedAt) / 1000);
@@ -1320,8 +1360,14 @@
     statusMsgEl.after(a, hint, close);
     safeStorageSet({ recordingState: 'idle' });
   }
+  function encerrarInstancia() {
+    try { chrome.runtime.onMessage.removeListener(onMessage); } catch {}
+    if (window.__salescoachStartRecording === startRecording) window.__salescoachStartRecording = undefined;
+    if (window.__salescoachStopRecording === stopRecording) window.__salescoachStopRecording = undefined;
+  }
   function autoRemove(delay) {
     setTimeout(() => {
+      encerrarInstancia();
       overlay.remove();
       safeStorageSet({ recordingState: 'idle' });
       try { chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']); } catch {}
