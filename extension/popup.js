@@ -129,6 +129,16 @@ async function loadAutoDetect() {
   const { autoDetect } = await chrome.storage.local.get(['autoDetect']);
   autoDetectEl.checked = autoDetect !== false;
 }
+// Gravar a tela é opcional: por padrão a extensão grava só o áudio (leve; a
+// voz do cliente vem da chamada). A escolha fica lembrada.
+const gravarTelaEl = document.getElementById('gravar-tela');
+(async () => {
+  const { gravarTela } = await chrome.storage.local.get(['gravarTela']);
+  gravarTelaEl.checked = gravarTela === true;
+})();
+gravarTelaEl.addEventListener('change', () => {
+  chrome.storage.local.set({ gravarTela: gravarTelaEl.checked });
+});
 autoDetectEl.addEventListener('change', () => {
   chrome.storage.local.set({ autoDetect: autoDetectEl.checked });
 });
@@ -259,8 +269,9 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     meetingUrl: calendarEvent?.meetingUrl || null,
     calendarEventId: calendarEvent?.eventId || null,
     attendees: calendarEvent?.attendees || [],
+    gravarTela: gravarTelaEl.checked,
   };
-  await chrome.storage.local.set({ meetingData });
+  await chrome.storage.local.set({ meetingData, gravarTela: gravarTelaEl.checked });
 
   // Inject the content script into the active tab
   try {

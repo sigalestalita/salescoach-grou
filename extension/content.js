@@ -63,7 +63,7 @@
       </button>
     </div>
     <div class="sc-body">
-      <div id="sc-init" class="sc-status sending">Escolha a aba da reunião e clique em Compartilhar.</div>
+      <div id="sc-init" class="sc-status sending">Iniciando a gravação…</div>
       <div id="sc-recording" class="sc-section" hidden>
         <div class="sc-confirm" id="sc-confirm" hidden>
           <b>Encerrar a gravação?</b>
@@ -340,12 +340,17 @@
     }
   }
 
-  async function pedirTela() {
+  // Vídeo da tela, quando a pessoa escolhe gravar a tela: 540p a 5 quadros/s.
+  // Gravar a aba obriga o Chrome a desenhá-la a todo vapor; somado ao Meet
+  // apresentando slides, travava notebooks comuns. A análise usa só o áudio.
+  const VIDEO_TELA = { width: { max: 960 }, height: { max: 540 }, frameRate: { max: 5 } };
+  // Só o áudio da aba: o Chrome exige pedir vídeo junto; ele é descartado na hora.
+  const VIDEO_MINIMO = { width: { max: 320 }, height: { max: 180 }, frameRate: { max: 1 } };
+
+  async function pedirTela(comVideo = true) {
     try {
       return await navigator.mediaDevices.getDisplayMedia({
-        // 720p a 8 quadros/s: basta para ver a tela e pesa bem menos no
-        // processador, que já está ocupado com o próprio Meet.
-        video: { width: { max: 1280 }, height: { max: 720 }, frameRate: { max: 8 } },
+        video: comVideo ? VIDEO_TELA : VIDEO_MINIMO,
         audio: true,
         // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
         // em "Compartilhar".
@@ -355,6 +360,14 @@
       console.warn('Screen denied:', err.message);
       return null;
     }
+  }
+
+  async function querGravarTela() {
+    try {
+      const { meetingData, gravarTela } = await chrome.storage.local.get(['meetingData', 'gravarTela']);
+      if (typeof meetingData?.gravarTela === 'boolean') return meetingData.gravarTela;
+      return gravarTela === true;
+    } catch { return false; }
   }
 
   /** A tela foi recusada: tentar de novo (o clique libera a janela do Chrome) ou seguir só com o áudio. */
@@ -394,15 +407,30 @@
     recordingEl.hidden = true;
     statusMsgEl.hidden = true;
 
-    // Sem a tela, a gravação fica só com o microfone: sem vídeo e sem a voz
-    // do cliente. Antes isso acontecia em silêncio; agora a pessoa escolhe.
-    screenStream = await pedirTela();
-    while (!screenStream) {
-      if (await escolherSemTela() !== 'tela') break;
-      screenStream = await pedirTela();
+    // Por padrão grava só o áudio: microfone (vendedor) + a voz do cliente que
+    // chega pela chamada. Sem seletor de tela e quase sem peso no computador.
+    // A tela só entra se a pessoa marcou "Gravar também a tela".
+    if (await querGravarTela()) {
+      initEl.textContent = 'Escolha a aba da reunião e clique em Compartilhar.';
+      screenStream = await pedirTela(true);
+      while (!screenStream) {
+        if (await escolherSemTela() !== 'tela') break;
+        screenStream = await pedirTela(true);
+      }
+    } else if (!temAudioDaChamada()) {
+      // A extensão não está ouvindo a chamada (instalada ou atualizada com a
+      // reunião já aberta). Com ela ouvindo, o cliente entra sozinho quando
+      // chegar na sala. Sem ela, pega o áudio da aba e descarta o vídeo.
+      initEl.textContent = 'Para ouvir o cliente, escolha a aba da reunião e clique em Compartilhar. Só o áudio é gravado.';
+      screenStream = await pedirTela(false);
+      if (screenStream) {
+        for (const t of screenStream.getVideoTracks()) { t.stop(); screenStream.removeTrack(t); }
+      }
+    } else {
+      initEl.textContent = 'Iniciando a gravação…';
     }
     if (screenStream) {
-      hasScreen = true;
+      hasScreen = screenStream.getVideoTracks().length > 0;
       hasSystemAudio = screenStream.getAudioTracks().length > 0;
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => stopRecording());
     }
@@ -417,7 +445,7 @@
         autoRemove(6000); return;
       }
     }
-    if (!screenStream && !micStream) {
+    if (!screenStream && !micStream && !temAudioDaChamada()) {
       showStatus('error', '❌ Nenhuma fonte disponível.'); autoRemove(6000); return;
     }
 
@@ -449,7 +477,7 @@
     const chunks = [];
     recordedChunks = chunks;
     mediaRecorder = new MediaRecorder(combinedStream, {
-      mimeType, ...(isVideo ? { videoBitsPerSecond: 600_000 } : {}),
+      mimeType, ...(isVideo ? { videoBitsPerSecond: 450_000 } : {}),
     });
     const meuRecorder = mediaRecorder;
     mediaRecorder.ondataavailable = (e) => {
@@ -513,7 +541,7 @@
     if (!clienteStream) {
       setAlert('sem-cliente', {
         kind: 'warn', title: 'Não estou ouvindo o cliente',
-        text: 'Só a sua voz entra. Pare e compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
+        text: 'Só a sua voz entra. Pare e grave de novo; se o Chrome pedir, compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
       });
     }
     safeStorageSet({
@@ -1164,7 +1192,7 @@
           if (quiet !== alerts.has('cliente-mudo')) {
             setAlert('cliente-mudo', quiet ? {
               kind: 'warn', title: 'Não ouço o cliente há mais de 1 minuto',
-              text: 'Se ele está falando, confira se a aba foi compartilhada com áudio.',
+              text: 'Se ele está falando, pare e grave de novo. Se continuar, recarregue a aba da reunião antes de gravar.',
             } : null);
           }
         }
