@@ -210,6 +210,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     steps: [
       { route: "/agendas", target: "agendas-titulo", title: "Agendas", body: "Cada reunião gravada ou enviada vira uma agenda: transcrição, análise e score. O vendedor vê as próprias; gestores e admins veem as do time." },
       { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead. Se o Google avisar que não verificou o app, abra Ver o passo a passo, logo abaixo do botão." },
+      { route: "/agendas", target: "agendas-visao", title: "Minha agenda", body: "Com a agenda conectada, a aba Minha agenda mostra a sua semana como no Google Agenda: reuniões com cliente, as que foram gravadas (com o score) e as que passaram sem gravação. Clique numa reunião para entrar na chamada ou abrir a análise." },
       { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole um link do Drive ou do YouTube. Para vários links, use Importar em Lote." },
       { route: "/agendas", target: "agendas-filtros", title: "Busca e filtros", body: "Ache uma agenda pelo nome, pelo tipo de reunião ou pelo executivo." },
       { route: "/agendas", target: "agendas-lista", title: "Lista de agendas", body: "O status mostra em que ponto está: Enviado, Transcrevendo, Analisando, Completo ou Erro. Clique para abrir a análise. No menu ⋮ dá para editar, refazer a análise ou apagar." },
@@ -420,6 +421,16 @@ export const ARTICLES: HelpArticle[] = [
           "Ao gravar, o Sales Coach acha o evento da reunião e traz o título e os participantes. O lead é o primeiro participante de fora da sua empresa.",
           "Link avulso, que não está na agenda, segue com o título da aba; a análise identifica o lead pela conversa.",
           "Se aparecer Reconectar, o acesso expirou ou a permissão da agenda ficou desmarcada: clique e autorize de novo, marcando a caixa da agenda.",
+        ],
+      },
+      {
+        title: "Minha agenda",
+        items: [
+          "Com a agenda conectada, Agendas ganha a aba Minha agenda: a sua agenda principal, por semana ou por dia (no celular, a lista do dia).",
+          "Cores: azul é reunião com cliente; verde, reunião gravada (com o score); tracejada, reunião com cliente que passou sem gravação; cinza, reunião interna, sem ninguém de fora da empresa.",
+          "Clique numa reunião para ver os participantes e o lead, entrar na chamada, abrir a análise ou abrir o evento no Google Agenda ou no Outlook.",
+          "No topo, quantas reuniões com cliente da semana foram gravadas.",
+          "Cada pessoa vê só a própria agenda; gestores e admins não veem a agenda do time. É só leitura e nada da agenda fica guardado no Sales Coach.",
         ],
       },
       {
@@ -690,6 +701,7 @@ export const FAQ: { q: string; a: string }[] = [
   { q: "A reunião trava ou fica lenta quando apresento slides.", a: "Na extensão 1.12 ou mais nova, grave só o áudio (o padrão): deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação do Meet pesa no computador. Se precisar do vídeo, ele sai em 540p. Até a 1.11, pare a gravação antes de apresentar e atualize a extensão." },
   { q: "Apareceu \"O Google não verificou este app\" ao conectar a agenda.", a: "É esperado enquanto o Google conclui a verificação do Sales Coach. Clique em Avançado (canto inferior esquerdo) → Acessar Sales Coach (não seguro) e, na tela seguinte, marque a caixa Ver eventos em todas as suas agendas antes de Continuar. O acesso é só de leitura. Se aparecer Acesso bloqueado, o administrador do Google Workspace da empresa precisa liberar o app (veja a ajuda Conectar o Google Agenda ou o Outlook)." },
   { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e a voz que chega pela chamada (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
+  { q: "Dá para ver a minha agenda dentro do Sales Coach?", a: "Sim. Conecte o Google Agenda ou o Outlook em Agendas e abra a aba Minha agenda: a sua semana, com as reuniões com cliente, as gravadas (com o score) e as que passaram sem gravação. Só você vê a sua agenda." },
   { q: "O título ou o lead da reunião vieram errados.", a: "Conecte sua agenda em Agendas para virem do convite. Dá para corrigir a qualquer momento no menu ⋮ → Editar da agenda." },
   { q: "Como mudar os critérios da análise?", a: "Admins: Configurações → Metodologia de análise. As próximas análises seguem os novos critérios; para uma antiga, use Refazer análise." },
   { q: "Temos um time de CS. Dá para usar?", a: "Sim. Crie um playbook em Configurações → Playbooks de atendimento e ligue-o ao tipo de reunião do CS. As conversas desse tipo são avaliadas pelo playbook, com saúde do cliente e sinais de risco. Veja a ajuda \"Coach de atendimento\"." },
