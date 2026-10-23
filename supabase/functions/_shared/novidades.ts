@@ -24,7 +24,7 @@ export const CTA_PATHS = [
   "/configuracoes", "/equipe",
 ];
 
-const esc = (s: string) =>
+export const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** "214 74% 40%" (como a marca guarda) para #rrggbb, que todo cliente de e-mail entende. */

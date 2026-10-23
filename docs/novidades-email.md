@@ -54,3 +54,23 @@ Rode uma vez o `supabase/manual/agendar-novidades.sql` no SQL do projeto, trocan
 - `supabase/functions/_shared/novidades.ts`: o e-mail, o prompt da IA e o token de descadastro. Os testes estão em `_shared/tests/novidades_check.ts`.
 - `src/components/plataforma/Novidades.tsx`: o quadro da tela Plataforma.
 - Quadro "Novidades" do Início: `src/pages/Inicio.tsx`.
+
+## E-mail de boas-vindas da demonstração
+
+Quando uma empresa é criada na tela **Plataforma** no modo convite, a caixa **Enviar e-mail de boas-vindas** vem marcada. O primeiro admin recebe:
+
+- o link do convite, para criar a própria senha (senha provisória nunca vai por e-mail);
+- o prazo da demonstração;
+- os primeiros passos: senha, extensão, agenda e primeira gravação, e trazer o time;
+- o contato do comercial.
+
+O comercial recebe cópia oculta e é o "responder para". Para mandar depois, ou para uma empresa criada no modo senha, use o menu da empresa → **Enviar boas-vindas**: ele usa o convite pendente desse e-mail ou gera um novo.
+
+Usa o mesmo Resend das novidades (`RESEND_API_KEY`). Segredos próprios:
+
+| Segredo | Valor |
+| --- | --- |
+| `COMERCIAL_EMAIL` (opcional) | e-mail do time comercial que recebe a cópia e as respostas. Sem ele, vale o e-mail de quem liberou a demo |
+| `DEMO_FROM` (opcional) | remetente, se for diferente do `NOVIDADES_FROM` |
+
+Código: `supabase/functions/_shared/demo-email.ts` (o e-mail; testes em `_shared/tests/demo_email_check.ts`) e a função `platform-orgs` (ações `create_org` e `send_welcome`).
