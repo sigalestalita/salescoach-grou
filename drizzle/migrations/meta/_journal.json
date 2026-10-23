@@ -127,6 +127,13 @@
       "when": 1792773497869,
       "tag": "0017_dica_do_dia",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792776527665,
+      "tag": "0018_novidades",
+      "breakpoints": true
     }
   ]
 }

@@ -660,6 +660,57 @@ export type Database = {
           },
         ]
       }
+      email_preferences: {
+        Row: {
+          novidades: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          novidades?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          novidades?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_sends: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          provider_id: string | null
+          ref: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          provider_id?: string | null
+          ref: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          provider_id?: string | null
+          ref?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       highlights: {
         Row: {
           created_at: string
@@ -1487,6 +1538,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_updates: {
+        Row: {
+          audience: string[]
+          body: string
+          created_at: string
+          created_by: string | null
+          cta_label: string | null
+          cta_path: string | null
+          emailed_at: string | null
+          id: string
+          published_at: string | null
+          source: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string[]
+          body: string
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_path?: string | null
+          emailed_at?: string | null
+          id?: string
+          published_at?: string | null
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string[]
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_path?: string | null
+          emailed_at?: string | null
+          id?: string
+          published_at?: string | null
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
