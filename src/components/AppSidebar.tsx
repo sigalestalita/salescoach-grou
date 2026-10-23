@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  House,
   LayoutDashboard,
   CalendarDays,
   BookOpen,
@@ -74,7 +75,8 @@ const TABS: { key: TabKey; label: string; groups: NavGroup[] }[] = [
       {
         label: "Análise",
         items: [
-          { title: "Visão geral", url: "/", icon: LayoutDashboard, roles: MANAGEMENT, end: true },
+          { title: "Início", url: "/", icon: House, roles: ALL_ROLES, end: true },
+          { title: "Visão geral", url: "/visao-geral", icon: LayoutDashboard, roles: MANAGEMENT },
           { title: "Agendas", url: "/agendas", icon: CalendarDays, roles: ALL_ROLES, badge: "processing" },
         ],
       },
