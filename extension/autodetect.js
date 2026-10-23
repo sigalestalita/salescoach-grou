@@ -58,7 +58,7 @@
 
   async function settings() {
     try {
-      return await chrome.storage.local.get(['accessToken', 'userId', 'autoDetect', 'recordingState', 'meetingTypesCache', 'lastMeetingType']);
+      return await chrome.storage.local.get(['accessToken', 'userId', 'autoDetect', 'recordingState', 'meetingTypesCache', 'lastMeetingType', 'gravarTela']);
     } catch {
       // A extensão foi atualizada ou removida: este script ficou órfão.
       return null;
@@ -100,7 +100,7 @@
     if (now - inCallSince < 3000) return;
 
     if (offer.key !== callKey()) offer = { key: callKey(), shown: 0, snoozedAt: 0 };
-    const opts = { loggedIn, types: s.meetingTypesCache || [], lastType: s.lastMeetingType };
+    const opts = { loggedIn, types: s.meetingTypesCache || [], lastType: s.lastMeetingType, gravarTela: s.gravarTela === true };
     if (offer.shown === 0) {
       offer.shown = 1;
       showCard({ ...opts, reminder: false, event: loggedIn ? await eventForCall() : null });
@@ -131,7 +131,7 @@
     card = null;
   }
 
-  function showCard({ loggedIn, types, lastType, reminder, event }) {
+  function showCard({ loggedIn, types, lastType, gravarTela, reminder, event }) {
     const host = document.createElement('div');
     host.id = 'salescoach-autodetect';
     host.dataset.loggedIn = String(loggedIn);
@@ -154,7 +154,7 @@
       : reminder ? 'Esta reunião não está sendo gravada' : 'Gravar esta reunião?';
     const text = !loggedIn
       ? 'Abra o Sales Coach neste navegador com a sua conta e a extensão entra sozinha. Depois, é só voltar aqui.'
-      : 'Grava, dá dicas ao vivo e analisa quando a chamada terminar. Na próxima tela, clique em Compartilhar.';
+      : 'Grava o áudio, dá dicas ao vivo e analisa quando a chamada terminar.';
     const primary = loggedIn ? 'Gravar' : 'Abrir o Sales Coach';
 
     root.innerHTML = `
@@ -169,6 +169,8 @@
         .l{color:#c9d6e8}
         select{width:100%;box-sizing:border-box;background:#0e2b4c;color:#fff;border:1px solid rgba(143,193,255,.25);
            border-radius:8px;padding:7px 9px;font:inherit;font-size:13px}
+        .tela{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:#a9b7cc;cursor:pointer}
+        .tela input{margin:2px 0 0;accent-color:#15498d}
         .b{display:flex;gap:8px;margin-top:12px}
         button{flex:1;border:0;border-radius:10px;padding:10px;font:600 14px system-ui,sans-serif;cursor:pointer}
         .go{background:#15498d;color:#fff}.go:hover{background:#1c5bb0}
@@ -180,6 +182,7 @@
         ${loggedIn ? `<div class="t" title="${esc(title)}">${esc(title)}</div>` : ''}
         ${loggedIn && leadLine ? `<div class="t l" title="${esc(leadLine)}">Lead: ${esc(leadLine)}</div>` : ''}
         ${loggedIn ? typeSelect : ''}
+        ${loggedIn ? `<label class="tela"><input type="checkbox" id="t"${gravarTela ? ' checked' : ''}>Gravar também a tela (mais pesado; na próxima tela, clique em Compartilhar)</label>` : ''}
         <div class="b"><button class="no" id="no">Agora não</button><button class="go" id="go">${esc(primary)}</button></div>
       </div>`;
 
@@ -196,6 +199,7 @@
         return;
       }
       const meetingType = root.getElementById('k')?.value || selected || null;
+      const comTela = !!root.getElementById('t')?.checked;
       // Sem formulário: o lead vem da agenda quando ela está conectada; o que
       // faltar, a análise identifica pela conversa. O vendedor corrige depois
       // no Sales Coach, se precisar.
@@ -205,10 +209,11 @@
         meetingUrl: location.href,
         calendarEventId: event?.eventId || null,
         attendees: event?.attendees || [],
+        gravarTela: comTela,
       };
       removeCard();
       try {
-        await chrome.storage.local.set({ meetingData, lastMeetingType: meetingType });
+        await chrome.storage.local.set({ meetingData, lastMeetingType: meetingType, gravarTela: comTela });
         // O gravador (content.js) é o mesmo do botão da extensão. O clique em
         // "Gravar" ainda vale como gesto quando ele pede a tela.
         await chrome.runtime.sendMessage({ action: 'injectRecorder' });

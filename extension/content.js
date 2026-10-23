@@ -63,7 +63,7 @@
       </button>
     </div>
     <div class="sc-body">
-      <div id="sc-init" class="sc-status sending">Escolha a aba da reunião e clique em Compartilhar.</div>
+      <div id="sc-init" class="sc-status sending">Iniciando a gravação…</div>
       <div id="sc-recording" class="sc-section" hidden>
         <div class="sc-confirm" id="sc-confirm" hidden>
           <b>Encerrar a gravação?</b>
@@ -219,10 +219,16 @@
     kind: 'info', title: 'Dicas pausadas, reconectando…', text: 'A gravação continua normalmente. Nada se perde.',
   };
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  // O painel some no fim de cada gravação, mas este script continua vivo na
+  // aba. Se a pessoa grava de novo pelo botão da extensão, entra um gravador
+  // novo e o popup manda "startRecording": sem tirar este ouvinte, o gravador
+  // antigo também respondia e abria um segundo seletor de tela e uma segunda
+  // reunião, invisível. Ver encerrarInstancia().
+  const onMessage = (msg) => {
     if (msg.action === 'startRecording') startRecording();
     if (msg.action === 'stopRecording') stopRecording();
-  });
+  };
+  chrome.runtime.onMessage.addListener(onMessage);
   window.__salescoachStartRecording = startRecording;
   // Usado pelo autodetect.js para parar quando a pessoa sai da chamada.
   window.__salescoachStopRecording = stopRecording;
@@ -318,6 +324,8 @@
 
   // ── Recording ──
   async function startRecording() {
+    // Painel já fechado: esta instância terminou; quem grava é a nova.
+    if (!overlay.isConnected) return;
     // Duas gravações ao mesmo tempo produzem um arquivo ilegível. Se já há uma
     // em curso, mantém a que está rodando.
     if (starting || (mediaRecorder && mediaRecorder.state === 'recording')) {
@@ -332,12 +340,17 @@
     }
   }
 
-  async function pedirTela() {
+  // Vídeo da tela, quando a pessoa escolhe gravar a tela: 540p a 5 quadros/s.
+  // Gravar a aba obriga o Chrome a desenhá-la a todo vapor; somado ao Meet
+  // apresentando slides, travava notebooks comuns. A análise usa só o áudio.
+  const VIDEO_TELA = { width: { max: 960 }, height: { max: 540 }, frameRate: { max: 5 } };
+  // Só o áudio da aba: o Chrome exige pedir vídeo junto; ele é descartado na hora.
+  const VIDEO_MINIMO = { width: { max: 320 }, height: { max: 180 }, frameRate: { max: 1 } };
+
+  async function pedirTela(comVideo = true) {
     try {
       return await navigator.mediaDevices.getDisplayMedia({
-        // 720p a 8 quadros/s: basta para ver a tela e pesa bem menos no
-        // processador, que já está ocupado com o próprio Meet.
-        video: { width: { max: 1280 }, height: { max: 720 }, frameRate: { max: 8 } },
+        video: comVideo ? VIDEO_TELA : VIDEO_MINIMO,
         audio: true,
         // Abre a escolha já na aba da reunião, com o áudio da aba: um clique
         // em "Compartilhar".
@@ -347,6 +360,14 @@
       console.warn('Screen denied:', err.message);
       return null;
     }
+  }
+
+  async function querGravarTela() {
+    try {
+      const { meetingData, gravarTela } = await chrome.storage.local.get(['meetingData', 'gravarTela']);
+      if (typeof meetingData?.gravarTela === 'boolean') return meetingData.gravarTela;
+      return gravarTela === true;
+    } catch { return false; }
   }
 
   /** A tela foi recusada: tentar de novo (o clique libera a janela do Chrome) ou seguir só com o áudio. */
@@ -386,15 +407,30 @@
     recordingEl.hidden = true;
     statusMsgEl.hidden = true;
 
-    // Sem a tela, a gravação fica só com o microfone: sem vídeo e sem a voz
-    // do cliente. Antes isso acontecia em silêncio; agora a pessoa escolhe.
-    screenStream = await pedirTela();
-    while (!screenStream) {
-      if (await escolherSemTela() !== 'tela') break;
-      screenStream = await pedirTela();
+    // Por padrão grava só o áudio: microfone (vendedor) + a voz do cliente que
+    // chega pela chamada. Sem seletor de tela e quase sem peso no computador.
+    // A tela só entra se a pessoa marcou "Gravar também a tela".
+    if (await querGravarTela()) {
+      initEl.textContent = 'Escolha a aba da reunião e clique em Compartilhar.';
+      screenStream = await pedirTela(true);
+      while (!screenStream) {
+        if (await escolherSemTela() !== 'tela') break;
+        screenStream = await pedirTela(true);
+      }
+    } else if (!temAudioDaChamada()) {
+      // A extensão não está ouvindo a chamada (instalada ou atualizada com a
+      // reunião já aberta). Com ela ouvindo, o cliente entra sozinho quando
+      // chegar na sala. Sem ela, pega o áudio da aba e descarta o vídeo.
+      initEl.textContent = 'Para ouvir o cliente, escolha a aba da reunião e clique em Compartilhar. Só o áudio é gravado.';
+      screenStream = await pedirTela(false);
+      if (screenStream) {
+        for (const t of screenStream.getVideoTracks()) { t.stop(); screenStream.removeTrack(t); }
+      }
+    } else {
+      initEl.textContent = 'Iniciando a gravação…';
     }
     if (screenStream) {
-      hasScreen = true;
+      hasScreen = screenStream.getVideoTracks().length > 0;
       hasSystemAudio = screenStream.getAudioTracks().length > 0;
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => stopRecording());
     }
@@ -409,7 +445,7 @@
         autoRemove(6000); return;
       }
     }
-    if (!screenStream && !micStream) {
+    if (!screenStream && !micStream && !temAudioDaChamada()) {
       showStatus('error', '❌ Nenhuma fonte disponível.'); autoRemove(6000); return;
     }
 
@@ -441,7 +477,7 @@
     const chunks = [];
     recordedChunks = chunks;
     mediaRecorder = new MediaRecorder(combinedStream, {
-      mimeType, ...(isVideo ? { videoBitsPerSecond: 600_000 } : {}),
+      mimeType, ...(isVideo ? { videoBitsPerSecond: 450_000 } : {}),
     });
     const meuRecorder = mediaRecorder;
     mediaRecorder.ondataavailable = (e) => {
@@ -505,7 +541,7 @@
     if (!clienteStream) {
       setAlert('sem-cliente', {
         kind: 'warn', title: 'Não estou ouvindo o cliente',
-        text: 'Só a sua voz entra. Pare e compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
+        text: 'Só a sua voz entra. Pare e grave de novo; se o Chrome pedir, compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
       });
     }
     safeStorageSet({
@@ -944,16 +980,24 @@
     tipsWS.send(JSON.stringify({ topic, event, payload, ref: nextRealtimeRef() }));
   }
 
+  // Canal das dicas (Supabase Realtime). Antes, se a conexão caía (rede
+  // instável) ou o login vencia (1 hora), as dicas paravam até o fim da
+  // reunião, com o aviso "reconectando" parado na tela. Agora reconecta com
+  // espera crescente e renova o login no canal antes de ele vencer.
+  const TIPS_TOKEN_MS = 20 * 60 * 1000;
+  let tipsTentativas = 0;
+  let tipsTokenTimer = null;
+
   function startTipsRealtime(token, mid) {
     try {
       const topic = `realtime:tips-${mid}`;
       const url = `${SUPABASE_REALTIME_WS}?apikey=${encodeURIComponent(SUPABASE_ANON_KEY)}&vsn=1.0.0`;
-      tipsWS = new WebSocket(url);
+      const ws = tipsWS = new WebSocket(url);
       let joinRef = null;
 
-      tipsWS.onopen = () => {
+      ws.onopen = () => {
         joinRef = nextRealtimeRef();
-        tipsWS.send(JSON.stringify({
+        ws.send(JSON.stringify({
           topic, event: 'phx_join',
           payload: {
             access_token: token,
@@ -967,14 +1011,21 @@
           },
           ref: joinRef,
         }));
+        if (tipsHeartbeatInterval) clearInterval(tipsHeartbeatInterval);
         tipsHeartbeatInterval = setInterval(() => sendRealtime('phoenix', 'heartbeat', {}), 25000);
+        if (tipsTokenTimer) clearInterval(tipsTokenTimer);
+        tipsTokenTimer = setInterval(async () => {
+          const fresh = await getValidToken();
+          if (fresh && tipsWS === ws) sendRealtime(topic, 'access_token', { access_token: fresh });
+        }, TIPS_TOKEN_MS);
       };
 
-      tipsWS.onmessage = (ev) => {
+      ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
           if (msg.event === 'phx_reply' && msg.ref === joinRef) {
             if (msg.payload?.status === 'ok') {
+              tipsTentativas = 0;
               setTipsStatus(null); // pronto, aguardando dicas
               setAlert('dicas', null);
             } else {
@@ -984,9 +1035,11 @@
             }
             return;
           }
-          if (msg.event === 'phx_error') {
-            setAlert('dicas', RECONNECTING);
-            console.error('phx_error', msg);
+          if (msg.event === 'phx_error' || msg.event === 'phx_close') {
+            // Canal derrubado pelo servidor (por exemplo, login vencido):
+            // fecha a conexão e o onclose reconecta.
+            console.error(msg.event, msg);
+            try { ws.close(); } catch {}
             return;
           }
           const tip = extractRealtimeTip(msg);
@@ -996,14 +1049,26 @@
         }
       };
 
-      tipsWS.onerror = (event) => {
+      ws.onerror = (event) => {
+        // O onclose vem logo depois e cuida da reconexão.
         console.error('Sales Coach tips Realtime WS error:', event);
-        setAlert('dicas', RECONNECTING);
       };
-      tipsWS.onclose = (event) => {
-        console.error('Sales Coach tips Realtime WS closed:', event.code, event.reason);
+      ws.onclose = (event) => {
+        if (tipsWS !== ws) return;
         if (tipsHeartbeatInterval) clearInterval(tipsHeartbeatInterval);
+        if (tipsTokenTimer) clearInterval(tipsTokenTimer);
         tipsHeartbeatInterval = null;
+        tipsTokenTimer = null;
+        if (liveStopping) return;
+        console.warn('Sales Coach: canal das dicas caiu; reconectando', event.code, event.reason);
+        setAlert('dicas', RECONNECTING);
+        const delay = Math.min(30000, 1000 * 2 ** tipsTentativas);
+        tipsTentativas += 1;
+        setTimeout(async () => {
+          if (liveStopping || tipsWS !== ws) return;
+          const fresh = await getValidToken();
+          startTipsRealtime(fresh || token, mid);
+        }, delay);
       };
     } catch (e) {
       console.warn('Realtime fail:', e);
@@ -1036,10 +1101,13 @@
       try { ch.ctx && ch.ctx.close(); } catch {}
     }
     liveChannels = {};
-    try { tipsWS && tipsWS.close(); } catch {}
-    try { tipsHeartbeatInterval && clearInterval(tipsHeartbeatInterval); } catch {}
+    const ws = tipsWS;
     tipsWS = null;
+    try { ws && ws.close(); } catch {}
+    try { tipsHeartbeatInterval && clearInterval(tipsHeartbeatInterval); } catch {}
+    try { tipsTokenTimer && clearInterval(tipsTokenTimer); } catch {}
     tipsHeartbeatInterval = null;
+    tipsTokenTimer = null;
     // Registra os minutos de transcrição ao vivo (consumo da empresa).
     if (meetingId && channels.length && liveStartedAt) {
       const seconds = Math.round((Date.now() - liveStartedAt) / 1000);
@@ -1124,7 +1192,7 @@
           if (quiet !== alerts.has('cliente-mudo')) {
             setAlert('cliente-mudo', quiet ? {
               kind: 'warn', title: 'Não ouço o cliente há mais de 1 minuto',
-              text: 'Se ele está falando, confira se a aba foi compartilhada com áudio.',
+              text: 'Se ele está falando, pare e grave de novo. Se continuar, recarregue a aba da reunião antes de gravar.',
             } : null);
           }
         }
@@ -1320,8 +1388,14 @@
     statusMsgEl.after(a, hint, close);
     safeStorageSet({ recordingState: 'idle' });
   }
+  function encerrarInstancia() {
+    try { chrome.runtime.onMessage.removeListener(onMessage); } catch {}
+    if (window.__salescoachStartRecording === startRecording) window.__salescoachStartRecording = undefined;
+    if (window.__salescoachStopRecording === stopRecording) window.__salescoachStopRecording = undefined;
+  }
   function autoRemove(delay) {
     setTimeout(() => {
+      encerrarInstancia();
       overlay.remove();
       safeStorageSet({ recordingState: 'idle' });
       try { chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'isScreenSharing']); } catch {}
