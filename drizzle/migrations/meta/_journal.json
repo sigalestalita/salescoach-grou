@@ -120,6 +120,13 @@
       "when": 1792709575426,
       "tag": "0016_base_por_area",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792773497869,
+      "tag": "0017_dica_do_dia",
+      "breakpoints": true
     }
   ]
 }

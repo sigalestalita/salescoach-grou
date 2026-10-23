@@ -625,6 +625,41 @@ export type Database = {
           },
         ]
       }
+      daily_tips: {
+        Row: {
+          created_at: string
+          day: string
+          model: string | null
+          org_id: string
+          tip: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          model?: string | null
+          org_id: string
+          tip: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          model?: string | null
+          org_id?: string
+          tip?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_tips_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       highlights: {
         Row: {
           created_at: string
