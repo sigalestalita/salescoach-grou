@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye, Pencil, MoreHorizontal, Clock, KeyRound, Mail } from "lucide-react";
 import { enterSupport } from "@/lib/support";
 import { Novidades } from "@/components/plataforma/Novidades";
+import { Atividade } from "@/components/plataforma/Atividade";
 import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
 /**
@@ -1092,6 +1093,8 @@ const Plataforma = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Atividade orgs={orgs} />
 
         <Novidades />
 
