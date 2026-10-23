@@ -114,7 +114,7 @@ export const JOURNEY: JourneyDef[] = [
     id: "agenda",
     title: "Conecte a sua agenda",
     description:
-      "Google Agenda ou Outlook, só leitura. As gravações já chegam com o título da reunião, os participantes e o lead (nome e e-mail).",
+      "Google Agenda ou Outlook, só leitura. As gravações já chegam com o título da reunião, os participantes e o lead (nome e e-mail). No Google, se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar Sales Coach (não seguro) e marque a caixa da agenda. O passo a passo está na página Extensão do Chrome.",
     cta: "Conectar a agenda",
     route: "/agendas",
     tour: "agendas",
@@ -293,7 +293,9 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Extensão do Chrome",
     steps: [
       { route: "/extensao", target: "ext-instalar", title: "Instale", body: "Abre a Chrome Web Store. Clique em Usar no Chrome; a extensão entra na sua conta sozinha." },
-      { route: "/extensao", target: "ext-passos", title: "Como gravar", body: "Ao entrar numa reunião, clique em Gravar no cartão do Sales Coach e confirme Compartilhar. Ao sair da chamada, a gravação é enviada sozinha." },
+      { route: "/extensao", target: "ext-passos", title: "Como gravar", body: "Ao entrar numa reunião, clique em Gravar no cartão do Sales Coach. Por padrão grava só o áudio, sem compartilhar a tela. Ao sair da chamada, a gravação é enviada sozinha." },
+      { route: "/extensao", target: "ext-agenda", title: "Conecte a agenda do Google", body: "O passo a passo para passar pelo aviso do Google (Avançado → Acessar Sales Coach) e marcar a permissão da agenda." },
+      { route: "/extensao", target: "ext-leve", title: "Para a reunião não travar", body: "Vai apresentar slides? Deixe desmarcado Gravar também a tela. Só o áudio quase não pesa no computador." },
     ],
   },
 };
@@ -376,14 +378,27 @@ export const ARTICLES: HelpArticle[] = [
       {
         title: "Gravar",
         items: [
-          "Ao entrar numa reunião do Meet ou do Teams, aparece o cartão Gravar esta reunião?. Clique em Gravar e confirme Compartilhar, com o áudio da guia ligado.",
+          "Ao entrar numa reunião do Meet ou do Teams, aparece o cartão Gravar esta reunião?. Clique em Gravar. Na primeira vez, permita o microfone.",
+          "Por padrão (versão 1.12 ou mais nova), grava só o áudio: a sua voz e a do cliente, que vem direto da chamada. Não abre o seletor de tela. Funciona com fone, e o cliente que entra depois entra na gravação sozinho.",
+          "Quer o vídeo? Marque Gravar também a tela no cartão ou no ícone da extensão. O Chrome pede a aba da reunião: deixe ligado Compartilhar áudio da guia e clique em Compartilhar. A tela é gravada em 540p, para não pesar.",
+          "Até a versão 1.11, o Chrome sempre pede a aba da reunião: escolha a aba com Compartilhar áudio da guia ligado. Veja a versão em chrome://extensions.",
           "Um painel mostra a transcrição e dicas ao vivo; só você o vê.",
           "Ao sair da chamada, a gravação é enviada sozinha.",
         ],
       },
       {
+        title: "Para a reunião não travar (apresentando slides)",
+        items: [
+          "Vai apresentar slides ou compartilhar a tela no Meet? Deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação era o que deixava a chamada lenta e travando.",
+          "Só o áudio quase não pesa no computador, e a análise usa só o áudio.",
+          "Se a chamada ficar lenta numa versão até a 1.11, pare a gravação antes de apresentar e atualize a extensão.",
+        ],
+      },
+      {
         title: "Se algo falhar",
         items: [
+          "O Chrome pediu para compartilhar a aba sem você marcar a tela? A extensão foi instalada ou atualizada com a reunião já aberta. Escolha a aba da reunião (só o áudio é gravado) ou recarregue a aba da reunião antes de gravar.",
+          "O painel avisou Não estou ouvindo o cliente? Pare, recarregue a aba da reunião e grave de novo.",
           "Se o envio falhar, o painel oferece Baixar a gravação: envie o arquivo depois em Agendas → Nova Agenda.",
           "Se pedir login, abra o Sales Coach neste navegador ou clique em Entrar pelo Sales Coach na extensão.",
           "Para não ver o cartão, desmarque a opção no ícone da extensão.",
@@ -402,10 +417,28 @@ export const ARTICLES: HelpArticle[] = [
       {
         title: "Como funciona",
         items: [
-          "Em Agendas → Sua agenda, clique em Conectar e autorize. O acesso é só de leitura.",
+          "Em Agendas → Sua agenda, clique em Conectar Google Agenda (ou Conectar Outlook) e autorize. O acesso é só de leitura: o Sales Coach não cria, não altera e não apaga eventos.",
           "Ao gravar, o Sales Coach acha o evento da reunião e traz o título e os participantes. O lead é o primeiro participante de fora da sua empresa.",
           "Link avulso, que não está na agenda, segue com o título da aba; a análise identifica o lead pela conversa.",
-          "Se aparecer Reconectar, o acesso expirou: clique e autorize de novo.",
+          "Se aparecer Reconectar, o acesso expirou ou a permissão da agenda ficou desmarcada: clique e autorize de novo, marcando a caixa da agenda.",
+        ],
+      },
+      {
+        title: "Google Agenda: passo a passo do consentimento",
+        items: [
+          "1. Agendas → Sua agenda → Conectar Google Agenda.",
+          "2. Escolha a sua conta do Google do trabalho, a mesma das reuniões com clientes.",
+          "3. Se aparecer \"O Google não verificou este app\", não clique no botão azul: clique em Avançado, no canto inferior esquerdo, e depois em Acessar Sales Coach (não seguro). O aviso aparece enquanto o Google conclui a verificação do Sales Coach.",
+          "4. Na tela \"O Sales Coach quer acessar sua Conta do Google\", marque a caixa Ver eventos em todas as suas agendas (ou Selecionar tudo) e clique em Continuar. Sem essa caixa marcada, a agenda não conecta.",
+          "5. Você volta ao Sales Coach com a mensagem Agenda conectada.",
+          "O passo a passo também está na página Extensão do Chrome.",
+        ],
+      },
+      {
+        title: "Se o Google bloquear",
+        items: [
+          "\"Acesso bloqueado\" ou sem a opção Avançado: a empresa usa Google Workspace e bloqueia apps ainda não verificados. O administrador do Google Workspace libera em admin.google.com → Segurança → Acesso e controle de dados → Controles de API → Gerenciar acesso de apps de terceiros → Configurar novo app: procura Sales Coach (ou o ID do app, que o suporte envia) e marca como Confiável.",
+          "No Outlook, \"Precisa de aprovação do administrador\": o administrador do Microsoft 365 da empresa aprova o Sales Coach uma vez.",
         ],
       },
     ],
@@ -653,9 +686,11 @@ export const ARTICLES: HelpArticle[] = [
 export const FAQ: { q: string; a: string }[] = [
   { q: "Quanto tempo leva a análise?", a: "Alguns minutos depois de a gravação chegar. Acompanhe o status em Agendas: Transcrevendo, Analisando e Completo." },
   { q: "A reunião ficou com Erro. E agora?", a: "Abra a reunião e clique em Tentar novamente. Se persistir, confira se o arquivo tem áudio e menos de 20 MB, ou se o link do Drive está aberto para qualquer pessoa com o link." },
-  { q: "O cliente percebe que estou gravando?", a: "Pela extensão, o Chrome mostra que a aba está sendo compartilhada só para você. Avise o cliente no início, como pede a LGPD." },
-  { q: "A gravação veio sem o áudio do cliente.", a: "Atualize a extensão (1.11 ou mais nova): ela grava a voz do cliente direto da chamada, mesmo com fone. Nas versões antigas, deixe ligado Compartilhar áudio da guia e use o alto-falante padrão no Meet." },
-  { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e o áudio da aba (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
+  { q: "O cliente percebe que estou gravando?", a: "Não: o painel da extensão só aparece para você, e os outros participantes não veem nada. Avise o cliente no início, como pede a LGPD." },
+  { q: "A gravação veio sem o áudio do cliente.", a: "Atualize a extensão (1.11 ou mais nova): ela grava a voz do cliente direto da chamada, mesmo com fone. Se a extensão foi instalada ou atualizada com a reunião aberta, recarregue a aba da reunião antes de gravar. Nas versões antigas, deixe ligado Compartilhar áudio da guia e use o alto-falante padrão no Meet." },
+  { q: "A reunião trava ou fica lenta quando apresento slides.", a: "Na extensão 1.12 ou mais nova, grave só o áudio (o padrão): deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação do Meet pesa no computador. Se precisar do vídeo, ele sai em 540p. Até a 1.11, pare a gravação antes de apresentar e atualize a extensão." },
+  { q: "Apareceu \"O Google não verificou este app\" ao conectar a agenda.", a: "É esperado enquanto o Google conclui a verificação do Sales Coach. Clique em Avançado (canto inferior esquerdo) → Acessar Sales Coach (não seguro) e, na tela seguinte, marque a caixa Ver eventos em todas as suas agendas antes de Continuar. O acesso é só de leitura. Se aparecer Acesso bloqueado, o administrador do Google Workspace da empresa precisa liberar o app (veja a ajuda Conectar o Google Agenda ou o Outlook)." },
+  { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e a voz que chega pela chamada (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
   { q: "O título ou o lead da reunião vieram errados.", a: "Conecte sua agenda em Agendas para virem do convite. Dá para corrigir a qualquer momento no menu ⋮ → Editar da agenda." },
   { q: "Como mudar os critérios da análise?", a: "Admins: Configurações → Metodologia de análise. As próximas análises seguem os novos critérios; para uma antiga, use Refazer análise." },
   { q: "Temos um time de CS. Dá para usar?", a: "Sim. Crie um playbook em Configurações → Playbooks de atendimento e ligue-o ao tipo de reunião do CS. As conversas desse tipo são avaliadas pelo playbook, com saúde do cliente e sinais de risco. Veja a ajuda \"Coach de atendimento\"." },
