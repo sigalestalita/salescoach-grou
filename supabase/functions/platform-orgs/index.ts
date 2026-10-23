@@ -473,6 +473,31 @@ Deno.serve(async (req) => {
       return json(req, { success: true, requeued: requeued?.length ?? 0 });
     }
 
+    // Atividade dos usuários de todas as empresas (só metadados; ver
+    // 20261030090000_atividade_plataforma.sql). Período de até 90 dias.
+    if (action === "activity" || action === "activity_people") {
+      const ate = body.ate ? new Date(body.ate) : new Date();
+      let desde = body.desde ? new Date(body.desde) : new Date(ate.getTime() - 7 * 86400_000);
+      if (isNaN(ate.getTime()) || isNaN(desde.getTime()) || desde >= ate) return json(req, { error: "Período inválido." }, 400);
+      if (ate.getTime() - desde.getTime() > 90 * 86400_000) desde = new Date(ate.getTime() - 90 * 86400_000);
+      if (action === "activity_people") {
+        const { data, error } = await admin.rpc("platform_activity_people", { _desde: desde.toISOString(), _ate: ate.toISOString() });
+        if (error) return json(req, { error: `A atividade ainda não está disponível (${error.message}). Aplique a migração 20261030090000_atividade_plataforma.sql.` }, 400);
+        return json(req, { people: data ?? [] });
+      }
+      const tipos = ["login", "reuniao", "analise", "erro", "treino", "assistente", "admin"];
+      const { data, error } = await admin.rpc("platform_activity", {
+        _desde: desde.toISOString(), _ate: ate.toISOString(),
+        _org: body.org_id || null,
+        _email: typeof body.busca === "string" && body.busca.trim() ? body.busca.trim().slice(0, 100) : null,
+        _tipo: tipos.includes(body.tipo) ? body.tipo : null,
+        _limite: Math.min(Math.max(Number(body.limite) || 100, 1), 500),
+        _offset: Math.max(Number(body.offset) || 0, 0),
+      });
+      if (error) return json(req, { error: `A atividade ainda não está disponível (${error.message}). Aplique a migração 20261030090000_atividade_plataforma.sql.` }, 400);
+      return json(req, { events: data ?? [] });
+    }
+
     if (action === "list_plans") {
       const { data, error } = await admin.from("plans").select("*").order("sort_order");
       if (error) throw error;
