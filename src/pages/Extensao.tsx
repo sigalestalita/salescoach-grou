@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import {
   ExternalLink, Pin, LogIn, MonitorPlay, Volume2, Lightbulb, Send, AlertCircle, Download, ChevronDown, Copy, Check,
-  Wrench, CalendarCheck, Gauge,
+  Wrench, Gauge,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,7 +91,7 @@ const steps = [
 ];
 
 const tips = [
-  "Conecte sua agenda (Google ou Outlook) na página Agendas: as gravações já vêm com o título, os participantes e o lead. O passo a passo do Google está logo acima.",
+  "Conecte sua agenda (Google ou Outlook) na página Agendas: as gravações já vêm com o título, os participantes e o lead. Se o Google mostrar um aviso, o passo a passo está ao lado do botão Conectar, em Agendas.",
   "Avise o cliente no início da reunião que ela está sendo gravada.",
   "Não feche a aba da reunião antes de o painel mostrar \"Gravação enviada\".",
   "Quer preencher os dados do lead antes? Clique no ícone da extensão e use Iniciar gravação.",
@@ -102,139 +101,6 @@ const tips = [
 ];
 
 const B = ({ children }: { children: React.ReactNode }) => <strong className="text-foreground">{children}</strong>;
-
-/**
- * Conectar o Google Agenda. Enquanto o Google não termina a verificação do
- * app, a tela de autorização mostra o aviso "O Google não verificou este app":
- * sem o passo a passo, a pessoa acha que é golpe e desiste. Depois da
- * verificação, tire o passo 3 e o primeiro problema.
- */
-const googleSteps: { title: string; body: React.ReactNode }[] = [
-  {
-    title: "Abra a página Agendas",
-    body: (
-      <>
-        No quadro <B>Sua agenda</B>, clique em <B>Conectar Google Agenda</B>.
-      </>
-    ),
-  },
-  {
-    title: "Escolha a sua conta do trabalho",
-    body: <>A mesma conta do Google em que ficam as suas reuniões com clientes.</>,
-  },
-  {
-    title: "Passe pelo aviso do Google",
-    body: (
-      <>
-        Se aparecer <B>O Google não verificou este app</B>, não clique no botão azul. Clique em <B>Avançado</B>, no canto
-        inferior esquerdo, e depois em <B>Acessar Sales Coach (não seguro)</B>. O aviso aparece enquanto o Google conclui a
-        verificação do Sales Coach. O acesso é só de leitura: o Sales Coach não cria, não altera e não apaga eventos.
-      </>
-    ),
-  },
-  {
-    title: "Marque a permissão da agenda",
-    body: (
-      <>
-        Na tela <B>O Sales Coach quer acessar sua Conta do Google</B>, marque a caixa <B>Ver eventos em todas as suas
-        agendas</B> (ou <B>Selecionar tudo</B>) e clique em <B>Continuar</B>. Sem essa caixa marcada, a agenda não conecta.
-      </>
-    ),
-  },
-  {
-    title: "Pronto",
-    body: (
-      <>
-        Você volta para o Sales Coach com a mensagem <B>Agenda conectada</B>. As próximas gravações já chegam com o título,
-        os participantes e o lead.
-      </>
-    ),
-  },
-];
-
-const googleProblems: { q: string; a: React.ReactNode }[] = [
-  {
-    q: "Apareceu \"Acesso bloqueado\" ou não tem a opção Avançado",
-    a: (
-      <>
-        A sua empresa usa Google Workspace e bloqueia apps que ainda não foram verificados. Peça ao administrador do Google
-        Workspace para liberar: em <B>admin.google.com</B> → <B>Segurança</B> → <B>Acesso e controle de dados</B> →{" "}
-        <B>Controles de API</B> → <B>Gerenciar acesso de apps de terceiros</B> → <B>Configurar novo app</B>, procurar{" "}
-        <B>Sales Coach</B> (ou o ID do app, que o nosso suporte envia) e marcar como <B>Confiável</B>. Depois, conecte de novo.
-      </>
-    ),
-  },
-  {
-    q: "Conectou, mas aparece Reconectar ou a gravação não pega o título",
-    a: (
-      <>
-        Provavelmente a caixa da agenda ficou desmarcada, ou o acesso expirou. Clique em <B>Reconectar Google Agenda</B> e,
-        na tela de permissões, marque <B>Ver eventos em todas as suas agendas</B>.
-      </>
-    ),
-  },
-  {
-    q: "Usa o Outlook?",
-    a: (
-      <>
-        Clique em <B>Conectar Outlook</B> e entre com a conta da Microsoft do trabalho. Se aparecer{" "}
-        <B>Precisa de aprovação do administrador</B>, o administrador do Microsoft 365 da empresa precisa aprovar o Sales
-        Coach uma vez.
-      </>
-    ),
-  },
-];
-
-function GoogleCalendar() {
-  return (
-    <Card className="border-border bg-card" data-tour="ext-agenda">
-      <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between md:space-y-0">
-        <div className="space-y-1.5">
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <CalendarCheck className="h-5 w-5 text-primary" />
-            Conecte a sua agenda do Google
-          </CardTitle>
-          <CardDescription className="max-w-2xl">
-            Com a agenda conectada, a extensão sabe qual reunião você está gravando: o título, os participantes e o lead vêm do
-            convite. Leva 1 minuto e é feito uma vez só.
-          </CardDescription>
-        </div>
-        <Button asChild variant="outline" className="w-full shrink-0 md:w-auto">
-          <Link to="/agendas">
-            <CalendarCheck className="mr-2 h-4 w-4" />
-            Abrir Agendas
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <ol className="space-y-5">
-          {googleSteps.map((step, i) => (
-            <li key={step.title} className="flex items-start gap-4">
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                {i + 1}
-              </span>
-              <div className="min-w-0">
-                <h3 className="font-semibold text-foreground">{step.title}</h3>
-                <div className="mt-0.5 text-sm text-muted-foreground">{step.body}</div>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <div className="space-y-3 rounded-lg bg-muted/50 p-4">
-          <h3 className="font-semibold text-foreground">Se algo der errado</h3>
-          <dl className="space-y-3 text-sm">
-            {googleProblems.map((p) => (
-              <div key={p.q}>
-                <dt className="font-medium text-foreground">{p.q}</dt>
-                <dd className="mt-0.5 text-muted-foreground">{p.a}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 /** Gravar sem pesar na reunião (extensão 1.12 ou mais nova). */
 const lightTips: React.ReactNode[] = [
@@ -544,8 +410,6 @@ export default function Extensao() {
           </ol>
         </CardContent>
       </Card>
-
-      <GoogleCalendar />
 
       <LightRecording />
 

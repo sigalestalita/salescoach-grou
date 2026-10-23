@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarCheck, CalendarPlus, AlertCircle } from "lucide-react";
 import { CALENDAR_NAME, calendarApi, CalendarConnection, CalendarProvider } from "@/lib/calendar";
+import { GoogleCalendarGuide } from "@/components/GoogleCalendarGuide";
 
 /**
  * Conexão da agenda do vendedor (Google Agenda ou Outlook). Com ela, a extensão
@@ -17,6 +18,8 @@ export function CalendarConnect() {
   const [providers, setProviders] = useState<CalendarProvider[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // Voltou do Google com erro: o passo a passo já abre.
+  const [returnedWithError, setReturnedWithError] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -40,6 +43,7 @@ export function CalendarConnect() {
     if (r === "conectada") {
       toast({ title: "Agenda conectada", description: "As próximas gravações já vêm com o título, os participantes e o lead." });
     } else {
+      setReturnedWithError(true);
       toast({ title: "Não foi possível conectar a agenda", description: q.get("motivo") ?? undefined, variant: "destructive" });
     }
     q.delete("agenda"); q.delete("motivo");
@@ -73,6 +77,7 @@ export function CalendarConnect() {
   // Nada configurado na plataforma e nada conectado: não ocupa espaço.
   if (!loaded || (!conn && providers.length === 0)) return null;
   const broken = conn?.status === "erro";
+  const showGuide = (!conn || broken) && (providers.includes("google") || conn?.provider === "google");
 
   return (
     <Card data-tour="agenda-conectar">
@@ -107,6 +112,7 @@ export function CalendarConnect() {
             </Button>
           ))}
         </div>
+        {showGuide && <GoogleCalendarGuide defaultOpen={broken || returnedWithError} />}
       </CardContent>
     </Card>
   );

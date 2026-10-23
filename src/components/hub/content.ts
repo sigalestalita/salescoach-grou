@@ -114,7 +114,7 @@ export const JOURNEY: JourneyDef[] = [
     id: "agenda",
     title: "Conecte a sua agenda",
     description:
-      "Google Agenda ou Outlook, só leitura. As gravações já chegam com o título da reunião, os participantes e o lead (nome e e-mail). No Google, se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar Sales Coach (não seguro) e marque a caixa da agenda. O passo a passo está na página Extensão do Chrome.",
+      "Google Agenda ou Outlook, só leitura. As gravações já chegam com o título da reunião, os participantes e o lead (nome e e-mail). No Google, se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar Sales Coach (não seguro) e marque a caixa da agenda. O passo a passo fica ao lado do botão Conectar, em Agendas.",
     cta: "Conectar a agenda",
     route: "/agendas",
     tour: "agendas",
@@ -209,7 +209,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Agendas",
     steps: [
       { route: "/agendas", target: "agendas-titulo", title: "Agendas", body: "Cada reunião gravada ou enviada vira uma agenda: transcrição, análise e score. O vendedor vê as próprias; gestores e admins veem as do time." },
-      { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead." },
+      { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead. Se o Google avisar que não verificou o app, abra Ver o passo a passo, logo abaixo do botão." },
       { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole um link do Drive ou do YouTube. Para vários links, use Importar em Lote." },
       { route: "/agendas", target: "agendas-filtros", title: "Busca e filtros", body: "Ache uma agenda pelo nome, pelo tipo de reunião ou pelo executivo." },
       { route: "/agendas", target: "agendas-lista", title: "Lista de agendas", body: "O status mostra em que ponto está: Enviado, Transcrevendo, Analisando, Completo ou Erro. Clique para abrir a análise. No menu ⋮ dá para editar, refazer a análise ou apagar." },
@@ -294,7 +294,6 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     steps: [
       { route: "/extensao", target: "ext-instalar", title: "Instale", body: "Abre a Chrome Web Store. Clique em Usar no Chrome; a extensão entra na sua conta sozinha." },
       { route: "/extensao", target: "ext-passos", title: "Como gravar", body: "Ao entrar numa reunião, clique em Gravar no cartão do Sales Coach. Por padrão grava só o áudio, sem compartilhar a tela. Ao sair da chamada, a gravação é enviada sozinha." },
-      { route: "/extensao", target: "ext-agenda", title: "Conecte a agenda do Google", body: "O passo a passo para passar pelo aviso do Google (Avançado → Acessar Sales Coach) e marcar a permissão da agenda." },
       { route: "/extensao", target: "ext-leve", title: "Para a reunião não travar", body: "Vai apresentar slides? Deixe desmarcado Gravar também a tela. Só o áudio quase não pesa no computador." },
     ],
   },
@@ -431,7 +430,7 @@ export const ARTICLES: HelpArticle[] = [
           "3. Se aparecer \"O Google não verificou este app\", não clique no botão azul: clique em Avançado, no canto inferior esquerdo, e depois em Acessar Sales Coach (não seguro). O aviso aparece enquanto o Google conclui a verificação do Sales Coach.",
           "4. Na tela \"O Sales Coach quer acessar sua Conta do Google\", marque a caixa Ver eventos em todas as suas agendas (ou Selecionar tudo) e clique em Continuar. Sem essa caixa marcada, a agenda não conecta.",
           "5. Você volta ao Sales Coach com a mensagem Agenda conectada.",
-          "O passo a passo também está na página Extensão do Chrome.",
+          "O passo a passo também fica no quadro Sua agenda, em Agendas: clique em Ver o passo a passo.",
         ],
       },
       {
