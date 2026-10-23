@@ -19,6 +19,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye, Pencil, MoreHorizontal, Clock, KeyRound } from "lucide-react";
 import { enterSupport } from "@/lib/support";
+import { Novidades } from "@/components/plataforma/Novidades";
 import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
 /**
@@ -1004,6 +1005,8 @@ const Plataforma = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Novidades />
 
         <p className="text-xs text-muted-foreground">
           Este painel mostra metadados e consumo. Conteúdo de reunião, transcrição e base de conhecimento só é visível

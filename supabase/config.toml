@@ -54,3 +54,12 @@ verify_jwt = true
 # vendedor dono da reunião.
 [functions.recording-parts]
 verify_jwt = true
+
+# Novidades: o agendador (pg_cron) chama sem token de usuário; a função confere
+# o segredo do agendador ou se é a administração da plataforma.
+[functions.product-updates]
+verify_jwt = false
+
+# Descadastro do e-mail de novidades: quem clica não está logado (token assinado).
+[functions.email-preferences]
+verify_jwt = false

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, CalendarCheck, CalendarX2, Check, Copy, Dumbbell, Flame,
-  Lightbulb, RefreshCw, Sparkles, Trophy, Users, Video,
+  Lightbulb, Megaphone, RefreshCw, Sparkles, Trophy, Users, Video,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -120,6 +120,7 @@ export default function Inicio() {
         <div className="min-w-0 space-y-6">
           <DicaCard tip={tip} erro={tipErro} />
           <RitmoCard r={meuRitmo} />
+          <NovidadesCard role={role} now={now} />
           {hint && (
             <Card>
               <CardContent className="space-y-2 p-5">
@@ -344,6 +345,45 @@ function Tendencia({ v }: { v: number | null }) {
       {sobe ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
       {sobe ? "+" : ""}{v}
     </span>
+  );
+}
+
+/** Novidades da plataforma publicadas nos últimos 30 dias para o papel da pessoa (as mesmas do e-mail semanal). */
+function NovidadesCard({ role, now }: { role: string | null; now: Date }) {
+  const [itens, setItens] = useState<{ id: string; title: string; body: string; cta_label: string | null; cta_path: string | null }[]>([]);
+  useEffect(() => {
+    if (!role) return;
+    const desde = new Date(now.getTime() - 30 * DAY).toISOString();
+    // Tabela nova (migração das novidades): sem ela, o quadro só não aparece.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from("product_updates")
+      .select("id, title, body, cta_label, cta_path")
+      .eq("status", "publicado").contains("audience", [role]).gte("published_at", desde)
+      .order("published_at", { ascending: false }).limit(3)
+      .then(({ data }: { data: typeof itens | null }) => setItens(data ?? []));
+  }, [role, now]);
+  if (!itens.length) return null;
+  return (
+    <Card data-tour="inicio-novidades">
+      <CardContent className="space-y-3 p-5">
+        <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <Megaphone className="h-4 w-4 text-primary" /> Novidades
+        </p>
+        <ul className="space-y-3">
+          {itens.map((n) => (
+            <li key={n.id} className="space-y-1">
+              <p className="text-sm font-semibold">{n.title}</p>
+              <p className="line-clamp-3 text-sm text-muted-foreground">{n.body}</p>
+              {n.cta_path && (
+                <Link to={n.cta_path} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+                  {n.cta_label ?? "Ver"} <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }
 
