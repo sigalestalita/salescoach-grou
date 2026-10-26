@@ -18,6 +18,7 @@ import { CrmMeetingCard } from "@/components/CrmMeetingCard";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 import { FRAMEWORK_GRID, methodologyOf } from "@/lib/methodology";
 import type { Attendee } from "@/lib/calendar";
+import { RecordingPlayer } from "@/components/RecordingPlayer";
 
 const MetricTooltip = ({ text }: { text: string }) => (
   <Tooltip>
@@ -254,17 +255,7 @@ const MeetingDetail = () => {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="pt-0">
-                  {isVideo ? (
-                    <video controls className="w-full rounded-md border" preload="metadata">
-                      <source src={fileMediaUrl} type="video/webm" />
-                      Seu navegador não suporta o player de vídeo.
-                    </video>
-                  ) : (
-                    <audio controls className="w-full" preload="metadata">
-                      <source src={fileMediaUrl} type="audio/webm" />
-                      Seu navegador não suporta o player de áudio.
-                    </audio>
-                  )}
+                  <RecordingPlayer src={fileMediaUrl} video={isVideo} />
                   {meeting.gravou_tela === false && (
                     <p className="mt-2 text-xs text-muted-foreground">
                       Gravada sem a tela: só o áudio chegou. A tela não foi compartilhada ao iniciar a gravação, ou o vídeo não conseguiu subir.
@@ -302,15 +293,7 @@ const MeetingDetail = () => {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="pt-0">
-                    {isVideo ? (
-                      <video controls className="w-full rounded-md border" preload="metadata" src={meeting.youtube_url}>
-                        Seu navegador não suporta o player de vídeo.
-                      </video>
-                    ) : (
-                      <audio controls className="w-full" preload="metadata" src={meeting.youtube_url}>
-                        Seu navegador não suporta o player de áudio.
-                      </audio>
-                    )}
+                    <RecordingPlayer src={meeting.youtube_url} video={isVideo} />
                   </CardContent>
                 </CollapsibleContent>
               </Card>
