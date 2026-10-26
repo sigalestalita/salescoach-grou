@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { RecordingPlayer } from "@/components/RecordingPlayer";
 import { Target, Thermometer, MessageSquare, Mic, Link as LinkIcon, ChevronDown, BookOpen, ShoppingCart, AlertTriangle, TrendingUp, Video, ExternalLink, Info, HeartPulse, ClipboardCheck, CheckCircle2, CircleDashed, XCircle, MinusCircle } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
@@ -119,7 +120,6 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
   const mediaExt = (mediaUrl ?? "").split("?")[0].match(/\.(mp4|webm|m4a|mp3|ogg)$/i)?.[1]?.toLowerCase() ?? null;
   // Gravação da extensão sem a tela: o arquivo é webm, mas só tem áudio.
   const isVideo = meeting.gravou_tela !== false && (meeting.file_type === "webm" || meeting.file_type === "mp4" || mediaExt === "mp4" || mediaExt === "webm" || (meeting.file_url?.endsWith(".webm") || meeting.file_url?.endsWith(".mp4")));
-  const mediaMime = mediaExt === "mp4" ? "video/mp4" : mediaExt === "m4a" ? "audio/mp4" : mediaExt === "mp3" ? "audio/mpeg" : mediaExt === "ogg" ? "audio/ogg" : isVideo ? "video/webm" : "audio/webm";
 
   return (
     <div className="space-y-6">
@@ -138,15 +138,7 @@ export const MeetingAnalysisView = ({ meeting, analysis, transcription, highligh
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="pt-0">
-                {isVideo ? (
-                  <video controls className="w-full rounded-md border" preload="metadata">
-                    <source src={mediaUrl} type={mediaMime} />
-                  </video>
-                ) : (
-                  <audio controls className="w-full" preload="metadata">
-                    <source src={mediaUrl} type={mediaMime} />
-                  </audio>
-                )}
+                <RecordingPlayer src={mediaUrl} video={isVideo} />
                 {meeting.gravou_tela === false && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     Gravada sem a tela: só o áudio chegou. A tela não foi compartilhada ao iniciar a gravação, ou o vídeo não conseguiu subir.
