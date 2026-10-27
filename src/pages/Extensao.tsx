@@ -18,8 +18,8 @@ const STORE_URL = "https://chromewebstore.google.com/detail/icabeghcpefeaeklfldp
  * nova: rode o script e atualize MANUAL_VERSION. Quando a loja estiver em dia,
  * MANUAL_VERSION = null esconde a seção.
  */
-// A 1.12.0 foi aprovada na loja: sem versão manual no momento.
-const MANUAL_VERSION: string | null = null;
+// 1.12.1 em análise na loja: corrige a voz do cliente e o popup preso em "Enviando".
+const MANUAL_VERSION: string | null = "1.12.1";
 const MANUAL_URL = MANUAL_VERSION ? `/downloads/sales-coach-extensao-${MANUAL_VERSION}.zip` : "";
 const EXTENSIONS_PAGE = "chrome://extensions";
 
