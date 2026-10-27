@@ -54,7 +54,7 @@ export interface EventMatch {
 const env = (k: string) => Deno.env.get(k) ?? "";
 
 // Para onde o Google e a Microsoft devolvem a pessoa depois da autorização. Com
-// CALENDAR_REDIRECT_URI (ex.: https://salescoach.grougp.com.br/agenda/retorno), o
+// CALENDAR_REDIRECT_URI (ex.: https://salescoach.nexatech.ia.br/agenda/retorno), o
 // retorno passa pelo domínio do Sales Coach, que repassa para esta função: a
 // verificação do app no Google exige que todos os domínios sejam da empresa, e o
 // supabase.co não é. Sem o segredo, volta direto para a função, como antes.
