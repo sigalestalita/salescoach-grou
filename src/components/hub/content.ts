@@ -296,6 +296,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     steps: [
       { route: "/extensao", target: "ext-instalar", title: "Instale", body: "Abre a Chrome Web Store. Clique em Usar no Chrome; a extensão entra na sua conta sozinha." },
       { route: "/extensao", target: "ext-passos", title: "Como gravar", body: "Ao entrar numa reunião, clique em Gravar no cartão do Sales Coach. Por padrão grava só o áudio, sem compartilhar a tela. Ao sair da chamada, a gravação é enviada sozinha." },
+      { route: "/extensao", target: "ext-requisitos", title: "Requisitos para gravar a tela", body: "Gravar a tela exige pelo menos um i5 de 8ª geração (ou Ryzen 5, ou Apple M1) e 8 GB de memória. Com i3, grave só o áudio para a reunião não travar." },
       { route: "/extensao", target: "ext-leve", title: "Para a reunião não travar", body: "Vai apresentar slides? Deixe desmarcado Gravar também a tela. Só o áudio quase não pesa no computador." },
     ],
   },
@@ -413,10 +414,21 @@ export const ARTICLES: HelpArticle[] = [
         items: [
           "Ao entrar numa reunião do Meet ou do Teams, aparece o cartão Gravar esta reunião?. Clique em Gravar. Na primeira vez, permita o microfone.",
           "Por padrão (versão 1.12 ou mais nova), grava só o áudio: a sua voz e a do cliente, que vem direto da chamada. Não abre o seletor de tela. Funciona com fone, e o cliente que entra depois entra na gravação sozinho.",
-          "Quer o vídeo? Marque Gravar também a tela no cartão ou no ícone da extensão. O Chrome pede a aba da reunião: deixe ligado Compartilhar áudio da guia e clique em Compartilhar. A tela é gravada em 540p, para não pesar.",
+          "Quer o vídeo? Confira antes se o computador atende aos requisitos para gravar a tela (página Extensão do Chrome). Se atender, marque Gravar também a tela no cartão ou no ícone da extensão. O Chrome pede a aba da reunião: deixe ligado Compartilhar áudio da guia e clique em Compartilhar. A tela é gravada em 540p.",
           "Até a versão 1.11, o Chrome sempre pede a aba da reunião: escolha a aba com Compartilhar áudio da guia ligado. Veja a versão em chrome://extensions.",
           "Um painel mostra a transcrição e dicas ao vivo; só você o vê.",
           "Ao sair da chamada, a gravação é enviada sozinha.",
+        ],
+      },
+      {
+        title: "Requisitos para gravar a tela",
+        items: [
+          "Só o áudio (o padrão) funciona em qualquer computador que já roda o Meet ou o Teams sem travar.",
+          "Para gravar também a tela, o mínimo é: processador Intel Core i5 de 8ª geração ou mais novo, AMD Ryzen 5 ou mais novo, ou Mac com chip Apple M1 ou mais novo; 8 GB de memória; Chrome atualizado e o carregador do notebook ligado.",
+          "Com Intel Core i3, Celeron, Pentium, AMD Athlon, Ryzen 3 ou 4 GB de memória, gravar a tela deixa a reunião lenta e travando. Nesses computadores, deixe desmarcado Gravar também a tela: a análise usa só o áudio, então o resultado é o mesmo.",
+          "Como ver o seu computador: no Windows, Configurações → Sistema → Sobre (linhas Processador e RAM instalada). No Mac, menu Apple → Sobre este Mac (Chip ou Processador, e Memória).",
+          "Como ler: em Intel Core i5-1135G7, o tipo é i5 e o 1135 indica a 11ª geração; 8250 seria a 8ª. Em Intel Core i3-1005G1, o tipo é i3: grave só o áudio.",
+          "Travou gravando a tela? Pare no botão vermelho do painel (o que foi gravado é enviado) e, na próxima, deixe a tela desmarcada.",
         ],
       },
       {
@@ -731,7 +743,7 @@ export const FAQ: { q: string; a: string }[] = [
   { q: "A reunião ficou com Erro. E agora?", a: "Abra a reunião e clique em Tentar novamente. Se persistir, confira se o arquivo tem áudio e menos de 20 MB, ou se o link do Drive está aberto para qualquer pessoa com o link." },
   { q: "O cliente percebe que estou gravando?", a: "Não: o painel da extensão só aparece para você, e os outros participantes não veem nada. Avise o cliente no início, como pede a LGPD." },
   { q: "A gravação veio sem o áudio do cliente.", a: "Atualize a extensão (1.12.1 ou mais nova): ela grava a voz do cliente direto da chamada, mesmo com fone, e avisa no painel se não estiver ouvindo. Nesse aviso, Ouvir o cliente pela aba resolve sem parar a gravação. Se a extensão foi instalada ou atualizada com a reunião aberta, recarregue a aba da reunião antes de gravar. Nas versões antigas, deixe ligado Compartilhar áudio da guia e use o alto-falante padrão no Meet." },
-  { q: "A reunião trava ou fica lenta quando apresento slides.", a: "Na extensão 1.12 ou mais nova, grave só o áudio (o padrão): deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação do Meet pesa no computador. Se precisar do vídeo, ele sai em 540p. Até a 1.11, pare a gravação antes de apresentar e atualize a extensão." },
+  { q: "A reunião trava ou fica lenta quando apresento slides.", a: "Na extensão 1.12 ou mais nova, grave só o áudio (o padrão): deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação do Meet pesa no computador. Para gravar a tela, o computador precisa de pelo menos um Intel Core i5 de 8ª geração (ou AMD Ryzen 5, ou Mac com chip Apple M1) e 8 GB de memória; com i3, Celeron, Pentium ou 4 GB, grave só o áudio. Até a 1.11, pare a gravação antes de apresentar e atualize a extensão." },
   { q: "Apareceu \"O Google não verificou este app\" ao conectar a agenda.", a: "É esperado enquanto o Google conclui a verificação do Sales Coach. Clique em Avançado (canto inferior esquerdo) → Acessar Sales Coach (não seguro) e, na tela seguinte, marque a caixa Ver eventos em todas as suas agendas antes de Continuar. O acesso é só de leitura. Se aparecer Acesso bloqueado, o administrador do Google Workspace da empresa precisa liberar o app (veja a ajuda Conectar o Google Agenda ou o Outlook)." },
   { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e a voz que chega pela chamada (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
   { q: "Dá para ver a minha agenda dentro do Sales Coach?", a: "Sim. Conecte o Google Agenda ou o Outlook em Agendas e abra a aba Minha agenda: a sua semana, com as reuniões com cliente, as gravadas (com o score) e as que passaram sem gravação. Só você vê a sua agenda." },
