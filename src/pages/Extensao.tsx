@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ExternalLink, Pin, LogIn, MonitorPlay, Volume2, Lightbulb, Send, AlertCircle, Download, ChevronDown, Copy, Check,
-  Wrench, Gauge,
+  Wrench, Gauge, Cpu, TriangleAlert,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,9 +72,12 @@ const steps = [
       <>
         Na primeira vez, o Chrome pede o microfone: clique em <strong className="text-foreground">Permitir</strong>. A
         gravação começa na hora, só com o áudio: a sua voz e a do cliente, que vem direto da chamada (funciona também com
-        fone). Quer gravar a tela junto? Marque <strong className="text-foreground">Gravar também a tela</strong> no cartão;
-        aí o Chrome pede a aba da reunião: deixe ligado <strong className="text-foreground">Compartilhar áudio da guia</strong>{" "}
-        e clique em <strong className="text-foreground">Compartilhar</strong>.
+        fone). Quer gravar a tela junto? Antes, confira se o seu computador atende aos{" "}
+        <a href="#requisitos-tela" className="font-medium text-primary underline underline-offset-2">requisitos para gravar a tela</a>:
+        em computador mais simples, a reunião trava. Se atender, marque{" "}
+        <strong className="text-foreground">Gravar também a tela</strong> no cartão; aí o Chrome pede a aba da reunião: deixe
+        ligado <strong className="text-foreground">Compartilhar áudio da guia</strong> e clique em{" "}
+        <strong className="text-foreground">Compartilhar</strong>.
       </>
     ),
   },
@@ -113,8 +116,9 @@ const lightTips: React.ReactNode[] = [
     junto com a apresentação é o que deixava a chamada lenta.
   </>,
   <>
-    Precisa do vídeo? Marque <B>Gravar também a tela</B> no cartão ou no ícone da extensão. A tela é gravada em qualidade
-    reduzida (540p), para não travar.
+    Precisa do vídeo? Confira antes os <a href="#requisitos-tela" className="font-medium text-primary underline underline-offset-2">requisitos
+    para gravar a tela</a> e marque <B>Gravar também a tela</B> no cartão ou no ícone da extensão. A tela é gravada em
+    qualidade reduzida (540p), mas ainda assim pesa num computador básico.
   </>,
   <>
     Pode usar fone: a voz do cliente vem direto da chamada, não da caixa de som. Se ele entrar depois de você começar a
@@ -135,6 +139,102 @@ const lightTips: React.ReactNode[] = [
     <B>Compartilhar áudio da guia</B> ligado. Se a chamada ficar lenta nessas versões, pare a gravação antes de apresentar.
   </>,
 ];
+
+/** Requisitos para gravar a tela: computador básico trava a reunião. */
+const requisitos: { titulo: string; itens: React.ReactNode[] }[] = [
+  {
+    titulo: "Só o áudio (o padrão)",
+    itens: [
+      <>Qualquer computador que já roda o Google Meet ou o Teams sem travar.</>,
+      <>Google Chrome atualizado.</>,
+    ],
+  },
+  {
+    titulo: "Gravar também a tela (mínimo)",
+    itens: [
+      <>Processador <B>Intel Core i5 de 8ª geração</B> ou mais novo, <B>AMD Ryzen 5</B> ou mais novo, ou Mac com chip{" "}
+        <B>Apple M1</B> ou mais novo.</>,
+      <><B>8 GB de memória</B> (RAM) ou mais.</>,
+      <>Google Chrome atualizado e, no notebook, o carregador ligado.</>,
+    ],
+  },
+];
+
+const comoVer: { so: string; passos: React.ReactNode }[] = [
+  {
+    so: "Windows",
+    passos: <>Abra <B>Configurações → Sistema → Sobre</B>. Veja as linhas <B>Processador</B> e <B>RAM instalada</B>.</>,
+  },
+  {
+    so: "Mac",
+    passos: <>Clique no menu <B>Apple</B> (canto superior esquerdo) → <B>Sobre este Mac</B>. Veja <B>Chip</B> (ou{" "}
+      <B>Processador</B>) e <B>Memória</B>.</>,
+  },
+];
+
+function ScreenRequirements() {
+  return (
+    <Card id="requisitos-tela" className="scroll-mt-20 border-border bg-card" data-tour="ext-requisitos">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-foreground">
+          <Cpu className="h-5 w-5 text-primary" />
+          Requisitos para gravar a tela
+        </CardTitle>
+        <CardDescription>Gravar só o áudio funciona em qualquer computador. Gravar a tela exige mais.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="space-y-1 text-muted-foreground">
+            <p className="font-semibold text-foreground">Computador abaixo do mínimo trava a reunião</p>
+            <p>
+              Com <B>Intel Core i3</B>, <B>Celeron</B>, <B>Pentium</B>, <B>AMD Athlon</B>, <B>Ryzen 3</B> ou{" "}
+              <B>4 GB de memória</B>, gravar a tela deixa o Meet lento e travando, principalmente apresentando slides.
+              Nesses computadores, deixe desmarcado <B>Gravar também a tela</B>: a análise usa só o áudio, então o
+              resultado é o mesmo.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {requisitos.map((r) => (
+            <div key={r.titulo} className="rounded-lg border border-border p-4">
+              <h3 className="text-sm font-semibold text-foreground">{r.titulo}</h3>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+                {r.itens.map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Como saber o processador e a memória do seu computador</h3>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
+            {comoVer.map((c) => <li key={c.so}><B>{c.so}:</B> {c.passos}</li>)}
+            <li>
+              Leia o nome do processador. Em <B>Intel Core i5-1135G7</B>, o tipo é <B>i5</B> e os números logo depois do
+              traço dizem a geração: <B>1135</B> é 11ª geração, <B>8250</B> é 8ª. Em <B>Intel Core i3-1005G1</B>, o tipo
+              é i3: grave só o áudio.
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Travou gravando a tela?</h3>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
+            <li>
+              Pare a gravação no botão vermelho do painel: o que foi gravado até ali é enviado normalmente.
+            </li>
+            <li>
+              Na próxima reunião, deixe desmarcado <B>Gravar também a tela</B>, no cartão ou no ícone da extensão.
+            </li>
+            <li>Feche as abas e os programas que não está usando e ligue o carregador do notebook.</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function LightRecording() {
   return (
@@ -412,6 +512,8 @@ export default function Extensao() {
           </ol>
         </CardContent>
       </Card>
+
+      <ScreenRequirements />
 
       <LightRecording />
 
