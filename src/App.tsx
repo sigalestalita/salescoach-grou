@@ -19,6 +19,7 @@ import Roleplay from "./pages/Roleplay";
 import Extensao from "./pages/Extensao";
 import NotFound from "./pages/NotFound";
 import SharedMeeting from "./pages/SharedMeeting";
+import AgendaRetorno from "./pages/AgendaRetorno";
 import AcceptInvite from "./pages/AcceptInvite";
 import SemOrganizacao from "./pages/SemOrganizacao";
 import Plataforma from "./pages/Plataforma";
@@ -79,6 +80,7 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
             <Route path="/share/:token" element={<SharedMeeting />} />
+            <Route path="/agenda/retorno" element={<AgendaRetorno />} />
             <Route path="/convite/:token" element={<AcceptInvite />} />
             <Route path="/sem-organizacao" element={<SemOrganizacao />} />
             <Route path="/plataforma" element={<PlatformRoute><Plataforma /></PlatformRoute>} />
