@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { temperatureLabels, useOrgConfig } from "@/hooks/useOrgConfig";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +41,7 @@ import {
   RotateCcw,
   MoreVertical,
   FileStack,
+  CalendarDays,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -61,6 +62,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tables } from "@/integrations/supabase/types";
 import { CalendarConnect } from "@/components/CalendarConnect";
+import { recordingLinkProblem } from "@/lib/mediaLink";
+import { MinhaAgenda } from "@/components/MinhaAgenda";
+import type { CalendarConnection } from "@/lib/calendar";
 
 type Meeting = Tables<"meetings">;
 type Profile = Tables<"profiles">;
@@ -99,6 +103,15 @@ const Agendas = () => {
   const typeLabel = (key: string | null) =>
     meetingTypes.find((t) => t.key === key)?.label ?? key ?? "—";
 
+  // Com a agenda conectada, a página ganha a visão "Minha agenda" (?visao=agenda).
+  const [calConn, setCalConn] = useState<CalendarConnection | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const visao = calConn && searchParams.get("visao") === "agenda" ? "agenda" : "lista";
+  const setVisao = (v: string) => {
+    const q = new URLSearchParams(searchParams);
+    if (v === "agenda") q.set("visao", "agenda"); else q.delete("visao");
+    setSearchParams(q, { replace: true });
+  };
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,6 +197,11 @@ const Agendas = () => {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newMeeting.title) return;
+    const problema = sourceTab === "link" && newMeeting.youtube_url ? recordingLinkProblem(newMeeting.youtube_url) : null;
+    if (problema) {
+      toast({ title: "Esse link não serve para transcrição", description: problema, variant: "destructive" });
+      return;
+    }
     setUploading(true);
 
     try {
@@ -306,14 +324,20 @@ const Agendas = () => {
 
   const handleBulkImport = async () => {
     if (!user) return;
-    const lines = bulkLinks
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && (l.includes("drive.google.com") || l.includes("youtube.com") || l.includes("youtu.be")));
+    const todas = bulkLinks.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    const recusadas = todas.map((l) => recordingLinkProblem(l)).filter((p): p is string => !!p);
+    const lines = todas.filter((l) => !recordingLinkProblem(l));
 
     if (lines.length === 0) {
-      toast({ title: "Nenhum link válido", description: "Cole links do Google Drive ou YouTube, um por linha.", variant: "destructive" });
+      toast({
+        title: "Nenhum link válido",
+        description: recusadas[0] ?? "Cole links do Google Drive (ou links diretos do arquivo), um por linha.",
+        variant: "destructive",
+      });
       return;
+    }
+    if (recusadas.length) {
+      toast({ title: `${recusadas.length} ${recusadas.length === 1 ? "link ignorado" : "links ignorados"}`, description: recusadas[0] });
     }
 
     setBulkImporting(true);
@@ -382,7 +406,7 @@ const Agendas = () => {
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Importar em Lote</DialogTitle>
-                  <DialogDescription>Cole vários links do Google Drive ou YouTube, um por linha</DialogDescription>
+                  <DialogDescription>Cole vários links de gravações no Google Drive (ou links diretos do arquivo), um por linha</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -390,7 +414,7 @@ const Agendas = () => {
                     <Textarea
                       value={bulkLinks}
                       onChange={(e) => setBulkLinks(e.target.value)}
-                      placeholder={"https://drive.google.com/file/d/...\nhttps://drive.google.com/file/d/...\nhttps://youtube.com/watch?v=..."}
+                      placeholder={"https://drive.google.com/file/d/...\nhttps://drive.google.com/file/d/...\nhttps://www.dropbox.com/..."}
                       rows={8}
                     />
                     <p className="text-xs text-muted-foreground">
@@ -545,7 +569,7 @@ const Agendas = () => {
                     </TabsTrigger>
                     <TabsTrigger value="link" className="flex-1">
                       <Link className="h-3 w-3 mr-1" />
-                      Link (Drive / YouTube)
+                      Link (Google Drive)
                     </TabsTrigger>
                   </TabsList>
                   <TabsContent value="file">
@@ -564,9 +588,9 @@ const Agendas = () => {
                     <Input
                       value={newMeeting.youtube_url}
                       onChange={(e) => setNewMeeting({ ...newMeeting, youtube_url: e.target.value })}
-                      placeholder="https://drive.google.com/... ou https://youtube.com/..."
+                      placeholder="https://drive.google.com/file/d/..."
                     />
-                    <p className="text-xs text-muted-foreground mt-2">Cole o link do Google Drive ou YouTube</p>
+                    <p className="text-xs text-muted-foreground mt-2">Link do arquivo no Google Drive, compartilhado com "Qualquer pessoa com o link". Também vale Dropbox ou o link direto do áudio ou vídeo. YouTube não funciona.</p>
                   </TabsContent>
                 </Tabs>
               </div>
@@ -581,8 +605,24 @@ const Agendas = () => {
         )}
       </div>
 
-      <CalendarConnect />
+      <CalendarConnect onStatus={setCalConn} />
 
+      {calConn && (
+        <Tabs value={visao} onValueChange={setVisao}>
+          <TabsList data-tour="agendas-visao">
+            <TabsTrigger value="lista">Reuniões gravadas</TabsTrigger>
+            <TabsTrigger value="agenda">
+              <CalendarDays className="mr-1.5 h-4 w-4" />
+              Minha agenda
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {visao === "agenda" && calConn ? (
+        <MinhaAgenda provider={calConn.provider} statusLabels={statusLabels} tempLabels={tempLabels} />
+      ) : (
+      <>
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3" data-tour="agendas-filtros">
         <div className="relative flex-1 max-w-md">
@@ -746,6 +786,8 @@ const Agendas = () => {
             </Card>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {/* Edit Dialog */}

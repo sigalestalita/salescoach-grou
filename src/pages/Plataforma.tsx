@@ -17,8 +17,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye, Pencil, MoreHorizontal, Clock, KeyRound } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye, Pencil, MoreHorizontal, Clock, KeyRound, Mail } from "lucide-react";
 import { enterSupport } from "@/lib/support";
+import { Novidades } from "@/components/plataforma/Novidades";
+import { Atividade } from "@/components/plataforma/Atividade";
 import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
 /**
@@ -159,10 +162,14 @@ function demoLabel(endsAt: string | null): { text: string; tone: "muted" | "warn
 }
 
 interface CreatedInvite {
+  orgId: string;
   orgName: string;
   email: string;
   token: string;
   expiresAt: string;
+  /** E-mail de boas-vindas: para quem foi, ou o erro. */
+  welcomeTo?: string | null;
+  welcomeError?: string | null;
 }
 
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -210,7 +217,9 @@ const Plataforma = () => {
   const [productName, setProductName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminName, setAdminName] = useState("");
-  const [accessMode, setAccessMode] = useState<"senha" | "convite">("senha");
+  // Convite por padrão: o e-mail de boas-vindas leva o link (senha provisória não vai por e-mail).
+  const [accessMode, setAccessMode] = useState<"senha" | "convite">("convite");
+  const [sendWelcome, setSendWelcome] = useState(true);
   const [demoDays, setDemoDays] = useState("14");
   const [planKey, setPlanKey] = useState<string>("");
   const [creating, setCreating] = useState(false);
@@ -228,6 +237,9 @@ const Plataforma = () => {
   const [accessName, setAccessName] = useState("");
   const [suspendOrg, setSuspendOrg] = useState<Org | null>(null);
   const [peopleOrg, setPeopleOrg] = useState<Org | null>(null);
+  const [welcomeOrg, setWelcomeOrg] = useState<Org | null>(null);
+  const [welcomeEmail, setWelcomeEmail] = useState("");
+  const [welcomeName, setWelcomeName] = useState("");
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error } = await supabase.functions.invoke("platform-orgs", { body });
@@ -238,7 +250,9 @@ const Plataforma = () => {
         await supabase.auth.signOut({ scope: "local" });
         throw new Error("Sua sessão expirou. Entre novamente.");
       }
-      throw new Error(error.message);
+      // O motivo vem no corpo da resposta; error.message é só "non-2xx status code".
+      const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      throw new Error(detail?.error ?? error.message);
     }
     if (data?.error) throw new Error(data.error);
     return data;
@@ -293,6 +307,7 @@ const Plataforma = () => {
         admin_name: adminName.trim() || null,
         access_mode: accessMode,
         demo_days: Number(demoDays) > 0 ? Number(demoDays) : null,
+        send_welcome: accessMode === "convite" && sendWelcome,
       });
 
       setCreateOpen(false);
@@ -309,10 +324,13 @@ const Plataforma = () => {
         });
       } else if (data.invite?.token && adminEmail.trim()) {
         setInvite({
+          orgId: data.org_id,
           orgName: name.trim(),
           email: adminEmail.trim(),
           token: data.invite.token,
           expiresAt: data.invite.expires_at,
+          welcomeTo: data.welcome?.to ?? null,
+          welcomeError: data.welcome_error ?? null,
         });
         setCopied(false);
       } else {
@@ -320,12 +338,28 @@ const Plataforma = () => {
       }
 
       setName(""); setSlug(""); setSlugTouched(false);
-      setProductName(""); setAdminEmail(""); setAdminName(""); setPlanKey(""); setDemoDays("14"); setAccessMode("senha");
+      setProductName(""); setAdminEmail(""); setAdminName(""); setPlanKey(""); setDemoDays("14"); setAccessMode("convite"); setSendWelcome(true);
       await load();
     } catch (err: any) {
       toast({ title: "Erro ao criar empresa", description: err.message, variant: "destructive" });
     } finally {
       setCreating(false);
+    }
+  };
+
+  /** E-mail de boas-vindas de uma empresa já criada (ou nova tentativa depois de criar). */
+  const sendWelcomeTo = async (orgId: string, email: string, adminName: string | null, fromCard = false) => {
+    setBusy(orgId);
+    try {
+      const data = await call({ action: "send_welcome", org_id: orgId, email, admin_name: adminName });
+      toast({ title: "E-mail de boas-vindas enviado", description: `Para ${data.welcome?.to ?? email}, com cópia para o comercial.` });
+      if (fromCard) setInvite((i) => (i ? { ...i, welcomeTo: data.welcome?.to ?? email, welcomeError: null } : i));
+      setWelcomeOrg(null);
+      await load();
+    } catch (err) {
+      toast({ title: "O e-mail não saiu", description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -545,6 +579,16 @@ const Plataforma = () => {
               <div className="rounded-md border border-border bg-muted/40 p-3">
                 <p className="break-all font-mono text-xs">{inviteUrl}</p>
               </div>
+              {invite.welcomeTo ? (
+                <p className="flex items-center gap-2 text-sm text-success"><Mail className="h-4 w-4" /> E-mail de boas-vindas enviado para {invite.welcomeTo}, com cópia para o comercial.</p>
+              ) : invite.welcomeError ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                  <span>O e-mail de boas-vindas não saiu: {invite.welcomeError}</span>
+                  <Button size="sm" variant="outline" disabled={busy === invite.orgId} onClick={() => sendWelcomeTo(invite.orgId, invite.email, null, true)}>
+                    Tentar de novo
+                  </Button>
+                </div>
+              ) : null}
               <div className="flex gap-2">
                 <Button onClick={copyInvite} size="sm">
                   {copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}
@@ -639,6 +683,15 @@ const Plataforma = () => {
                         <span><strong>Enviar link de convite.</strong> A pessoa cria a conta e a senha pelo link.</span>
                       </label>
                     </RadioGroup>
+                  )}
+                  {adminEmail.trim() && accessMode === "convite" && (
+                    <label className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-sm">
+                      <Checkbox checked={sendWelcome} onCheckedChange={(c) => setSendWelcome(c === true)} className="mt-0.5" />
+                      <span>
+                        <strong>Enviar e-mail de boas-vindas</strong> para {adminEmail.trim()}, com o convite, o prazo da demonstração e os
+                        primeiros passos. O comercial recebe cópia.
+                      </span>
+                    </label>
                   )}
                 </div>
                 <DialogFooter>
@@ -747,6 +800,12 @@ const Plataforma = () => {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => { setAccessOrg(org); setAccessEmail(""); setAccessName(""); }}>
                                   <KeyRound className="mr-2 h-4 w-4" /> Acesso do admin
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                  const pendente = (org.invites ?? []).find((i) => i.role === "admin" && inviteState(i) !== "aceito" && inviteState(i) !== "revogado");
+                                  setWelcomeOrg(org); setWelcomeEmail(pendente?.email ?? ""); setWelcomeName("");
+                                }}>
+                                  <Mail className="mr-2 h-4 w-4" /> Enviar boas-vindas
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {suspended ? (
@@ -911,6 +970,36 @@ const Plataforma = () => {
           </DialogContent>
         </Dialog>
 
+        <Dialog open={!!welcomeOrg} onOpenChange={(o) => !o && setWelcomeOrg(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Boas-vindas para {welcomeOrg?.name}</DialogTitle>
+              <DialogDescription>
+                Manda o e-mail de boas-vindas com o link de convite (a pessoa cria a própria senha), o prazo da demonstração e os
+                primeiros passos. Usa o convite pendente desse e-mail ou gera um novo. O comercial recebe cópia.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="wel-name">Nome (opcional)</Label>
+                <Input id="wel-name" value={welcomeName} onChange={(e) => setWelcomeName(e.target.value)} placeholder="Maria Souza" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wel-email">E-mail do administrador</Label>
+                <Input id="wel-email" type="email" value={welcomeEmail} onChange={(e) => setWelcomeEmail(e.target.value)} placeholder="admin@empresa.com" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                disabled={!welcomeEmail.trim() || busy === welcomeOrg?.id}
+                onClick={() => welcomeOrg && sendWelcomeTo(welcomeOrg.id, welcomeEmail.trim(), welcomeName.trim() || null)}
+              >
+                {busy === welcomeOrg?.id ? "Enviando..." : "Enviar e-mail"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={!!peopleOrg} onOpenChange={(o) => !o && setPeopleOrg(null)}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
             <DialogHeader>
@@ -1004,6 +1093,10 @@ const Plataforma = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Atividade orgs={orgs} />
+
+        <Novidades />
 
         <p className="text-xs text-muted-foreground">
           Este painel mostra metadados e consumo. Conteúdo de reunião, transcrição e base de conhecimento só é visível

@@ -9,6 +9,7 @@ import { json, preflight } from "../_shared/cors.ts";
 import { adminClient, ANON_KEY, SUPABASE_URL, writeAudit } from "../_shared/tenant.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { crmOverview } from "../_shared/crm/overview.ts";
+import { renderDemoWelcome } from "../_shared/demo-email.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 
 const MAX_DEMO_DAYS = 365;
@@ -28,6 +29,67 @@ function demoEndsAt(days: unknown): string | null {
   d.setDate(d.getDate() + Math.min(Math.round(n), MAX_DEMO_DAYS));
   d.setHours(23, 59, 59, 0);
   return d.toISOString();
+}
+
+// ── E-mail de boas-vindas da demonstração ──
+
+interface InviteRow { token: string; expires_at: string | null; email: string }
+
+/**
+ * Manda ao primeiro admin o e-mail de boas-vindas com o link do convite
+ * (Resend: RESEND_API_KEY; remetente em DEMO_FROM ou NOVIDADES_FROM). O
+ * comercial (COMERCIAL_EMAIL ou quem liberou a demo) recebe cópia e é o
+ * "responder para". O link usa o endereço de onde a Plataforma foi aberta.
+ */
+async function sendDemoWelcome(
+  admin: SupabaseClient,
+  req: Request,
+  p: { orgId: string; invite: InviteRow; adminName: string | null; operador: { id: string; email?: string | null } },
+): Promise<{ sent: true; to: string }> {
+  const key = Deno.env.get("RESEND_API_KEY");
+  const from = Deno.env.get("DEMO_FROM") || Deno.env.get("NOVIDADES_FROM") || "";
+  const endereco = from.match(/<([^>]+)>/)?.[1] ?? from;
+  if (!key || !endereco) throw new Error("Configure RESEND_API_KEY e o remetente (NOVIDADES_FROM) para enviar e-mails.");
+
+  const [{ data: org }, { data: marca }] = await Promise.all([
+    admin.from("organizations").select("name, demo_ends_at").eq("id", p.orgId).single(),
+    admin.from("organization_branding").select("product_name, logo_url, primary_hsl, support_email").eq("org_id", p.orgId).maybeSingle(),
+  ]);
+  const origem = req.headers.get("origin") ?? "";
+  const appUrl = origem.startsWith("https://") ? origem : (Deno.env.get("APP_URL") || "https://salescoach.grougp.com.br");
+  const comercial = Deno.env.get("COMERCIAL_EMAIL") || p.operador.email || null;
+  const produto = marca?.product_name || "Sales Coach";
+  const m = renderDemoWelcome({
+    orgName: org?.name ?? "sua empresa",
+    marca: { product_name: produto, logo_url: marca?.logo_url ?? null, primary_hsl: marca?.primary_hsl ?? null, support_email: marca?.support_email ?? null },
+    adminName: p.adminName,
+    inviteUrl: `${appUrl.replace(/\/$/, "")}/convite/${p.invite.token}`,
+    inviteExpiresAt: p.invite.expires_at,
+    demoEndsAt: org?.demo_ends_at ?? null,
+    appUrl,
+    comercialEmail: comercial,
+  });
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: `${produto.replace(/["<>]/g, "")} <${endereco}>`,
+      to: [p.invite.email],
+      ...(comercial ? { bcc: [comercial], reply_to: comercial } : {}),
+      subject: m.subject,
+      html: m.html,
+      text: m.text,
+    }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(`O Resend recusou o envio: ${d?.message ?? `HTTP ${res.status}`}`);
+  }
+  await writeAudit(admin, {
+    orgId: p.orgId, actorUserId: p.operador.id, action: "organization.welcome_sent", entity: "organization", entityId: p.orgId,
+    metadata: { to: p.invite.email },
+  });
+  return { sent: true, to: p.invite.email };
 }
 
 /**
@@ -148,7 +210,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === "create_org") {
-      const { name, slug, plan_key, product_name, admin_email, admin_role, admin_name, access_mode, demo_days } = body;
+      const { name, slug, plan_key, product_name, admin_email, admin_role, admin_name, access_mode, demo_days, send_welcome } = body;
       if (!name || !slug) {
         return json(req, { error: "Nome e subdomínio são obrigatórios" }, 400);
       }
@@ -207,7 +269,23 @@ Deno.serve(async (req) => {
         else invite = inv;
       }
 
-      return json(req, { success: true, org_id: orgId, invite, demo_ends_at: demoEnd });
+      // E-mail de boas-vindas com o convite (caixa marcada por padrão na Plataforma).
+      let welcome = null;
+      let welcome_error = null;
+      if (invite && send_welcome) {
+        try {
+          welcome = await sendDemoWelcome(admin, req, {
+            orgId: orgId as string,
+            invite: { token: invite.token, expires_at: invite.expires_at, email: String(admin_email).toLowerCase() },
+            adminName: admin_name ?? null,
+            operador: user,
+          });
+        } catch (e) {
+          welcome_error = e instanceof Error ? e.message : String(e);
+        }
+      }
+
+      return json(req, { success: true, org_id: orgId, invite, demo_ends_at: demoEnd, welcome, welcome_error });
     }
 
     if (action === "set_status") {
@@ -270,6 +348,58 @@ Deno.serve(async (req) => {
           metadata: { role: "admin", by: "platform" },
         });
         return json(req, { success: true, access });
+      } catch (e) {
+        return json(req, { error: e instanceof Error ? e.message : String(e) }, 400);
+      }
+    }
+
+    // Boas-vindas de uma empresa já criada. Só pode haver um convite pendente
+    // por e-mail na empresa (índice idx_invites_pending_email), e um convite
+    // vencido sem aceite continua "pendente": o de admin válido é reaproveitado;
+    // qualquer outro desse e-mail (vencido ou de outro papel) é revogado antes
+    // de gerar o novo.
+    if (action === "send_welcome") {
+      const { org_id, admin_name } = body;
+      const { data: pendentes } = await admin.from("organization_invites")
+        .select("id, email, role, token, expires_at")
+        .eq("org_id", org_id).is("accepted_at", null).is("revoked_at", null)
+        .order("created_at", { ascending: false });
+      const informado = typeof body.email === "string" && body.email.trim() ? body.email.trim().toLowerCase() : null;
+      const alvo = informado ?? pendentes?.find((i) => i.role === "admin")?.email?.toLowerCase() ?? null;
+      if (!alvo) return json(req, { error: "Informe o e-mail do administrador." }, 400);
+
+      // Quem já tem conta não precisa de convite.
+      const { data: contaId } = await admin.rpc("platform_user_id_by_email", { _email: alvo });
+      if (contaId) {
+        const { data: prof } = await admin.from("profiles").select("org_id").eq("user_id", contaId as string).maybeSingle();
+        if (prof?.org_id === org_id) {
+          return json(req, { error: `${alvo} já tem acesso a esta empresa e entra com a própria senha. Se esqueceu, use "Esqueci minha senha" no login ou gere uma senha nova em "Acesso do admin".` }, 400);
+        }
+        if (prof?.org_id) {
+          return json(req, { error: `${alvo} já usa o Sales Coach em outra empresa. Use outro e-mail para o admin desta.` }, 400);
+        }
+      }
+
+      const doEmail = (pendentes ?? []).filter((i) => i.email.toLowerCase() === alvo);
+      let convite = doEmail.find((i) => i.role === "admin" && (!i.expires_at || new Date(i.expires_at) > new Date())) ?? null;
+      if (!convite) {
+        if (doEmail.length) {
+          const { error: revErr } = await admin.from("organization_invites")
+            .update({ revoked_at: new Date().toISOString() }).in("id", doEmail.map((i) => i.id));
+          if (revErr) return json(req, { error: `Não foi possível trocar o convite antigo: ${revErr.message}` }, 400);
+        }
+        const { data: novo, error: novoErr } = await admin.from("organization_invites")
+          .insert({ org_id, email: alvo, role: "admin", invited_by: user.id })
+          .select("id, email, role, token, expires_at").single();
+        if (novoErr || !novo) return json(req, { error: `Não foi possível criar o convite: ${novoErr?.message ?? ""}` }, 400);
+        convite = novo;
+      }
+      try {
+        const welcome = await sendDemoWelcome(admin, req, {
+          orgId: org_id, invite: { token: convite.token, expires_at: convite.expires_at, email: convite.email.toLowerCase() },
+          adminName: admin_name ?? null, operador: user,
+        });
+        return json(req, { success: true, welcome });
       } catch (e) {
         return json(req, { error: e instanceof Error ? e.message : String(e) }, 400);
       }
@@ -341,6 +471,31 @@ Deno.serve(async (req) => {
         metadata: { jobs: requeued?.length ?? 0 },
       });
       return json(req, { success: true, requeued: requeued?.length ?? 0 });
+    }
+
+    // Atividade dos usuários de todas as empresas (só metadados; ver
+    // 20261030090000_atividade_plataforma.sql). Período de até 90 dias.
+    if (action === "activity" || action === "activity_people") {
+      const ate = body.ate ? new Date(body.ate) : new Date();
+      let desde = body.desde ? new Date(body.desde) : new Date(ate.getTime() - 7 * 86400_000);
+      if (isNaN(ate.getTime()) || isNaN(desde.getTime()) || desde >= ate) return json(req, { error: "Período inválido." }, 400);
+      if (ate.getTime() - desde.getTime() > 90 * 86400_000) desde = new Date(ate.getTime() - 90 * 86400_000);
+      if (action === "activity_people") {
+        const { data, error } = await admin.rpc("platform_activity_people", { _desde: desde.toISOString(), _ate: ate.toISOString() });
+        if (error) return json(req, { error: `A atividade ainda não está disponível (${error.message}). Aplique a migração 20261030090000_atividade_plataforma.sql.` }, 400);
+        return json(req, { people: data ?? [] });
+      }
+      const tipos = ["login", "reuniao", "analise", "erro", "treino", "assistente", "admin"];
+      const { data, error } = await admin.rpc("platform_activity", {
+        _desde: desde.toISOString(), _ate: ate.toISOString(),
+        _org: body.org_id || null,
+        _email: typeof body.busca === "string" && body.busca.trim() ? body.busca.trim().slice(0, 100) : null,
+        _tipo: tipos.includes(body.tipo) ? body.tipo : null,
+        _limite: Math.min(Math.max(Number(body.limite) || 100, 1), 500),
+        _offset: Math.max(Number(body.offset) || 0, 0),
+      });
+      if (error) return json(req, { error: `A atividade ainda não está disponível (${error.message}). Aplique a migração 20261030090000_atividade_plataforma.sql.` }, 400);
+      return json(req, { events: data ?? [] });
     }
 
     if (action === "list_plans") {

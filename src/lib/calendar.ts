@@ -17,6 +17,27 @@ export interface Attendee {
   externo: boolean;
 }
 
+/** Evento da agenda principal, com a gravação ligada a ele (tela Minha agenda). */
+export interface AgendaItem {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  joinUrl: string | null;
+  webLink: string | null;
+  declined: boolean;
+  attendees: Attendee[];
+  lead: { name: string | null; email: string } | null;
+  externo: boolean;
+  meeting: {
+    id: string;
+    title: string;
+    status: string;
+    overall_score: number | null;
+    temperature: string | null;
+  } | null;
+}
+
 export const CALENDAR_NAME: Record<CalendarProvider, string> = {
   google: "Google Agenda",
   microsoft: "Outlook",
@@ -43,4 +64,6 @@ export const calendarApi = {
   connect: (provider: CalendarProvider) =>
     call<{ url: string }>({ action: "connect", provider, returnTo: `${window.location.origin}/agendas` }),
   disconnect: () => call<{ ok: boolean }>({ action: "disconnect" }),
+  events: (from: Date, to: Date) =>
+    call<{ connected: boolean; events: AgendaItem[] }>({ action: "events", from: from.toISOString(), to: to.toISOString() }),
 };

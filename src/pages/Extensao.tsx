@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   ExternalLink, Pin, LogIn, MonitorPlay, Volume2, Lightbulb, Send, AlertCircle, Download, ChevronDown, Copy, Check,
-  Wrench,
+  Wrench, Gauge,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,8 @@ const STORE_URL = "https://chromewebstore.google.com/detail/icabeghcpefeaeklfldp
  * nova: rode o script e atualize MANUAL_VERSION. Quando a loja estiver em dia,
  * MANUAL_VERSION = null esconde a seção.
  */
-// A 1.10.1 foi aprovada na loja: sem versão manual no momento.
-const MANUAL_VERSION: string | null = null;
+// 1.12.1 em análise na loja: corrige a voz do cliente e o popup preso em "Enviando".
+const MANUAL_VERSION: string | null = "1.12.1";
 const MANUAL_URL = MANUAL_VERSION ? `/downloads/sales-coach-extensao-${MANUAL_VERSION}.zip` : "";
 const EXTENSIONS_PAGE = "chrome://extensions";
 
@@ -67,12 +67,14 @@ const steps = [
   },
   {
     icon: Volume2,
-    title: "Confirme no Chrome",
+    title: "Permita o microfone e pronto",
     desc: (
       <>
-        O Chrome pede para compartilhar a aba da reunião. Deixe ligado{" "}
-        <strong className="text-foreground">Compartilhar áudio da guia</strong> e clique em{" "}
-        <strong className="text-foreground">Compartilhar</strong>. Na primeira vez, permita também o microfone.
+        Na primeira vez, o Chrome pede o microfone: clique em <strong className="text-foreground">Permitir</strong>. A
+        gravação começa na hora, só com o áudio: a sua voz e a do cliente, que vem direto da chamada (funciona também com
+        fone). Quer gravar a tela junto? Marque <strong className="text-foreground">Gravar também a tela</strong> no cartão;
+        aí o Chrome pede a aba da reunião: deixe ligado <strong className="text-foreground">Compartilhar áudio da guia</strong>{" "}
+        e clique em <strong className="text-foreground">Compartilhar</strong>.
       </>
     ),
   },
@@ -89,7 +91,7 @@ const steps = [
 ];
 
 const tips = [
-  "Conecte sua agenda (Google ou Outlook) na página Agendas: as gravações já vêm com o título, os participantes e o lead.",
+  "Conecte sua agenda (Google ou Outlook) na página Agendas: as gravações já vêm com o título, os participantes e o lead. Se o Google mostrar um aviso, o passo a passo está ao lado do botão Conectar, em Agendas.",
   "Avise o cliente no início da reunião que ela está sendo gravada.",
   "Não feche a aba da reunião antes de o painel mostrar \"Gravação enviada\".",
   "Quer preencher os dados do lead antes? Clique no ícone da extensão e use Iniciar gravação.",
@@ -99,6 +101,59 @@ const tips = [
 ];
 
 const B = ({ children }: { children: React.ReactNode }) => <strong className="text-foreground">{children}</strong>;
+
+/** Gravar sem pesar na reunião (extensão 1.12 ou mais nova). */
+const lightTips: React.ReactNode[] = [
+  <>
+    A extensão grava <B>só o áudio</B> por padrão: a sua voz e a do cliente. Não abre o seletor de tela e quase não pesa no
+    computador, mesmo apresentando slides. A análise usa só o áudio.
+  </>,
+  <>
+    <B>Vai apresentar slides ou compartilhar a tela no Meet?</B> Deixe desmarcado <B>Gravar também a tela</B>. Gravar a tela
+    junto com a apresentação é o que deixava a chamada lenta.
+  </>,
+  <>
+    Precisa do vídeo? Marque <B>Gravar também a tela</B> no cartão ou no ícone da extensão. A tela é gravada em qualidade
+    reduzida (540p), para não travar.
+  </>,
+  <>
+    Pode usar fone: a voz do cliente vem direto da chamada, não da caixa de som. Se ele entrar depois de você começar a
+    gravar, entra na gravação sozinho.
+  </>,
+  <>
+    O Chrome pediu para compartilhar a aba sem você marcar a tela? A extensão foi instalada ou atualizada com a reunião já
+    aberta. Escolha a aba da reunião e clique em Compartilhar (só o áudio é gravado) ou, melhor, recarregue a aba da reunião
+    antes de gravar.
+  </>,
+  <>
+    O painel avisou que não está ouvindo o cliente? Clique em <B>Ouvir o cliente pela aba</B>, no próprio aviso, e
+    compartilhe a aba da reunião com <B>Compartilhar áudio da guia</B> ligado: a gravação continua. Sem esse botão
+    (versão anterior à 1.12.1), pare, recarregue a aba da reunião e grave de novo.
+  </>,
+  <>
+    Confira a versão em <B>{EXTENSIONS_PAGE}</B>. Até a 1.11, o Chrome sempre pede a aba da reunião: escolha a aba com{" "}
+    <B>Compartilhar áudio da guia</B> ligado. Se a chamada ficar lenta nessas versões, pare a gravação antes de apresentar.
+  </>,
+];
+
+function LightRecording() {
+  return (
+    <Card className="border-border bg-card" data-tour="ext-leve">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-foreground">
+          <Gauge className="h-5 w-5 text-primary" />
+          Para a reunião não travar
+        </CardTitle>
+        <CardDescription>Como gravar sem pesar no computador, inclusive apresentando slides.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+          {lightTips.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
 
 function CopyAddress() {
   const [copied, setCopied] = useState(false);
@@ -252,8 +307,8 @@ function ManualInstall() {
             <Badge variant="secondary">{MANUAL_VERSION}</Badge>
           </CardTitle>
           <CardDescription className="max-w-2xl">
-            A versão {MANUAL_VERSION} está em análise na Chrome Web Store. Ela traz o painel novo na reunião e não perde a
-            gravação se a aba for fechada. Se quiser usá-la agora, instale à mão. Leva uns 3 minutos.
+            A versão {MANUAL_VERSION} está em análise na Chrome Web Store. Ela grava só o áudio por padrão, sem pedir a tela,
+            e não deixa a reunião lenta ao apresentar slides. Se quiser usá-la agora, instale à mão. Leva uns 3 minutos.
           </CardDescription>
         </div>
         <Button asChild variant="outline" className="w-full shrink-0 md:w-auto">
@@ -357,6 +412,8 @@ export default function Extensao() {
           </ol>
         </CardContent>
       </Card>
+
+      <LightRecording />
 
       <Card className="bg-card border-border">
         <CardHeader>

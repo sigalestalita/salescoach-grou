@@ -31,7 +31,18 @@ async function restoreState() {
   const data = await chrome.storage.local.get([
     'recordingState', 'recordingStartTime', 'recordingMode', 'uploadError',
   ]);
-  const state = data.recordingState || 'idle';
+  let state = data.recordingState || 'idle';
+
+  // O estado salvo pode ter ficado para trás: a aba recarregou ou fechou no
+  // meio do envio, ou a extensão foi atualizada durante a reunião (o gravador
+  // antigo perde o acesso ao armazenamento e não avisa o fim). Sem conferir,
+  // o popup ficava preso em "Enviando gravação…" para sempre.
+  if ((state === 'recording' || state === 'stopping' || state === 'uploading') && !(await gravacaoViva())) {
+    await chrome.storage.local.set({ recordingState: 'idle' });
+    await chrome.storage.local.remove(['recordingStartTime', 'recordingMode', 'uploadError']);
+    try { chrome.action.setBadgeText({ text: '' }); } catch {}
+    state = 'idle';
+  }
 
   if (state === 'recording') {
     startTime = data.recordingStartTime || Date.now();
@@ -42,6 +53,21 @@ async function restoreState() {
     showDoneState();
   } else if (state === 'error') {
     showErrorState(data.uploadError || 'Erro desconhecido');
+  }
+}
+
+/** Alguma aba tem um gravador desta extensão gravando ou enviando agora? */
+async function gravacaoViva() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const perguntar = (tab) => Promise.race([
+      chrome.tabs.sendMessage(tab.id, { action: 'status' }).catch(() => null),
+      new Promise((r) => setTimeout(() => r(null), 1500)),
+    ]);
+    const respostas = await Promise.all(tabs.map(perguntar));
+    return respostas.some((r) => r && (r.recording || r.uploading || r.starting));
+  } catch {
+    return true; // na dúvida, não mexe no estado
   }
 }
 
@@ -129,6 +155,16 @@ async function loadAutoDetect() {
   const { autoDetect } = await chrome.storage.local.get(['autoDetect']);
   autoDetectEl.checked = autoDetect !== false;
 }
+// Gravar a tela é opcional: por padrão a extensão grava só o áudio (leve; a
+// voz do cliente vem da chamada). A escolha fica lembrada.
+const gravarTelaEl = document.getElementById('gravar-tela');
+(async () => {
+  const { gravarTela } = await chrome.storage.local.get(['gravarTela']);
+  gravarTelaEl.checked = gravarTela === true;
+})();
+gravarTelaEl.addEventListener('change', () => {
+  chrome.storage.local.set({ gravarTela: gravarTelaEl.checked });
+});
 autoDetectEl.addEventListener('change', () => {
   chrome.storage.local.set({ autoDetect: autoDetectEl.checked });
 });
@@ -259,8 +295,9 @@ document.getElementById('btn-start').addEventListener('click', async () => {
     meetingUrl: calendarEvent?.meetingUrl || null,
     calendarEventId: calendarEvent?.eventId || null,
     attendees: calendarEvent?.attendees || [],
+    gravarTela: gravarTelaEl.checked,
   };
-  await chrome.storage.local.set({ meetingData });
+  await chrome.storage.local.set({ meetingData, gravarTela: gravarTelaEl.checked });
 
   // Inject the content script into the active tab
   try {

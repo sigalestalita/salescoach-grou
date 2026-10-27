@@ -34,6 +34,12 @@ export interface CalendarEvent {
   end: string;
   /** Chaves de reunião encontradas no evento (código do Meet, id do Teams, id do Zoom). */
   keys: string[];
+  /** Link para entrar na chamada (Meet ou Teams), quando o evento tem. */
+  joinUrl?: string | null;
+  /** O evento na própria agenda (Google Agenda ou Outlook na web). */
+  webLink?: string | null;
+  /** O dono da agenda recusou o convite. */
+  selfDeclined?: boolean;
   attendees: { name: string | null; email: string; self: boolean; resource: boolean; declined: boolean }[];
 }
 
@@ -69,7 +75,7 @@ interface ProviderDef {
   tokenUrl: string;
   tokenParams(extra: Record<string, string>): Record<string, string>;
   accountEmail(accessToken: string): Promise<string | null>;
-  listEvents(accessToken: string, from: Date, to: Date): Promise<CalendarEvent[]>;
+  listEvents(accessToken: string, from: Date, to: Date, limit?: number): Promise<CalendarEvent[]>;
 }
 
 const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/userinfo.email";
@@ -102,13 +108,13 @@ const google: ProviderDef = {
     if (!res.ok) return null;
     return (await res.json()).email ?? null;
   },
-  async listEvents(token, from, to) {
+  async listEvents(token, from, to, limit = 50) {
     const q = new URLSearchParams({
       timeMin: from.toISOString(),
       timeMax: to.toISOString(),
       singleEvents: "true",
       orderBy: "startTime",
-      maxResults: "50",
+      maxResults: String(limit),
     });
     const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${q}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -130,6 +136,11 @@ const google: ProviderDef = {
           e.location,
           e.description,
         ]),
+        joinUrl: e.hangoutLink ??
+          (e.conferenceData?.entryPoints ?? []).find((p: { entryPointType?: string }) => p.entryPointType === "video")?.uri ?? null,
+        webLink: e.htmlLink ?? null,
+        // deno-lint-ignore no-explicit-any
+        selfDeclined: (e.attendees ?? []).some((a: any) => a.self && a.responseStatus === "declined"),
         // deno-lint-ignore no-explicit-any
         attendees: (e.attendees ?? []).filter((a: any) => a.email).map((a: any) => ({
           name: a.displayName ?? null,
@@ -171,13 +182,13 @@ const microsoft: ProviderDef = {
     const me = await res.json();
     return me.mail ?? me.userPrincipalName ?? null;
   },
-  async listEvents(token, from, to) {
+  async listEvents(token, from, to, limit = 50) {
     const q = new URLSearchParams({
       startDateTime: from.toISOString(),
       endDateTime: to.toISOString(),
-      $top: "50",
+      $top: String(limit),
       $orderby: "start/dateTime",
-      $select: "id,subject,bodyPreview,body,start,end,attendees,organizer,onlineMeeting,onlineMeetingUrl,location,isCancelled",
+      $select: "id,subject,bodyPreview,body,start,end,attendees,organizer,onlineMeeting,onlineMeetingUrl,location,isCancelled,webLink,responseStatus",
     });
     const res = await fetch(`https://graph.microsoft.com/v1.0/me/calendarView?${q}`, {
       headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"' },
@@ -195,6 +206,9 @@ const microsoft: ProviderDef = {
         start: utc(e.start.dateTime),
         end: utc(e.end?.dateTime ?? e.start.dateTime),
         keys: meetingKeys([e.onlineMeeting?.joinUrl, e.onlineMeetingUrl, e.location?.displayName, e.body?.content]),
+        joinUrl: e.onlineMeeting?.joinUrl ?? e.onlineMeetingUrl ?? null,
+        webLink: e.webLink ?? null,
+        selfDeclined: e.responseStatus?.response === "declined",
         attendees: [
           // O organizador não vem na lista de participantes do Outlook.
           ...(e.organizer?.emailAddress?.address ? [e.organizer.emailAddress] : []).map((a: { name?: string; address: string }) => ({
@@ -424,6 +438,113 @@ export function describe(event: CalendarEvent, sellerEmails: string[]): EventMat
     attendees,
     lead: lead ? { name: lead.name, email: lead.email } : null,
   };
+}
+
+// ── Minha agenda ────────────────────────────────────────────────────────────
+
+/** Gravação do vendedor ligada a um evento da agenda. */
+export interface AgendaMeeting {
+  id: string;
+  title: string;
+  status: string;
+  overall_score: number | null;
+  temperature: string | null;
+}
+
+export interface AgendaItem {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  joinUrl: string | null;
+  webLink: string | null;
+  declined: boolean;
+  attendees: Attendee[];
+  lead: { name: string | null; email: string } | null;
+  /** Tem alguém de fora da empresa: é reunião com cliente. */
+  externo: boolean;
+  meeting: AgendaMeeting | null;
+}
+
+export interface MeetingRow extends AgendaMeeting {
+  meeting_url: string | null;
+  calendar_event_id: string | null;
+  created_at: string;
+}
+
+export const AGENDA_MAX_DAYS = 42;
+
+/**
+ * Liga cada evento à gravação do vendedor: pelo id do evento que a extensão
+ * guardou ao gravar ou, sem ele, pelo link da reunião gravada perto do horário
+ * do evento (reuniões recorrentes usam o mesmo link toda semana).
+ */
+export function matchMeetings(events: CalendarEvent[], meetings: MeetingRow[]): Map<string, MeetingRow> {
+  const out = new Map<string, MeetingRow>();
+  const keysOf = new Map(meetings.map((m) => [m.id, meetingKeys([m.meeting_url])]));
+  const rank = (m: MeetingRow) => (m.status === "completo" ? 2 : m.status === "erro" ? 0 : 1);
+  for (const e of events) {
+    const start = new Date(e.start).getTime() - 30 * 60_000;
+    const end = new Date(e.end).getTime() + 3 * 3600_000;
+    const cands = meetings.filter((m) => {
+      if (m.calendar_event_id) return m.calendar_event_id === e.id;
+      const t = new Date(m.created_at).getTime();
+      return t >= start && t <= end && (keysOf.get(m.id) ?? []).some((k) => e.keys.includes(k));
+    });
+    if (!cands.length) continue;
+    cands.sort((a, b) => rank(b) - rank(a) || b.created_at.localeCompare(a.created_at));
+    out.set(e.id, cands[0]);
+  }
+  return out;
+}
+
+/**
+ * Eventos da agenda principal do vendedor no período, com a gravação de cada
+ * um. Lidos na hora, nada é guardado. Null quando ele não conectou a agenda.
+ */
+export async function agendaEvents(
+  admin: SupabaseClient,
+  userId: string,
+  userEmail: string | null,
+  from: Date,
+  to: Date,
+): Promise<AgendaItem[] | null> {
+  const { data: account } = await admin.from("calendar_accounts")
+    .select("id, provider, email, status").eq("user_id", userId).maybeSingle();
+  if (!account) return null;
+
+  const token = await accessToken(admin, account as AccountRow);
+  const [events, { data: meetings }] = await Promise.all([
+    providerOf(account.provider).listEvents(token, from, to, 250),
+    admin.from("meetings")
+      .select("id, title, status, overall_score, temperature, meeting_url, calendar_event_id, created_at")
+      .eq("seller_id", userId)
+      .gte("created_at", new Date(from.getTime() - 86400_000).toISOString())
+      .lte("created_at", new Date(to.getTime() + 86400_000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(500),
+  ]);
+  const linked = matchMeetings(events, (meetings ?? []) as MeetingRow[]);
+  const sellerEmails = [account.email, userEmail].filter(Boolean) as string[];
+  return events.map((e) => {
+    const d = describe(e, sellerEmails);
+    const m = linked.get(e.id);
+    return {
+      id: e.id,
+      title: e.title || "(sem título)",
+      start: e.start,
+      end: e.end,
+      joinUrl: e.joinUrl ?? null,
+      webLink: e.webLink ?? null,
+      declined: !!e.selfDeclined,
+      attendees: d.attendees,
+      lead: d.lead,
+      externo: d.attendees.some((a) => a.externo),
+      meeting: m
+        ? { id: m.id, title: m.title, status: m.status, overall_score: m.overall_score, temperature: m.temperature }
+        : null,
+    };
+  });
 }
 
 // ── Utilidades ──────────────────────────────────────────────────────────────

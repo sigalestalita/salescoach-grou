@@ -1,5 +1,5 @@
 import {
-  BarChart3, BookOpen, Bot, CalendarCheck, CalendarDays, ClipboardList, Dumbbell, FileSearch, MonitorSmartphone, Plug, Settings,
+  BarChart3, BookOpen, House, Bot, CalendarCheck, CalendarDays, ClipboardList, Dumbbell, FileSearch, MonitorSmartphone, Plug, Settings,
   Sparkles, Users,
 } from "lucide-react";
 
@@ -114,7 +114,7 @@ export const JOURNEY: JourneyDef[] = [
     id: "agenda",
     title: "Conecte a sua agenda",
     description:
-      "Google Agenda ou Outlook, só leitura. As gravações já chegam com o título da reunião, os participantes e o lead (nome e e-mail).",
+      "Google Agenda ou Outlook, só leitura. As gravações já chegam com o título da reunião, os participantes e o lead (nome e e-mail). No Google, se aparecer \"O Google não verificou este app\", clique em Avançado → Acessar Sales Coach (não seguro) e marque a caixa da agenda. O passo a passo fica ao lado do botão Conectar, em Agendas.",
     cta: "Conectar a agenda",
     route: "/agendas",
     tour: "agendas",
@@ -126,7 +126,7 @@ export const JOURNEY: JourneyDef[] = [
     id: "primeira-reuniao",
     title: "Grave a sua primeira reunião",
     description:
-      "Entre numa chamada do Meet ou do Teams e clique em Gravar no cartão do Sales Coach. Admins e gestores também podem enviar um arquivo ou um link do Drive ou do YouTube em Agendas → Nova Agenda.",
+      "Entre numa chamada do Meet ou do Teams e clique em Gravar no cartão do Sales Coach. Admins e gestores também podem enviar um arquivo ou um link do Google Drive em Agendas → Nova Agenda.",
     cta: "Abrir Agendas",
     route: "/agendas",
     tour: "agendas",
@@ -151,7 +151,7 @@ export const JOURNEY: JourneyDef[] = [
     description:
       "Evolução dos scores, temperatura das agendas, médias da metodologia, talk ratio e ranking de vendedores. Use o filtro para ver uma pessoa só.",
     cta: "Abrir a Visão geral",
-    route: "/",
+    route: "/visao-geral",
     tour: "visao-geral",
     roles: MGMT,
     minutes: 3,
@@ -193,8 +193,9 @@ export function welcomeTour(role: string | null): TourStep[] {
       title: "Boas-vindas ao Sales Coach",
       body: "Ele grava e analisa as suas reuniões de venda pela metodologia da sua empresa e mostra o que fazer melhor na próxima. Uma volta rápida pelas telas:",
     },
+    { target: "nav-inicio", title: "Início", body: "A sua primeira tela todo dia: as reuniões de hoje, o que está pendente, o seu ritmo e uma dica escrita pela IA a partir das suas reuniões." },
     { target: "nav-agendas", title: "Agendas", body: "Todas as reuniões gravadas, com status, score e temperatura. Clique numa reunião para ver a análise completa." },
-    mgmt && { target: "nav-inicio", title: "Visão geral", body: "Indicadores do time: evolução dos scores, temperatura das agendas, médias da metodologia e ranking de vendedores." },
+    mgmt && { target: "nav-visao-geral", title: "Visão geral", body: "Indicadores do time: evolução dos scores, temperatura das agendas, médias da metodologia e ranking de vendedores." },
     mgmt && { target: "nav-conhecimento", title: "Base de conhecimento", body: "Materiais da empresa (apresentações, propostas, cases). A IA usa para avaliar se a conversa bateu com o que vocês vendem." },
     { target: "nav-argumentos", title: "Gerador de argumentos", body: "Argumentos, ROI, frases prontas e respostas para objeções a partir do contexto do lead." },
     { target: "nav-treino", title: "Modo de treino", body: "Converse com um cliente simulado, por texto ou voz, e receba uma avaliação no fim." },
@@ -209,8 +210,9 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Agendas",
     steps: [
       { route: "/agendas", target: "agendas-titulo", title: "Agendas", body: "Cada reunião gravada ou enviada vira uma agenda: transcrição, análise e score. O vendedor vê as próprias; gestores e admins veem as do time." },
-      { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead." },
-      { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole um link do Drive ou do YouTube. Para vários links, use Importar em Lote." },
+      { route: "/agendas", target: "agenda-conectar", title: "Sua agenda", body: "Conecte o Google Agenda ou o Outlook. As gravações já chegam com o título, os participantes e o lead. Se o Google avisar que não verificou o app, abra Ver o passo a passo, logo abaixo do botão." },
+      { route: "/agendas", target: "agendas-visao", title: "Minha agenda", body: "Com a agenda conectada, a aba Minha agenda mostra a sua semana como no Google Agenda: reuniões com cliente, as que foram gravadas (com o score) e as que passaram sem gravação. Clique numa reunião para entrar na chamada ou abrir a análise." },
+      { route: "/agendas", target: "nova-agenda", title: "Nova Agenda", body: "Envie um arquivo (MP3, WAV, M4A ou MP4, até 20 MB) ou cole o link da gravação no Google Drive. Para vários links, use Importar em Lote." },
       { route: "/agendas", target: "agendas-filtros", title: "Busca e filtros", body: "Ache uma agenda pelo nome, pelo tipo de reunião ou pelo executivo." },
       { route: "/agendas", target: "agendas-lista", title: "Lista de agendas", body: "O status mostra em que ponto está: Enviado, Transcrevendo, Analisando, Completo ou Erro. Clique para abrir a análise. No menu ⋮ dá para editar, refazer a análise ou apagar." },
     ],
@@ -229,9 +231,9 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
   "visao-geral": {
     title: "Visão geral",
     steps: [
-      { route: "/", target: "dash-filtro", title: "Filtro de vendedor", body: "Veja o time todo ou uma pessoa só." },
-      { route: "/", target: "dash-stats", title: "Indicadores", body: "Total de agendas, score médio, reuniões quentes e vendedores ativos." },
-      { route: "/", target: "dash-graficos", title: "Gráficos", body: "Evolução dos scores, temperatura das agendas, médias da metodologia, talk ratio e ranking de vendedores." },
+      { route: "/visao-geral", target: "dash-filtro", title: "Filtro de vendedor", body: "Veja o time todo ou uma pessoa só." },
+      { route: "/visao-geral", target: "dash-stats", title: "Indicadores", body: "Total de agendas, score médio, reuniões quentes e vendedores ativos." },
+      { route: "/visao-geral", target: "dash-graficos", title: "Gráficos", body: "Evolução dos scores, temperatura das agendas, médias da metodologia, talk ratio e ranking de vendedores." },
     ],
   },
   conhecimento: {
@@ -278,7 +280,7 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
       { route: "/configuracoes", target: "cfg-playbooks-salvar", title: "4. Salve", body: "Ao salvar um playbook novo, o tipo de reunião com o mesmo nome já é criado e ligado a ele. O time de CS grava pela extensão escolhendo esse tipo, e a conversa é avaliada pelo playbook." },
       { route: "/configuracoes", target: "cfg-tipos", title: "Tipos de reunião", body: "Para ligar um tipo que já existe a um playbook, abra o tipo e escolha o playbook em \"Metodologia ou playbook de análise\"." },
       { route: "/configuracoes", target: "cfg-crm-atendimento", title: "5. CRM", body: "Com o CRM conectado, o botão \"Criar campos do atendimento\" cria no negócio aderência, saúde do cliente, sinais, compromissos e cada informação a registrar, e já faz o mapeamento. A anotação e a tarefa também saem." },
-      { route: "/", target: "dash-area", title: "Painel de atendimento", body: "Na Visão geral, a aba Atendimento mostra aderência média, clientes em risco, saúde dos clientes, etapas por playbook e os sinais mais frequentes." },
+      { route: "/visao-geral", target: "dash-area", title: "Painel de atendimento", body: "Na Visão geral, a aba Atendimento mostra aderência média, clientes em risco, saúde dos clientes, etapas por playbook e os sinais mais frequentes." },
     ],
   },
   equipe: {
@@ -293,7 +295,8 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
     title: "Extensão do Chrome",
     steps: [
       { route: "/extensao", target: "ext-instalar", title: "Instale", body: "Abre a Chrome Web Store. Clique em Usar no Chrome; a extensão entra na sua conta sozinha." },
-      { route: "/extensao", target: "ext-passos", title: "Como gravar", body: "Ao entrar numa reunião, clique em Gravar no cartão do Sales Coach e confirme Compartilhar. Ao sair da chamada, a gravação é enviada sozinha." },
+      { route: "/extensao", target: "ext-passos", title: "Como gravar", body: "Ao entrar numa reunião, clique em Gravar no cartão do Sales Coach. Por padrão grava só o áudio, sem compartilhar a tela. Ao sair da chamada, a gravação é enviada sozinha." },
+      { route: "/extensao", target: "ext-leve", title: "Para a reunião não travar", body: "Vai apresentar slides? Deixe desmarcado Gravar também a tela. Só o áudio quase não pesa no computador." },
     ],
   },
 };
@@ -301,6 +304,36 @@ export const TOURS: Record<string, { title: string; steps: TourStep[] }> = {
 // ── Ajuda ───────────────────────────────────────────────────────────────────
 
 export const ARTICLES: HelpArticle[] = [
+  {
+    id: "inicio",
+    title: "Início: o seu dia no Sales Coach",
+    icon: House,
+    summary: "Reuniões de hoje, pendências, o seu ritmo, a dica do dia e, para gestores, o time.",
+    route: "/",
+    sections: [
+      {
+        title: "Seu dia",
+        items: [
+          "Hoje: as reuniões da sua agenda, com o botão Entrar e gravar na próxima. Precisa da agenda conectada em Agendas.",
+          "Pendências, sem nada para marcar: análises com erro para tentar de novo, reuniões com cliente da última semana que passaram sem gravação e os primeiros passos que faltam.",
+          "Seu ritmo: score médio dos últimos 30 dias, a tendência contra os 30 dias anteriores e as reuniões gravadas na semana.",
+          "Dica do dia: escrita pela IA uma vez por dia, a partir das suas últimas reuniões analisadas (o critério da metodologia em que você está mais fraco), da metodologia e da base de conhecimento da empresa. Traz uma frase pronta para a próxima reunião.",
+          "Você sabia?: um recurso do Sales Coach por dia.",
+        ],
+      },
+      {
+        title: "Seu time (admin e gestor)",
+        items: [
+          "Admin e gestor também veem o próprio dia, porque gravam as próprias reuniões. Abaixo, o time: o gestor vê a própria equipe; o admin, a empresa toda.",
+          "Atenção: quem caiu 8 pontos ou mais no score, quem não grava há 7 dias ou nunca gravou, e análises do time com erro.",
+          "Destaques: a melhor reunião da semana (vale ouvir com o time), os leads quentes e o critério mais fraco do time, como pauta para o próximo treino.",
+          "Por pessoa: reuniões gravadas na semana e score de 30 dias com a tendência.",
+          "Só reuniões gravadas: a agenda dos vendedores não aparece para ninguém além deles.",
+          "Gestor ou admin com poucas reuniões próprias recebe uma dica de gestão, a partir das reuniões do time.",
+        ],
+      },
+    ],
+  },
   {
     id: "agendas",
     title: "Agendas: suas reuniões",
@@ -313,8 +346,10 @@ export const ARTICLES: HelpArticle[] = [
         title: "Como uma reunião entra",
         items: [
           "Pela extensão do Chrome: grava a chamada do Meet ou do Teams e envia sozinha.",
-          "Em Nova Agenda (admins e gestores): arquivo MP3, WAV, M4A ou MP4 de até 20 MB, ou link do Drive ou do YouTube.",
-          "Em Importar em Lote: vários links do Drive ou do YouTube, um por linha.",
+          "Em Nova Agenda (admins e gestores): arquivo MP3, WAV, M4A ou MP4 de até 20 MB, ou o link da gravação no Google Drive (compartilhado com \"Qualquer pessoa com o link\"). Também vale Dropbox ou o link direto do arquivo.",
+          "Em Importar em Lote: vários links de gravações, um por linha.",
+          "YouTube não funciona: o vídeo não pode ser baixado para transcrição. Baixe e envie o arquivo, ou suba no Drive. Links de pasta, de documento ou de página (Zoom, Loom) também não: use o link do arquivo da gravação.",
+          "Já tem a transcrição? Abra a agenda, cole em \"Já tem a transcrição? Cole aqui\" e clique em Tentar novamente.",
         ],
       },
       {
@@ -376,14 +411,27 @@ export const ARTICLES: HelpArticle[] = [
       {
         title: "Gravar",
         items: [
-          "Ao entrar numa reunião do Meet ou do Teams, aparece o cartão Gravar esta reunião?. Clique em Gravar e confirme Compartilhar, com o áudio da guia ligado.",
+          "Ao entrar numa reunião do Meet ou do Teams, aparece o cartão Gravar esta reunião?. Clique em Gravar. Na primeira vez, permita o microfone.",
+          "Por padrão (versão 1.12 ou mais nova), grava só o áudio: a sua voz e a do cliente, que vem direto da chamada. Não abre o seletor de tela. Funciona com fone, e o cliente que entra depois entra na gravação sozinho.",
+          "Quer o vídeo? Marque Gravar também a tela no cartão ou no ícone da extensão. O Chrome pede a aba da reunião: deixe ligado Compartilhar áudio da guia e clique em Compartilhar. A tela é gravada em 540p, para não pesar.",
+          "Até a versão 1.11, o Chrome sempre pede a aba da reunião: escolha a aba com Compartilhar áudio da guia ligado. Veja a versão em chrome://extensions.",
           "Um painel mostra a transcrição e dicas ao vivo; só você o vê.",
           "Ao sair da chamada, a gravação é enviada sozinha.",
         ],
       },
       {
+        title: "Para a reunião não travar (apresentando slides)",
+        items: [
+          "Vai apresentar slides ou compartilhar a tela no Meet? Deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação era o que deixava a chamada lenta e travando.",
+          "Só o áudio quase não pesa no computador, e a análise usa só o áudio.",
+          "Se a chamada ficar lenta numa versão até a 1.11, pare a gravação antes de apresentar e atualize a extensão.",
+        ],
+      },
+      {
         title: "Se algo falhar",
         items: [
+          "O Chrome pediu para compartilhar a aba sem você marcar a tela? A extensão foi instalada ou atualizada com a reunião já aberta. Escolha a aba da reunião (só o áudio é gravado) ou recarregue a aba da reunião antes de gravar.",
+          "O painel avisou que não está ouvindo o cliente? Clique em Ouvir o cliente pela aba, no próprio aviso, e compartilhe a aba da reunião com Compartilhar áudio da guia: a gravação continua. Sem o botão (versão anterior à 1.12.1), pare, recarregue a aba da reunião e grave de novo.",
           "Se o envio falhar, o painel oferece Baixar a gravação: envie o arquivo depois em Agendas → Nova Agenda.",
           "Se pedir login, abra o Sales Coach neste navegador ou clique em Entrar pelo Sales Coach na extensão.",
           "Para não ver o cartão, desmarque a opção no ícone da extensão.",
@@ -402,10 +450,38 @@ export const ARTICLES: HelpArticle[] = [
       {
         title: "Como funciona",
         items: [
-          "Em Agendas → Sua agenda, clique em Conectar e autorize. O acesso é só de leitura.",
+          "Em Agendas → Sua agenda, clique em Conectar Google Agenda (ou Conectar Outlook) e autorize. O acesso é só de leitura: o Sales Coach não cria, não altera e não apaga eventos.",
           "Ao gravar, o Sales Coach acha o evento da reunião e traz o título e os participantes. O lead é o primeiro participante de fora da sua empresa.",
           "Link avulso, que não está na agenda, segue com o título da aba; a análise identifica o lead pela conversa.",
-          "Se aparecer Reconectar, o acesso expirou: clique e autorize de novo.",
+          "Se aparecer Reconectar, o acesso expirou ou a permissão da agenda ficou desmarcada: clique e autorize de novo, marcando a caixa da agenda.",
+        ],
+      },
+      {
+        title: "Minha agenda",
+        items: [
+          "Com a agenda conectada, Agendas ganha a aba Minha agenda: a sua agenda principal, por semana ou por dia (no celular, a lista do dia).",
+          "Cores: azul é reunião com cliente; verde, reunião gravada (com o score); tracejada, reunião com cliente que passou sem gravação; cinza, reunião interna, sem ninguém de fora da empresa.",
+          "Clique numa reunião para ver os participantes e o lead, entrar na chamada, abrir a análise ou abrir o evento no Google Agenda ou no Outlook.",
+          "No topo, quantas reuniões com cliente da semana foram gravadas.",
+          "Cada pessoa vê só a própria agenda; gestores e admins não veem a agenda do time. É só leitura e nada da agenda fica guardado no Sales Coach.",
+        ],
+      },
+      {
+        title: "Google Agenda: passo a passo do consentimento",
+        items: [
+          "1. Agendas → Sua agenda → Conectar Google Agenda.",
+          "2. Escolha a sua conta do Google do trabalho, a mesma das reuniões com clientes.",
+          "3. Se aparecer \"O Google não verificou este app\", não clique no botão azul: clique em Avançado, no canto inferior esquerdo, e depois em Acessar Sales Coach (não seguro). O aviso aparece enquanto o Google conclui a verificação do Sales Coach.",
+          "4. Na tela \"O Sales Coach quer acessar sua Conta do Google\", marque a caixa Ver eventos em todas as suas agendas (ou Selecionar tudo) e clique em Continuar. Sem essa caixa marcada, a agenda não conecta.",
+          "5. Você volta ao Sales Coach com a mensagem Agenda conectada.",
+          "O passo a passo também fica no quadro Sua agenda, em Agendas: clique em Ver o passo a passo.",
+        ],
+      },
+      {
+        title: "Se o Google bloquear",
+        items: [
+          "\"Acesso bloqueado\" ou sem a opção Avançado: a empresa usa Google Workspace e bloqueia apps ainda não verificados. O administrador do Google Workspace libera em admin.google.com → Segurança → Acesso e controle de dados → Controles de API → Gerenciar acesso de apps de terceiros → Configurar novo app: procura Sales Coach (ou o ID do app, que o suporte envia) e marca como Confiável.",
+          "No Outlook, \"Precisa de aprovação do administrador\": o administrador do Microsoft 365 da empresa aprova o Sales Coach uma vez.",
         ],
       },
     ],
@@ -415,7 +491,7 @@ export const ARTICLES: HelpArticle[] = [
     title: "Visão geral do time",
     icon: BarChart3,
     summary: "Indicadores, evolução dos scores e ranking de vendedores.",
-    route: "/",
+    route: "/visao-geral",
     tour: "visao-geral",
     roles: MGMT,
     sections: [
@@ -653,9 +729,12 @@ export const ARTICLES: HelpArticle[] = [
 export const FAQ: { q: string; a: string }[] = [
   { q: "Quanto tempo leva a análise?", a: "Alguns minutos depois de a gravação chegar. Acompanhe o status em Agendas: Transcrevendo, Analisando e Completo." },
   { q: "A reunião ficou com Erro. E agora?", a: "Abra a reunião e clique em Tentar novamente. Se persistir, confira se o arquivo tem áudio e menos de 20 MB, ou se o link do Drive está aberto para qualquer pessoa com o link." },
-  { q: "O cliente percebe que estou gravando?", a: "Pela extensão, o Chrome mostra que a aba está sendo compartilhada só para você. Avise o cliente no início, como pede a LGPD." },
-  { q: "A gravação veio sem o áudio do cliente.", a: "Atualize a extensão (1.11 ou mais nova): ela grava a voz do cliente direto da chamada, mesmo com fone. Nas versões antigas, deixe ligado Compartilhar áudio da guia e use o alto-falante padrão no Meet." },
-  { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e o áudio da aba (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
+  { q: "O cliente percebe que estou gravando?", a: "Não: o painel da extensão só aparece para você, e os outros participantes não veem nada. Avise o cliente no início, como pede a LGPD." },
+  { q: "A gravação veio sem o áudio do cliente.", a: "Atualize a extensão (1.12.1 ou mais nova): ela grava a voz do cliente direto da chamada, mesmo com fone, e avisa no painel se não estiver ouvindo. Nesse aviso, Ouvir o cliente pela aba resolve sem parar a gravação. Se a extensão foi instalada ou atualizada com a reunião aberta, recarregue a aba da reunião antes de gravar. Nas versões antigas, deixe ligado Compartilhar áudio da guia e use o alto-falante padrão no Meet." },
+  { q: "A reunião trava ou fica lenta quando apresento slides.", a: "Na extensão 1.12 ou mais nova, grave só o áudio (o padrão): deixe desmarcado Gravar também a tela. Gravar a tela junto com a apresentação do Meet pesa no computador. Se precisar do vídeo, ele sai em 540p. Até a 1.11, pare a gravação antes de apresentar e atualize a extensão." },
+  { q: "Apareceu \"O Google não verificou este app\" ao conectar a agenda.", a: "É esperado enquanto o Google conclui a verificação do Sales Coach. Clique em Avançado (canto inferior esquerdo) → Acessar Sales Coach (não seguro) e, na tela seguinte, marque a caixa Ver eventos em todas as suas agendas antes de Continuar. O acesso é só de leitura. Se aparecer Acesso bloqueado, o administrador do Google Workspace da empresa precisa liberar o app (veja a ajuda Conectar o Google Agenda ou o Outlook)." },
+  { q: "As dicas ao vivo confundem o que eu e o cliente dissemos.", a: "O live ouve duas trilhas: o seu microfone (você) e a voz que chega pela chamada (cliente). Use fone de ouvido: sem ele, o microfone também capta a voz do cliente saindo da caixa de som." },
+  { q: "Dá para ver a minha agenda dentro do Sales Coach?", a: "Sim. Conecte o Google Agenda ou o Outlook em Agendas e abra a aba Minha agenda: a sua semana, com as reuniões com cliente, as gravadas (com o score) e as que passaram sem gravação. Só você vê a sua agenda." },
   { q: "O título ou o lead da reunião vieram errados.", a: "Conecte sua agenda em Agendas para virem do convite. Dá para corrigir a qualquer momento no menu ⋮ → Editar da agenda." },
   { q: "Como mudar os critérios da análise?", a: "Admins: Configurações → Metodologia de análise. As próximas análises seguem os novos critérios; para uma antiga, use Refazer análise." },
   { q: "Temos um time de CS. Dá para usar?", a: "Sim. Crie um playbook em Configurações → Playbooks de atendimento e ligue-o ao tipo de reunião do CS. As conversas desse tipo são avaliadas pelo playbook, com saúde do cliente e sinais de risco. Veja a ajuda \"Coach de atendimento\"." },
@@ -670,3 +749,21 @@ export function articleForPath(path: string): HelpArticle | undefined {
   if (/^\/agendas\/[^/]+/.test(path)) return ARTICLES.find((a) => a.id === "reuniao");
   return ARTICLES.find((a) => a.route === path);
 }
+
+// ── Você sabia? (tela Início) ───────────────────────────────────────────────
+
+/** Uma dica de uso do Sales Coach por dia, na tela Início. */
+export const HINTS: { text: string; route?: string; cta?: string; roles?: string[] }[] = [
+  { text: "A extensão grava só o áudio por padrão: apresentar slides no Meet não deixa a chamada lenta.", route: "/extensao", cta: "Dicas da extensão" },
+  { text: "Em Agendas → Minha agenda, você vê a sua semana com as reuniões gravadas e as que passaram sem gravação.", route: "/agendas?visao=agenda", cta: "Abrir Minha agenda" },
+  { text: "Pode usar fone: a voz do cliente vem direto da chamada, não da caixa de som.", route: "/extensao", cta: "Ver a extensão" },
+  { text: "Antes de uma reunião difícil, treine com um cliente simulado no Modo de treino, por texto ou por voz.", route: "/treino", cta: "Começar um treino" },
+  { text: "O Gerador de argumentos monta argumentos, ROI e respostas para objeções a partir do contexto do lead.", route: "/argumentos", cta: "Abrir o gerador" },
+  { text: "Na análise, Compartilhar gera um link para quem não tem conta ver a reunião, com validade de 1 a 90 dias." },
+  { text: "Se o envio da gravação falhar, o painel oferece Baixar a gravação: nada se perde." },
+  { text: "Com a agenda conectada, a gravação já chega com o título, os participantes e o lead do convite.", route: "/agendas", cta: "Conectar a agenda" },
+  { text: "O assistente do botão de ajuda responde sobre as suas reuniões: \"quais agendas ficaram mornas esta semana?\"" },
+  { text: "Pela Visão geral, você acompanha a evolução dos scores e o ranking do time.", route: "/visao-geral", cta: "Abrir a Visão geral", roles: MGMT },
+  { text: "Materiais novos na Base de conhecimento (propostas, cases, tabelas) deixam a análise e a dica do dia mais certeiras.", route: "/conhecimento", cta: "Abrir a base", roles: MGMT },
+  { text: "Time de CS? Playbooks de atendimento avaliam as conversas por etapa, saúde do cliente e sinais de risco.", route: "/configuracoes", cta: "Ver os playbooks", roles: ["admin"] },
+];

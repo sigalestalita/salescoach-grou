@@ -120,6 +120,27 @@
       "when": 1792709575426,
       "tag": "0016_base_por_area",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792773497869,
+      "tag": "0017_dica_do_dia",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792776527665,
+      "tag": "0018_novidades",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792789171150,
+      "tag": "0019_atividade_plataforma",
+      "breakpoints": true
     }
   ]
 }

@@ -23,6 +23,19 @@ describe("trecho da ajuda para o assistente", () => {
     expect(g).toContain("Papel de quem pergunta: vendedor");
   });
 
+  it("reunião travando ao apresentar slides leva as dicas de gravação leve", () => {
+    const g = helpContextFor("a reunião começou a travar quando fui apresentar slides", "vendedor");
+    expect(g).toContain("### Gravar com a extensão do Chrome");
+    expect(g).toContain("Gravar também a tela");
+  });
+
+  it("aviso do Google ao conectar a agenda leva o passo a passo do consentimento", () => {
+    const g = helpContextFor("apareceu que o google não verificou este app, como libero a agenda?", "vendedor");
+    expect(g).toContain("### Conectar o Google Agenda ou o Outlook");
+    expect(g).toContain("Acessar Sales Coach (não seguro)");
+    expect(g).toContain("Ver eventos em todas as suas agendas");
+  });
+
   it("fica dentro do limite de tamanho", () => {
     expect(helpContextFor("configurar crm extensão agenda equipe treino playbook metodologia", "admin").length).toBeLessThanOrEqual(9000);
   });

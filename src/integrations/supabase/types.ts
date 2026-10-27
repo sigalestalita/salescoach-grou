@@ -625,6 +625,92 @@ export type Database = {
           },
         ]
       }
+      daily_tips: {
+        Row: {
+          created_at: string
+          day: string
+          model: string | null
+          org_id: string
+          tip: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day: string
+          model?: string | null
+          org_id: string
+          tip: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day?: string
+          model?: string | null
+          org_id?: string
+          tip?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_tips_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_preferences: {
+        Row: {
+          novidades: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          novidades?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          novidades?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      email_sends: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          provider_id: string | null
+          ref: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          provider_id?: string | null
+          ref: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          provider_id?: string | null
+          ref?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       highlights: {
         Row: {
           created_at: string
@@ -1453,6 +1539,54 @@ export type Database = {
           },
         ]
       }
+      product_updates: {
+        Row: {
+          audience: string[]
+          body: string
+          created_at: string
+          created_by: string | null
+          cta_label: string | null
+          cta_path: string | null
+          emailed_at: string | null
+          id: string
+          published_at: string | null
+          source: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string[]
+          body: string
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_path?: string | null
+          emailed_at?: string | null
+          id?: string
+          published_at?: string | null
+          source?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string[]
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_path?: string | null
+          emailed_at?: string | null
+          id?: string
+          published_at?: string | null
+          source?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1989,6 +2123,49 @@ export type Database = {
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }
+      platform_activity: {
+        Args: {
+          _ate: string
+          _desde: string
+          _email?: string
+          _limite?: number
+          _offset?: number
+          _org?: string
+          _tipo?: string
+        }
+        Returns: {
+          detalhe: string
+          em: string
+          email: string
+          nome: string
+          org_id: string
+          org_nome: string
+          ref: string
+          tipo: string
+          titulo: string
+          user_id: string
+        }[]
+      }
+      platform_activity_people: {
+        Args: { _ate: string; _desde: string }
+        Returns: {
+          analises: number
+          assistente: number
+          custo: number
+          email: string
+          erros: number
+          logins: number
+          nome: string
+          org_id: string
+          org_nome: string
+          papel: string
+          reunioes: number
+          treinos: number
+          ultima_atividade: string
+          ultimo_login: string
+          user_id: string
+        }[]
+      }
       platform_org_people: {
         Args: never
         Returns: {

@@ -38,6 +38,7 @@ export function fakeDb(tables: Record<string, Row[]>) {
       neq(c: string, v: any) { st.filters.push((r: Row) => r[c] !== v); return api; },
       in(c: string, v: any[]) { st.filters.push((r: Row) => v.includes(r[c])); return api; },
       lte(c: string, v: any) { st.filters.push((r: Row) => r[c] <= v); return api; },
+      gte(c: string, v: any) { st.filters.push((r: Row) => r[c] >= v); return api; },
       lt(c: string, v: any) { st.filters.push((r: Row) => r[c] < v); return api; },
       order(c: string, o?: any) { st.order = { col: c, asc: o?.ascending !== false }; return api; },
       limit(n: number) { st.limit = n; return api; },

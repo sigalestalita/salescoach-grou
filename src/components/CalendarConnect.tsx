@@ -5,31 +5,35 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { CalendarCheck, CalendarPlus, AlertCircle } from "lucide-react";
 import { CALENDAR_NAME, calendarApi, CalendarConnection, CalendarProvider } from "@/lib/calendar";
+import { GoogleCalendarGuide } from "@/components/GoogleCalendarGuide";
 
 /**
  * Conexão da agenda do vendedor (Google Agenda ou Outlook). Com ela, a extensão
  * grava já com o título da agenda, os participantes e o lead. Fica no topo da
  * página Agendas, para todos os papéis.
  */
-export function CalendarConnect() {
+export function CalendarConnect({ onStatus }: { onStatus?: (conn: CalendarConnection | null) => void } = {}) {
   const { toast } = useToast();
   const [conn, setConn] = useState<CalendarConnection | null>(null);
   const [providers, setProviders] = useState<CalendarProvider[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // Voltou do Google com erro: o passo a passo já abre.
+  const [returnedWithError, setReturnedWithError] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const r = await calendarApi.status();
       setConn(r.connection);
       setProviders(r.providers);
+      onStatus?.(r.connection);
     } catch {
       // Função ainda não publicada ou agenda não configurada: o cartão some.
       setProviders([]);
     } finally {
       setLoaded(true);
     }
-  }, []);
+  }, [onStatus]);
   useEffect(() => { load(); }, [load]);
 
   // Volta do OAuth: ?agenda=conectada ou ?agenda=erro&motivo=...
@@ -40,6 +44,7 @@ export function CalendarConnect() {
     if (r === "conectada") {
       toast({ title: "Agenda conectada", description: "As próximas gravações já vêm com o título, os participantes e o lead." });
     } else {
+      setReturnedWithError(true);
       toast({ title: "Não foi possível conectar a agenda", description: q.get("motivo") ?? undefined, variant: "destructive" });
     }
     q.delete("agenda"); q.delete("motivo");
@@ -62,6 +67,7 @@ export function CalendarConnect() {
     try {
       await calendarApi.disconnect();
       setConn(null);
+      onStatus?.(null);
       toast({ title: "Agenda desconectada" });
     } catch (e) {
       toast({ title: "Não foi possível desconectar", description: (e as Error).message, variant: "destructive" });
@@ -73,6 +79,7 @@ export function CalendarConnect() {
   // Nada configurado na plataforma e nada conectado: não ocupa espaço.
   if (!loaded || (!conn && providers.length === 0)) return null;
   const broken = conn?.status === "erro";
+  const showGuide = (!conn || broken) && (providers.includes("google") || conn?.provider === "google");
 
   return (
     <Card data-tour="agenda-conectar">
@@ -107,6 +114,7 @@ export function CalendarConnect() {
             </Button>
           ))}
         </div>
+        {showGuide && <GoogleCalendarGuide defaultOpen={broken || returnedWithError} />}
       </CardContent>
     </Card>
   );

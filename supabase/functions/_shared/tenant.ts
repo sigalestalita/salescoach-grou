@@ -206,7 +206,8 @@ export interface UsageRecord {
     | "roleplay"
     | "assistant_chat"
     | "sugestao_metodologia"
-    | "sugestao_perfis";
+    | "sugestao_perfis"
+    | "dica_do_dia";
   model?: string | null;
   provider?: string | null;
   inputTokens?: number;
