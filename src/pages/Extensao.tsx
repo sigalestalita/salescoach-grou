@@ -126,7 +126,9 @@ const lightTips: React.ReactNode[] = [
     antes de gravar.
   </>,
   <>
-    O painel avisou <B>Não estou ouvindo o cliente</B>? Pare a gravação, recarregue a aba da reunião e grave de novo.
+    O painel avisou que não está ouvindo o cliente? Clique em <B>Ouvir o cliente pela aba</B>, no próprio aviso, e
+    compartilhe a aba da reunião com <B>Compartilhar áudio da guia</B> ligado: a gravação continua. Sem esse botão
+    (versão anterior à 1.12.1), pare, recarregue a aba da reunião e grave de novo.
   </>,
   <>
     Confira a versão em <B>{EXTENSIONS_PAGE}</B>. Até a 1.11, o Chrome sempre pede a aba da reunião: escolha a aba com{" "}

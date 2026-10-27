@@ -132,6 +132,7 @@
 #salescoach-overlay .sc-alert-ic {
   width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; margin-top: 1px; color: #fff;
 }
+#salescoach-overlay .sc-alert .sc-alert-btn { display: block; width: auto; margin-top: 8px; padding: 6px 10px; font-size: 12px; }
 #salescoach-overlay .sc-alert.warn { background: rgba(242,181,68,.12); border: 1px solid rgba(242,181,68,.5); }
 #salescoach-overlay .sc-alert.warn .sc-alert-ic { background: var(--sc-warn); color: #3A2800; }
 #salescoach-overlay .sc-alert.info { background: var(--sc-accent-soft); border: 1px solid rgba(21,73,141,.3); }
