@@ -212,6 +212,14 @@
       const icon = a.kind === 'info' ? '<span class="sc-spin"></span>' : '!';
       el.innerHTML = `<span class="sc-alert-ic">${icon}</span><div><b>${escape(a.title)}</b><span>${escape(a.text)}</span></div>`;
       if (a.detail) el.title = a.detail;
+      if (a.action) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sc-btn sc-btn-primary sc-alert-btn';
+        b.textContent = a.action.label;
+        b.addEventListener('click', a.action.onClick);
+        el.querySelector('div').appendChild(b);
+      }
       alertsEl.appendChild(el);
     }
   }
@@ -224,9 +232,13 @@
   // novo e o popup manda "startRecording": sem tirar este ouvinte, o gravador
   // antigo também respondia e abria um segundo seletor de tela e uma segunda
   // reunião, invisível. Ver encerrarInstancia().
-  const onMessage = (msg) => {
+  const onMessage = (msg, _sender, sendResponse) => {
     if (msg.action === 'startRecording') startRecording();
     if (msg.action === 'stopRecording') stopRecording();
+    // O popup confere se há mesmo uma gravação viva antes de mostrar "Enviando…".
+    if (msg.action === 'status') {
+      sendResponse({ recording: !!mediaRecorder && mediaRecorder.state === 'recording', uploading, starting });
+    }
   };
   chrome.runtime.onMessage.addListener(onMessage);
   window.__salescoachStartRecording = startRecording;
@@ -538,10 +550,11 @@
     recEl.title = isVideo ? 'Gravando tela e áudio' : 'Gravando só o áudio';
     startTimer();
     startMeters(micStream, clienteStream);
-    if (!clienteStream) {
+    if (!hasSystemAudio && !temAudioDaChamada()) {
       setAlert('sem-cliente', {
         kind: 'warn', title: 'Não estou ouvindo o cliente',
-        text: 'Só a sua voz entra. Pare e grave de novo; se o Chrome pedir, compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
+        text: 'Só a sua voz entra. Compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado; a gravação continua.',
+        action: OUVIR_PELA_ABA,
       });
     }
     safeStorageSet({
@@ -710,17 +723,40 @@
   // da aba compartilhada. Grava UMA delas por vez, para a voz não sair
   // duplicada: a chamada tem preferência; a aba só entra se a chamada não
   // trouxer som nenhum (por exemplo, extensão atualizada no meio da reunião).
-  function audioDaChamada() {
-    const el = document.getElementById('sc-remote-audio');
-    const s = el && el.srcObject;
-    return s && typeof s.getAudioTracks === 'function' ? s : null;
+  //
+  // As trilhas da chamada vêm de dois lugares: o gancho (remote-audio.js) e os
+  // próprios <audio>/<video> em que o Meet e o Teams tocam a chamada. O
+  // segundo cobre o caso em que o gancho não pegou a conexão. Microfone fica
+  // de fora: trilha capturada no computador tem o nome do aparelho no label;
+  // trilha que chega pela chamada tem um identificador (o próprio id) no lugar.
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const daChamada = (t) => !t.label || t.label === t.id || UUID.test(t.label) || /remote/i.test(t.label);
+  function faixasDaChamada() {
+    const faixas = new Map();
+    const meus = new Set(micStream ? micStream.getAudioTracks().map((t) => t.id) : []);
+    const juntar = (s, doGancho) => {
+      if (!s || typeof s.getAudioTracks !== 'function') return;
+      for (const t of s.getAudioTracks()) {
+        if (t.readyState !== 'live' || faixas.has(t.id) || meus.has(t.id)) continue;
+        if (doGancho || daChamada(t)) faixas.set(t.id, t);
+      }
+    };
+    juntar(document.getElementById('sc-remote-audio')?.srcObject, true);
+    for (const m of document.querySelectorAll('audio, video')) {
+      try { juntar(m.srcObject); } catch {}
+    }
+    return [...faixas.values()];
   }
-  function temAudioDaChamada() { return !!audioDaChamada(); }
+  /** A extensão consegue ouvir a chamada nesta aba (gancho instalado ou chamada já tocando). */
+  function temAudioDaChamada() {
+    return !!document.getElementById('sc-remote-audio') || faixasDaChamada().length > 0;
+  }
 
   const CLIENTE_TROCA_MS = 12000;
   function montarCliente(ctx, aba) {
-    const chamada = audioDaChamada();
-    if (!chamada && !aba) return null;
+    // Sem nenhuma fonte agora, o mix nasce vazio: a aba pode entrar depois
+    // (botão "Ouvir pela aba" no painel).
+    const chamada = temAudioDaChamada();
     const dest = ctx.createMediaStreamDestination();
     const saida = ctx.createGain();
     saida.connect(dest);
@@ -741,22 +777,22 @@
     if (chamada) nova('chamada');
     // As trilhas da chamada mudam (gente entra e sai): liga as novas a cada segundo.
     const ligar = () => {
-      if (!chamada) return;
-      for (const t of chamada.getAudioTracks()) {
-        if (t.readyState !== 'live' || ligadas.has(t.id)) continue;
+      if (!fontes.chamada) return;
+      const vivas = new Map(faixasDaChamada().map((t) => [t.id, t]));
+      for (const t of vivas.values()) {
+        if (ligadas.has(t.id)) continue;
         try {
           const src = ctx.createMediaStreamSource(new MediaStream([t]));
           src.connect(fontes.chamada.soma);
-          ligadas.set(t.id, src);
+          ligadas.set(t.id, { src, t });
         } catch (e) { console.warn('Sales Coach: trilha da chamada não ligou', e); }
       }
-      for (const [id, src] of ligadas) {
-        const t = chamada.getTrackById(id);
-        if (!t || t.readyState === 'ended') { try { src.disconnect(); } catch {} ligadas.delete(id); }
+      for (const [id, l] of ligadas) {
+        if (l.t.readyState === 'ended') { try { l.src.disconnect(); } catch {} ligadas.delete(id); }
       }
     };
     let atual = chamada ? 'chamada' : 'aba';
-    const inicio = Date.now();
+    let inicio = Date.now();
     const usar = (nome) => {
       atual = nome;
       for (const [n, f] of Object.entries(fontes)) f.ganho.gain.setTargetAtTime(n === nome ? 1 : 0, ctx.currentTime, 0.05);
@@ -782,9 +818,19 @@
     ligar();
     return {
       stream: dest.stream, saida,
+      /** Quantas trilhas da chamada estão ligadas e quando a chamada teve som pela última vez. */
+      estado: () => ({ trilhas: ligadas.size, somChamada: fontes.chamada?.ultimoSom || 0, temAba: !!fontes.aba }),
+      /** Áudio da aba compartilhado no meio da gravação: entra como reserva da chamada. */
+      adicionarAba(stream) {
+        if (fontes.aba) return;
+        ctx.createMediaStreamSource(stream).connect(nova('aba').soma);
+        // A chamada que nunca teve som cede a vez à aba logo que ela tiver som.
+        inicio = Date.now() - CLIENTE_TROCA_MS;
+        if (!fontes.chamada?.ultimoSom) usar('aba');
+      },
       parar() {
         clearInterval(timer);
-        for (const src of ligadas.values()) { try { src.disconnect(); } catch {} }
+        for (const l of ligadas.values()) { try { l.src.disconnect(); } catch {} }
         ligadas.clear();
       },
     };
@@ -1157,6 +1203,34 @@
   // Um analisador por trilha, lido a cada 100 ms. Se o áudio do cliente fica
   // mudo por muito tempo, avisa: costuma ser a aba compartilhada sem áudio.
   const CLIENT_SILENCE_MS = 90000;
+  const SEM_CHAMADA_MS = 45000;
+  const OUVIR_PELA_ABA = { label: 'Ouvir o cliente pela aba', onClick: () => ouvirPelaAba() };
+
+  /**
+   * A voz do cliente não está chegando pela chamada: pede o áudio da aba no
+   * meio da gravação (o clique no botão libera o seletor do Chrome) e junta ao
+   * cliente. O vídeo que o Chrome obriga a pedir é descartado na hora.
+   */
+  async function ouvirPelaAba() {
+    if (!clienteMix || !mediaRecorder || mediaRecorder.state !== 'recording') return;
+    const s = await pedirTela(false);
+    if (!s) return;
+    for (const t of s.getVideoTracks()) { t.stop(); s.removeTrack(t); }
+    if (!s.getAudioTracks().length) {
+      setAlert('cliente-mudo', {
+        kind: 'warn', title: 'O áudio da aba não veio',
+        text: 'Compartilhe de novo e deixe "Compartilhar áudio da guia" ligado.',
+        action: OUVIR_PELA_ABA,
+      });
+      return;
+    }
+    if (screenStream) for (const t of s.getAudioTracks()) screenStream.addTrack(t);
+    else screenStream = s;
+    clienteMix.adicionarAba(new MediaStream(s.getAudioTracks()));
+    setAlert('sem-cliente', null);
+    setAlert('cliente-mudo', null);
+    console.info('Sales Coach: áudio da aba adicionado no meio da gravação');
+  }
   let meterCtx = null;
   let meterTimer = null;
   function startMeters(mic, tab) {
@@ -1188,12 +1262,25 @@
           meterEls[who].style.transform = `scaleX(${level.toFixed(2)})`;
         }
         if (analysers.cliente) {
-          const quiet = Date.now() - lastClientSound > CLIENT_SILENCE_MS;
-          if (quiet !== alerts.has('cliente-mudo')) {
-            setAlert('cliente-mudo', quiet ? {
-              kind: 'warn', title: 'Não ouço o cliente há mais de 1 minuto',
-              text: 'Se ele está falando, pare e grave de novo. Se continuar, recarregue a aba da reunião antes de gravar.',
-            } : null);
+          const st = clienteMix?.estado?.() || { trilhas: 0, temAba: false };
+          const gravando = Date.now() - startTime;
+          // Gravando há um tempo e nenhuma trilha da chamada chegou: a
+          // extensão não está ouvindo a chamada. Sem esperar o minuto e meio.
+          const semChamada = !st.temAba && st.trilhas === 0 && gravando > SEM_CHAMADA_MS;
+          const quiet = semChamada || Date.now() - lastClientSound > CLIENT_SILENCE_MS;
+          const key = alerts.get('cliente-mudo')?.semChamada;
+          if (quiet !== alerts.has('cliente-mudo') || (quiet && key !== semChamada)) {
+            setAlert('cliente-mudo', !quiet ? null : semChamada ? {
+              kind: 'warn', semChamada: true, title: 'Ainda não recebi o áudio da chamada',
+              text: 'Se o cliente já entrou, clique abaixo e compartilhe esta aba com "Compartilhar áudio da guia". A gravação continua.',
+              action: OUVIR_PELA_ABA,
+            } : {
+              kind: 'warn', semChamada: false, title: 'Não ouço o cliente há mais de 1 minuto',
+              text: st.temAba
+                ? 'Confira se o cliente está com o microfone ligado.'
+                : 'Se ele está falando, clique abaixo e compartilhe esta aba com "Compartilhar áudio da guia". A gravação continua.',
+              ...(st.temAba ? {} : { action: OUVIR_PELA_ABA }),
+            });
           }
         }
       }, 100);
