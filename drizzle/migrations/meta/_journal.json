@@ -162,6 +162,13 @@
       "when": 1793190967983,
       "tag": "0022_robo_automatico_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793193285223,
+      "tag": "0023_versao_extensao",
+      "breakpoints": true
     }
   ]
 }
