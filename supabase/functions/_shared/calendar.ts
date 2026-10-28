@@ -366,7 +366,7 @@ export function meetingKeys(texts: (string | null | undefined)[]): string[] {
     if (!raw) continue;
     let t = String(raw);
     try { t = decodeURIComponent(t); } catch { /* texto com % solto */ }
-    for (const m of t.matchAll(/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})/gi)) keys.add(`meet:${m[1].toLowerCase()}`);
+    for (const m of t.matchAll(/meet\.google\.com\/(?:meet\/)?([a-z]{3}-[a-z]{4}-[a-z]{3})/gi)) keys.add(`meet:${m[1].toLowerCase()}`);
     for (const m of t.matchAll(/(19:meeting_[A-Za-z0-9_-]+@thread\.v2)/g)) keys.add(`teams:${m[1].toLowerCase()}`);
     for (const m of t.matchAll(/zoom\.us\/(?:j|wc\/join|wc)\/(\d{9,11})/gi)) keys.add(`zoom:${m[1]}`);
   }

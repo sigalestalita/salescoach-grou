@@ -62,10 +62,14 @@ export function roboDaChamada<T extends RoboDaChamada>(
   robos: T[],
   q: { eventId: string | null; chaves: string[]; chavesDe: (url: string) => string[] },
 ): T | null {
-  return robos.find((r) =>
-    (q.eventId && r.calendar_event_id === q.eventId) ||
-    (q.chaves.length > 0 && q.chavesDe(r.meeting_url).some((k) => q.chaves.includes(k)))
-  ) ?? null;
+  return robos.find((r) => {
+    const doRobo = q.chavesDe(r.meeting_url);
+    const mesmoLink = doRobo.some((k) => q.chaves.includes(k));
+    // Link conhecido dos dois lados e diferente: o robô foi para outra sala
+    // (a chamada mudou de link), mesmo sendo o mesmo evento da agenda.
+    if (q.chaves.length > 0 && doRobo.length > 0 && !mesmoLink) return false;
+    return (q.eventId && r.calendar_event_id === q.eventId) || mesmoLink;
+  }) ?? null;
 }
 
 export type Acao =
