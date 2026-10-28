@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Bot, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Video } from "lucide-react";
+import { AlertCircle, Bot, ChevronLeft, ChevronRight, ExternalLink, Info, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import {
   BOT_ATIVOS, BOT_LABEL, entraSozinho, MeetingBot, meetingBotApi, MODO_LABEL, ModoRobo, robotAceita,
 } from "@/lib/meetingBot";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import {
   addDays, agendaKind, AgendaKind, hourRange, layoutDay, Placed, sameDay, startOfDay, startOfWeek,
@@ -41,6 +42,29 @@ const KIND_LABEL: Record<AgendaKind, string> = {
   gravada: "Gravada",
   "nao-gravada": "Com cliente, não gravada",
   interna: "Interna",
+};
+
+/** Explicação curta atrás de um "i". Abre no clique, para funcionar também no celular. */
+function Dica({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="inline-flex shrink-0 rounded-full text-muted-foreground hover:text-foreground" aria-label={`Ajuda: ${titulo}`}>
+          <Info className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="w-80 space-y-2 text-xs leading-relaxed">
+        <p className="text-sm font-medium">{titulo}</p>
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const MODO_DICA: Record<ModoRobo, string> = {
+  desligado: "Você manda o robô reunião por reunião.",
+  clientes: "Reuniões com alguém de fora da empresa.",
+  todas: "Inclui as internas, como dailies e 1:1.",
 };
 
 const hora = (d: Date) => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -204,6 +228,12 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
               {KIND_LABEL[k]}
             </span>
           ))}
+          {robos.ativo && (
+            <span className="flex items-center gap-1.5">
+              <Bot className="h-3 w-3 text-primary" />
+              Com robô
+            </span>
+          )}
           {passadas.length > 0 && (
             <span className="ml-auto font-medium text-foreground">
               {gravadas} de {passadas.length} {passadas.length === 1 ? "reunião com cliente gravada" : "reuniões com cliente gravadas"} nesta semana
@@ -212,16 +242,32 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
         </div>
 
         {robos.ativo && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+          <div data-tour="robo-automatico" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
             <Bot className="h-4 w-4 shrink-0 text-primary" />
             <span className="font-medium">Robô automático</span>
+            <Dica titulo="Robô automático">
+              <p>
+                O robô de reunião entra na chamada do Meet, Teams ou Zoom como um participante e grava áudio e vídeo.
+                Quem grava são os servidores do Sales Coach: o seu computador não grava nada.
+              </p>
+              <p>Escolha em quais reuniões da sua agenda ele entra sozinho:</p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li><strong>Só quando eu mandar:</strong> você abre a reunião e clica em Enviar o robô.</li>
+                <li><strong>Reuniões com cliente:</strong> toda reunião com alguém de fora da empresa.</li>
+                <li><strong>Todas as reuniões com link:</strong> inclui as internas.</li>
+              </ul>
+              <p>Para pular uma reunião, abra a reunião e clique em Não gravar esta reunião. A escolha vale só para a sua agenda.</p>
+            </Dica>
             <Select value={robos.modo} onValueChange={(v) => trocarModo(v as ModoRobo)} disabled={salvandoModo}>
               <SelectTrigger className="h-8 w-[220px]" aria-label="Em quais reuniões o robô entra sozinho">
-                <SelectValue />
+                <SelectValue>{MODO_LABEL[robos.modo]}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {(["desligado", "clientes", "todas"] as const).map((m) => (
-                  <SelectItem key={m} value={m}>{MODO_LABEL[m]}</SelectItem>
+                  <SelectItem key={m} value={m} className="py-2">
+                    <span className="block">{MODO_LABEL[m]}</span>
+                    <span className="block text-xs text-muted-foreground">{MODO_DICA[m]}</span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -534,6 +580,15 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
 
           {roboAtivo && !m && ev.joinUrl && aindaVai && !ev.declined && robotAceita(ev.joinUrl) && (
             <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Gravação desta reunião
+                <Dica titulo="Robô ou extensão?">
+                  <p><strong>Robô:</strong> entra na chamada como participante e grava áudio e vídeo sem pesar no seu computador. O cliente vê o robô entre os participantes.</p>
+                  <p><strong>Extensão do Chrome:</strong> grava pelo seu navegador, sem participante a mais, e mostra as dicas ao vivo.</p>
+                  <p>Use um dos dois. Com o robô na reunião, não clique em Gravar na extensão, senão a reunião é gravada duas vezes.</p>
+                  <p>Se a reunião tiver sala de espera, aceite a entrada do robô: ele espera até 15 minutos.</p>
+                </Dica>
+              </div>
               {robo && (BOT_ATIVOS.includes(robo.status) || robo.status === "erro") ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <Bot className="h-4 w-4 text-primary" />
