@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, Bot, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Video } from "lucide-react";
+import { AlertCircle, Bot, ChevronLeft, ChevronRight, ExternalLink, Info, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { AgendaItem, CALENDAR_NAME, calendarApi, CalendarProvider } from "@/lib/calendar";
-import { BOT_ATIVOS, BOT_LABEL, MeetingBot, meetingBotApi, robotAceita } from "@/lib/meetingBot";
+import {
+  BOT_ATIVOS, BOT_LABEL, Escolha, ESCOLHA_LABEL, escolhaAtual, entraSozinho, MeetingBot, meetingBotApi, MODO_LABEL, ModoRobo,
+  robotAceita,
+} from "@/lib/meetingBot";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import {
   addDays, agendaKind, AgendaKind, hourRange, layoutDay, Placed, sameDay, startOfDay, startOfWeek,
@@ -40,6 +46,29 @@ const KIND_LABEL: Record<AgendaKind, string> = {
   interna: "Interna",
 };
 
+/** Explicação curta atrás de um "i". Abre no clique, para funcionar também no celular. */
+function Dica({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="inline-flex shrink-0 rounded-full text-muted-foreground hover:text-foreground" aria-label={`Ajuda: ${titulo}`}>
+          <Info className="h-4 w-4" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="w-80 space-y-2 text-xs leading-relaxed">
+        <p className="text-sm font-medium">{titulo}</p>
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+const MODO_DICA: Record<ModoRobo, string> = {
+  desligado: "Você manda o robô reunião por reunião.",
+  clientes: "Reuniões com alguém de fora da empresa.",
+  todas: "Inclui as internas, como dailies e 1:1.",
+};
+
 const hora = (d: Date) => d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 const maiuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 const diaLongo = (d: Date) => maiuscula(d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }));
@@ -69,7 +98,8 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
   const [open, setOpen] = useState<AgendaItem | null>(null);
   const [now, setNow] = useState(() => new Date());
   // Robô de reunião (protótipo): só aparece quando a chave da Recall está configurada.
-  const [robos, setRobos] = useState<{ ativo: boolean; lista: MeetingBot[] }>({ ativo: false, lista: [] });
+  const [robos, setRobos] = useState<{ ativo: boolean; modo: ModoRobo; lista: MeetingBot[] }>({ ativo: false, modo: "desligado", lista: [] });
+  const [salvandoModo, setSalvandoModo] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -87,7 +117,7 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
         meetingBotApi.listar(inicio, addDays(inicio, 7)).catch(() => null),
       ]);
       setCache((c) => ({ ...c, [inicio.toISOString()]: r.events }));
-      if (b) setRobos((atual) => ({ ativo: b.ativo, lista: [...b.robos, ...atual.lista.filter((x) => !b.robos.some((y) => y.id === x.id))] }));
+      if (b) setRobos((atual) => ({ ativo: b.ativo, modo: b.modo ?? "desligado", lista: [...b.robos, ...atual.lista.filter((x) => !b.robos.some((y) => y.id === x.id))] }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -102,6 +132,35 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
   const gridDays = useMemo(() => (mode === "semana" ? weekDays : [day]), [mode, weekDays, day]);
   const placed = useMemo(() => gridDays.map((d) => layoutDay(events, d)), [events, gridDays]);
   const [h0, h1] = hourRange(placed.flat());
+
+  // Robô de cada reunião: o último pedido para o evento (a lista vem do mais novo).
+  const roboDe = useCallback((ev: AgendaItem) => robos.lista.find((r) => r.calendar_event_id === ev.id) ?? null, [robos.lista]);
+  const comRobo = useCallback((ev: AgendaItem) => {
+    if (!robos.ativo) return false;
+    const r = roboDe(ev);
+    return r ? BOT_ATIVOS.includes(r.status) : entraSozinho(ev, robos.modo, now);
+  }, [robos.ativo, robos.modo, roboDe, now]);
+  const recarregarRobos = async () => {
+    const b = await meetingBotApi.listar(week, addDays(week, 7)).catch(() => null);
+    if (b) setRobos({ ativo: b.ativo, modo: b.modo ?? "desligado", lista: b.robos });
+  };
+  const trocarModo = async (modo: ModoRobo) => {
+    setSalvandoModo(true);
+    try {
+      await meetingBotApi.modo(modo);
+      setRobos((r) => ({ ...r, modo }));
+      toast({
+        title: modo === "desligado" ? "Robô automático desligado" : "Robô automático ligado",
+        description: modo === "desligado"
+          ? "O robô só entra nas reuniões para onde você mandar."
+          : `Ele entra sozinho em: ${MODO_LABEL[modo].toLowerCase()}. Para pular uma reunião, abra a reunião e clique em Não gravar esta reunião.`,
+      });
+    } catch (e) {
+      toast({ title: "Não foi possível mudar o robô automático", description: (e as Error).message, variant: "destructive" });
+    }
+    await recarregarRobos();
+    setSalvandoModo(false);
+  };
 
   // Reuniões com cliente que já passaram: quantas foram gravadas.
   const passadas = events.filter((e) => e.externo && !e.declined && new Date(e.end) < now);
@@ -171,12 +230,56 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
               {KIND_LABEL[k]}
             </span>
           ))}
+          {robos.ativo && (
+            <span className="flex items-center gap-1.5">
+              <Bot className="h-3 w-3 text-primary" />
+              Com robô
+            </span>
+          )}
           {passadas.length > 0 && (
             <span className="ml-auto font-medium text-foreground">
               {gravadas} de {passadas.length} {passadas.length === 1 ? "reunião com cliente gravada" : "reuniões com cliente gravadas"} nesta semana
             </span>
           )}
         </div>
+
+        {robos.ativo && (
+          <div data-tour="robo-automatico" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+            <Bot className="h-4 w-4 shrink-0 text-primary" />
+            <span className="font-medium">Robô automático</span>
+            <Dica titulo="Robô automático">
+              <p>
+                O robô de reunião entra na chamada do Meet, Teams ou Zoom como um participante e grava áudio e vídeo.
+                Quem grava são os servidores do Sales Coach: o seu computador não grava nada.
+              </p>
+              <p>Escolha em quais reuniões da sua agenda ele entra sozinho:</p>
+              <ul className="list-disc space-y-1 pl-4">
+                <li><strong>Só quando eu mandar:</strong> você abre a reunião e clica em Enviar o robô.</li>
+                <li><strong>Reuniões com cliente:</strong> toda reunião com alguém de fora da empresa.</li>
+                <li><strong>Todas as reuniões com link:</strong> inclui as internas.</li>
+              </ul>
+              <p>Para pular uma reunião, abra a reunião e clique em Não gravar esta reunião. A escolha vale só para a sua agenda.</p>
+            </Dica>
+            <Select value={robos.modo} onValueChange={(v) => trocarModo(v as ModoRobo)} disabled={salvandoModo}>
+              <SelectTrigger className="h-8 w-[220px]" aria-label="Em quais reuniões o robô entra sozinho">
+                <SelectValue>{MODO_LABEL[robos.modo]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(["desligado", "clientes", "todas"] as const).map((m) => (
+                  <SelectItem key={m} value={m} className="py-2">
+                    <span className="block">{MODO_LABEL[m]}</span>
+                    <span className="block text-xs text-muted-foreground">{MODO_DICA[m]}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">
+              {robos.modo === "desligado"
+                ? "O robô entra só nas reuniões para onde você mandar."
+                : "Ele entra sozinho nas reuniões marcadas com o robô. Para pular uma, abra a reunião."}
+            </span>
+          </div>
+        )}
 
         {error && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
@@ -237,6 +340,7 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
                   placed={placed[i]}
                   h0={h0}
                   now={now}
+                  comRobo={comRobo}
                   onOpen={setOpen}
                 />
               ))}
@@ -268,7 +372,7 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
             })}
           </div>
           <p className="text-sm font-medium">{diaLongo(day)}</p>
-          <DayList events={events} day={day} now={now} loading={loading && !cached} onOpen={setOpen} />
+          <DayList events={events} day={day} now={now} loading={loading && !cached} comRobo={comRobo} onOpen={setOpen} />
         </div>
 
         <EventDialog
@@ -280,23 +384,23 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
           onClose={() => setOpen(null)}
           onAnalysis={(id) => navigate(`/agendas/${id}`)}
           roboAtivo={robos.ativo}
-          robo={open ? robos.lista.find((r) => r.calendar_event_id === open.id) ?? null : null}
-          onEnviarRobo={async (ev) => {
+          modo={robos.modo}
+          robo={open ? roboDe(open) : null}
+          onEscolher={async (ev, escolha) => {
             try {
-              await meetingBotApi.enviar({ id: ev.id, joinUrl: ev.joinUrl!, title: ev.title, start: ev.start, lead: ev.lead, attendees: ev.attendees });
-              toast({ title: "Robô agendado", description: "Ele entra na chamada na hora da reunião. Aceite a entrada dele se ficar na sala de espera." });
+              await meetingBotApi.escolher({ id: ev.id, joinUrl: ev.joinUrl!, title: ev.title, start: ev.start, lead: ev.lead, attendees: ev.attendees }, escolha);
+              toast({
+                title: escolha === "robo" ? "O robô grava esta reunião" : escolha === "extensao" ? "A extensão grava esta reunião" : "Esta reunião não será gravada",
+                description: escolha === "robo"
+                  ? "Ele entra na chamada na hora da reunião. Aceite a entrada dele se ficar na sala de espera. Na chamada, a extensão oferece só as dicas ao vivo."
+                  : escolha === "extensao"
+                    ? "Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."
+                    : "A extensão não vai oferecer a gravação nesta reunião.",
+              });
             } catch (e) {
-              toast({ title: "Não foi possível agendar o robô", description: (e as Error).message, variant: "destructive" });
+              toast({ title: "Não foi possível mudar a gravação", description: (e as Error).message, variant: "destructive" });
             }
-            const b = await meetingBotApi.listar(week, addDays(week, 7)).catch(() => null);
-            if (b) setRobos({ ativo: b.ativo, lista: b.robos });
-          }}
-          onCancelarRobo={async (id) => {
-            try { await meetingBotApi.cancelar(id); } catch (e) {
-              toast({ title: "Não foi possível cancelar o robô", description: (e as Error).message, variant: "destructive" });
-            }
-            const b = await meetingBotApi.listar(week, addDays(week, 7)).catch(() => null);
-            if (b) setRobos({ ativo: b.ativo, lista: b.robos });
+            await recarregarRobos();
           }}
         />
       </CardContent>
@@ -304,8 +408,8 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
   );
 }
 
-function DayColumn({ day, placed, h0, now, onOpen }: {
-  day: Date; placed: Placed[]; h0: number; now: Date; onOpen: (ev: AgendaItem) => void;
+function DayColumn({ day, placed, h0, now, comRobo, onOpen }: {
+  day: Date; placed: Placed[]; h0: number; now: Date; comRobo: (ev: AgendaItem) => boolean; onOpen: (ev: AgendaItem) => void;
 }) {
   const isToday = sameDay(day, now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -341,6 +445,7 @@ function DayColumn({ day, placed, h0, now, onOpen }: {
           >
             {curto ? (
               <span className="block truncate">
+                {comRobo(p.ev) && <Bot className="mr-0.5 inline h-3 w-3 align-[-2px] text-primary" aria-label="Com robô" />}
                 <span className="font-medium">{hora(new Date(p.ev.start))}</span> {p.ev.title}
               </span>
             ) : (
@@ -353,7 +458,8 @@ function DayColumn({ day, placed, h0, now, onOpen }: {
                     </span>
                   )}
                 </span>
-                <span className="block truncate opacity-80">
+                <span className="flex items-center gap-1 truncate opacity-80">
+                  {comRobo(p.ev) && <Bot className="h-3 w-3 shrink-0 text-primary" aria-label="Com robô" />}
                   {hora(new Date(p.ev.start))} – {hora(new Date(p.ev.end))}
                 </span>
                 {p.ev.lead && altura > 60 && (
@@ -368,8 +474,8 @@ function DayColumn({ day, placed, h0, now, onOpen }: {
   );
 }
 
-function DayList({ events, day, now, loading, onOpen }: {
-  events: AgendaItem[]; day: Date; now: Date; loading: boolean; onOpen: (ev: AgendaItem) => void;
+function DayList({ events, day, now, loading, comRobo, onOpen }: {
+  events: AgendaItem[]; day: Date; now: Date; loading: boolean; comRobo: (ev: AgendaItem) => boolean; onOpen: (ev: AgendaItem) => void;
 }) {
   const doDia = layoutDay(events, day).sort((a, b) => a.start - b.start);
   if (loading) return <p className="py-6 text-center text-sm text-muted-foreground">Carregando a agenda…</p>;
@@ -395,7 +501,8 @@ function DayList({ events, day, now, loading, onOpen }: {
               </span>
               <span className="min-w-0 flex-1">
                 <span className={cn("block truncate text-sm font-medium text-foreground", ev.declined && "line-through")}>{ev.title}</span>
-                <span className="block truncate text-xs text-muted-foreground">
+                <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                  {comRobo(ev) && <Bot className="h-3 w-3 shrink-0 text-primary" aria-label="Com robô" />}
                   {ev.lead ? (ev.lead.name ?? ev.lead.email) : KIND_LABEL[kind]}
                 </span>
               </span>
@@ -412,7 +519,7 @@ function DayList({ events, day, now, loading, onOpen }: {
   );
 }
 
-function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onAnalysis, roboAtivo, robo, onEnviarRobo, onCancelarRobo }: {
+function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onAnalysis, roboAtivo, modo, robo, onEscolher }: {
   ev: AgendaItem | null;
   now: Date;
   provider: CalendarProvider;
@@ -421,9 +528,9 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
   onClose: () => void;
   onAnalysis: (id: string) => void;
   roboAtivo: boolean;
+  modo: ModoRobo;
   robo: MeetingBot | null;
-  onEnviarRobo: (ev: AgendaItem) => Promise<void>;
-  onCancelarRobo: (id: string) => Promise<void>;
+  onEscolher: (ev: AgendaItem, escolha: Escolha) => Promise<void>;
 }) {
   const [ocupado, setOcupado] = useState(false);
   if (!ev) return null;
@@ -432,6 +539,8 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
   const kind = agendaKind(ev, now);
   const aindaVai = fim > now;
   const m = ev.meeting;
+  const escolha = roboAtivo ? escolhaAtual(robo, ev, modo, now) : "extensao";
+  const roboVem = escolha === "robo";
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -459,37 +568,59 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
                   ? "Reunião interna: ninguém de fora da empresa foi convidado."
                   : kind === "nao-gravada"
                     ? "Esta reunião com cliente passou sem gravação."
-                    : "Reunião com cliente. Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."}
+                    : roboVem
+                      ? "Reunião com cliente. O robô grava esta reunião."
+                      : escolha === "nao_gravar"
+                        ? "Reunião com cliente. Você escolheu não gravar."
+                        : "Reunião com cliente. Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."}
             </p>
           )}
 
           {roboAtivo && !m && ev.joinUrl && aindaVai && !ev.declined && robotAceita(ev.joinUrl) && (
-            <div className="space-y-2 rounded-lg border p-3">
-              {robo && (BOT_ATIVOS.includes(robo.status) || robo.status === "erro") ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Bot className="h-4 w-4 text-primary" />
-                  <span className="min-w-0 flex-1">
-                    {BOT_LABEL[robo.status] ?? robo.status}
-                    {robo.status_detail && <span className="block text-xs text-muted-foreground">{robo.status_detail}</span>}
-                  </span>
-                  {BOT_ATIVOS.includes(robo.status) && robo.status !== "processando" && (
-                    <Button size="sm" variant="outline" disabled={ocupado}
-                      onClick={async () => { setOcupado(true); await onCancelarRobo(robo.id); setOcupado(false); }}>
-                      Cancelar robô
-                    </Button>
-                  )}
-                </div>
-              ) : null}
-              {!robo || !BOT_ATIVOS.includes(robo.status) ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" disabled={ocupado}
-                    onClick={async () => { setOcupado(true); await onEnviarRobo(ev); setOcupado(false); }}>
-                    <Bot className="mr-2 h-4 w-4" />
-                    {robo?.status === "erro" ? "Enviar o robô de novo" : "Enviar o robô"}
-                  </Button>
-                  <span className="text-xs text-muted-foreground">Ele entra na chamada e grava. Seu computador não grava nada.</span>
-                </div>
-              ) : null}
+            <div className="space-y-3 rounded-lg border p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Como gravar esta reunião
+                <Dica titulo="Robô, extensão ou não gravar?">
+                  <p><strong>Robô:</strong> entra na chamada como participante e grava áudio e vídeo sem pesar no seu computador. O cliente vê o robô entre os participantes. Na chamada, a extensão oferece só as dicas ao vivo, sem gravar de novo.</p>
+                  <p><strong>Extensão:</strong> grava o áudio pelo seu Chrome, sem participante a mais, com as dicas ao vivo. Ao entrar na chamada, clique em Gravar no cartão do Sales Coach.</p>
+                  <p><strong>Não gravar:</strong> nada é gravado e a extensão não oferece a gravação.</p>
+                  <p>Vem marcado pelo seu Robô automático. O que você escolher aqui vale só para esta reunião.</p>
+                </Dica>
+              </div>
+              <ToggleGroup
+                type="single" variant="outline" size="sm" className="grid grid-cols-3 gap-1"
+                value={escolha}
+                disabled={ocupado || robo?.status === "processando"}
+                onValueChange={async (v) => {
+                  if (!v || v === escolha) return;
+                  setOcupado(true); await onEscolher(ev, v as Escolha); setOcupado(false);
+                }}
+                aria-label="Como gravar esta reunião"
+              >
+                {(["robo", "extensao", "nao_gravar"] as const).map((e) => (
+                  <ToggleGroupItem key={e} value={e} className="data-[state=on]:border-primary data-[state=on]:bg-primary/10 data-[state=on]:text-primary">
+                    {e === "robo" && <Bot className="mr-1.5 h-4 w-4" />}
+                    {ESCOLHA_LABEL[e]}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {robo?.status === "erro" && (
+                <p className="text-xs text-destructive">
+                  {BOT_LABEL.erro}{robo.status_detail ? `: ${robo.status_detail}` : "."} Escolha Robô para mandar de novo.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {escolha === "robo"
+                  ? <>
+                      {robo && BOT_ATIVOS.includes(robo.status)
+                        ? `${BOT_LABEL[robo.status] ?? robo.status}${robo.status_detail ? ` · ${robo.status_detail}` : ""}.`
+                        : "O robô automático entra nesta reunião. Ele é agendado nas 24 horas antes."}
+                      {" "}Na chamada, a extensão oferece só as dicas ao vivo. Seu computador não grava nada.
+                    </>
+                  : escolha === "extensao"
+                    ? "Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."
+                    : "Nada é gravado e a extensão não oferece a gravação nesta reunião."}
+              </p>
             </div>
           )}
 

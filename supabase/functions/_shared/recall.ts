@@ -52,7 +52,8 @@ export function criarRobo(r: NovoRobo): Promise<{ id: string }> {
       bot_name: r.nome.slice(0, 100),
       ...(agendado ? { join_at: r.inicio!.toISOString() } : {}),
       metadata: r.metadata,
-      recording_config: { audio_mixed_mp3: {} },
+      // Vídeo da chamada (quem fala e a tela compartilhada) e o áudio à parte, mais leve, de reserva.
+      recording_config: { video_mixed_mp4: {}, audio_mixed_mp3: {} },
       automatic_leave: { waiting_room_timeout: 900, noone_joined_timeout: 900 },
     }),
   });
@@ -64,13 +65,13 @@ export async function cancelarRobo(id: string, jaEntrou: boolean) {
   else await recall(`/bot/${id}/`, { method: "DELETE" });
 }
 
-/** Endereço temporário (alguns dias) do áudio da reunião, depois que o robô termina. */
-export async function audioDoRobo(id: string): Promise<string | null> {
+/** Endereços temporários da gravação (vídeo e áudio), depois que o robô termina. */
+export async function gravacaoDoRobo(id: string): Promise<{ video: string | null; audio: string | null }> {
   const bot = await recall(`/bot/${id}/`);
   // deno-lint-ignore no-explicit-any
   const rec = (bot?.recordings ?? []).find((r: any) => r?.media_shortcuts) ?? bot?.recordings?.[0];
   const m = rec?.media_shortcuts ?? {};
-  return m.audio_mixed?.data?.download_url ?? m.video_mixed?.data?.download_url ?? null;
+  return { video: m.video_mixed?.data?.download_url ?? null, audio: m.audio_mixed?.data?.download_url ?? null };
 }
 
 const b64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));

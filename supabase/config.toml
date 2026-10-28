@@ -66,3 +66,8 @@ verify_jwt = false
 
 [functions.meeting-bot-webhook]
 verify_jwt = false
+
+# Robô de reunião. O agendador (pg_cron) chama sem token de usuário, com o
+# segredo ROBO_CRON_SECRET; as outras ações validam o usuário em getCaller.
+[functions.meeting-bot]
+verify_jwt = false

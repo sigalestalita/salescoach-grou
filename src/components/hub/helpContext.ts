@@ -66,6 +66,15 @@ const SINONIMOS: Record<string, string[]> = {
   calendario: ["agenda", "google"],
   convidar: ["equipe", "usuarios"],
   dashboard: ["visao", "geral"],
+  bot: ["robo"],
+  robos: ["robo"],
+  recall: ["robo"],
+  tldv: ["robo"],
+  gravador: ["robo"],
+  participante: ["robo"],
+  sozinho: ["robo", "automatico"],
+  automaticamente: ["robo", "automatico"],
+  pular: ["robo", "gravar"],
   painel: ["visao", "geral"],
 };
 

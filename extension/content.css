@@ -59,6 +59,10 @@
   width: 7px; height: 7px; border-radius: 50%; background: var(--sc-danger); animation: sc-pulse 1.6s ease-in-out infinite;
 }
 @keyframes sc-pulse { 50% { opacity: .35; } }
+/* Só o coach ao vivo (o robô grava): azul, não o vermelho de gravação. */
+#salescoach-overlay .sc-rec.sc-coach { background: var(--sc-accent-soft); color: var(--sc-accent); }
+#salescoach-overlay .sc-rec.sc-coach i { background: var(--sc-accent); }
+#salescoach-overlay.sc-modo-coach .sc-name { display: none; }
 #salescoach-overlay .sc-ibtn {
   width: 28px; height: 28px; display: grid; place-items: center; flex: none; border-radius: 8px; border: 0;
   background: transparent; color: var(--sc-soft); cursor: pointer; padding: 0;

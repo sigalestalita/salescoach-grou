@@ -39,4 +39,17 @@ describe("trecho da ajuda para o assistente", () => {
   it("fica dentro do limite de tamanho", () => {
     expect(helpContextFor("configurar crm extensão agenda equipe treino playbook metodologia", "admin").length).toBeLessThanOrEqual(9000);
   });
+
+  it("pergunta sobre o robô leva o artigo do robô de reunião", () => {
+    const g = helpContextFor("como faço o robô entrar sozinho só nas reuniões com cliente?", "vendedor");
+    expect(g).toContain("### Robô de reunião: gravar sem a extensão");
+    expect(g).toContain("Robô automático");
+    const h = helpContextFor("uso o bot ou a extensão pra gravar?", "vendedor");
+    expect(h).toContain("Robô ou extensão?");
+  });
+
+  it("pergunta sobre dicas ao vivo com o robô leva a resposta certa", () => {
+    const g = helpContextFor("o robô está gravando, ainda tenho as dicas ao vivo?", "vendedor");
+    expect(g).toContain("Ligar dicas ao vivo");
+  });
 });

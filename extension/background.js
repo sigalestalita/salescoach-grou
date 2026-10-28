@@ -10,8 +10,8 @@ function setBadge(text, color = '#F06B5E') {
 }
 
 // Restore badge on startup
-chrome.storage.local.get(['recordingState'], (data) => {
-  if (data.recordingState === 'recording') setBadge('REC');
+chrome.storage.local.get(['recordingState', 'recordingMode'], (data) => {
+  if (data.recordingState === 'recording') setBadge(data.recordingMode === 'coach' ? 'LIVE' : 'REC', data.recordingMode === 'coach' ? '#15498D' : undefined);
   else if (data.recordingState === 'uploading' || data.recordingState === 'stopping') setBadge('...', '#15498D');
 });
 
@@ -31,12 +31,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Evento da agenda para a reunião aberta (cartão e popup).
   if (msg.action === 'calendarLookup') {
     calendarLookup(msg.meetingUrl, msg.title)
-      .then((event) => sendResponse({ event }))
-      .catch(() => sendResponse({ event: null }));
+      .then((r) => sendResponse(r))
+      .catch(() => sendResponse({ event: null, robo: null, escolha: null }));
     return true;
   }
   if (msg.action === 'recordingStarted') {
     setBadge('REC');
+  }
+  // Só o coach ao vivo: quem grava é o robô de reunião.
+  if (msg.action === 'coachStarted') {
+    setBadge('LIVE', '#15498D');
+  }
+  if (msg.action === 'coachEnded') {
+    setBadge('');
   }
   if (msg.action === 'uploadStarted') {
     setBadge('...', '#15498D');
@@ -149,19 +156,24 @@ async function refreshSession() {
   return r.access_token;
 }
 
+/**
+ * Evento da agenda da reunião aberta, o robô de reunião dela (quando o
+ * vendedor escolheu o robô) e a escolha "não gravar".
+ */
 async function calendarLookup(meetingUrl, title) {
+  const vazio = { event: null, robo: null, escolha: null };
   const { accessToken } = await chrome.storage.local.get(['accessToken']);
-  if (!accessToken) return null;
+  if (!accessToken) return vazio;
   const body = { action: 'lookup', meetingUrl, title };
   let res = await callFunction('calendar', body, accessToken);
   if (res.status === 401) {
     const fresh = await refreshSession();
-    if (!fresh) return null;
+    if (!fresh) return vazio;
     res = await callFunction('calendar', body, fresh);
   }
-  if (!res.ok) return null;
+  if (!res.ok) return vazio;
   const data = await res.json();
-  return data.event || null;
+  return { event: data.event || null, robo: data.robo || null, escolha: data.escolha || null };
 }
 
 // ── Reunião abandonada ──
