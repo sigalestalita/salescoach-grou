@@ -42,6 +42,9 @@
   let lastToken = null;
   // Gravação principal subindo: fechar a aba agora perderia o vídeo.
   let uploading = false;
+  // Microfone na mistura da gravação (para trocar sem parar a gravação).
+  let mixDest = null;
+  let micSource = null;
   // Só o coach ao vivo: o robô de reunião grava esta chamada, a extensão só ouve.
   let soCoach = false;
   let coachAtivo = false;
@@ -474,9 +477,7 @@
     }
 
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
+      micStream = await abrirMicrofone(microfoneDaChamada());
     } catch (err) {
       if (!hasScreen) {
         showStatus('error', '❌ Permissões negadas.');
@@ -491,8 +492,11 @@
     // Criado depois do seletor de tela, o contexto pode nascer suspenso e
     // gravar silêncio: retoma já.
     audioContext.resume().catch(() => {});
-    const mixedDest = audioContext.createMediaStreamDestination();
-    if (micStream) audioContext.createMediaStreamSource(micStream).connect(mixedDest);
+    const mixedDest = mixDest = audioContext.createMediaStreamDestination();
+    if (micStream) {
+      micSource = audioContext.createMediaStreamSource(micStream);
+      micSource.connect(mixedDest);
+    }
     clienteMix = montarCliente(audioContext, hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null);
     if (clienteMix) clienteMix.saida.connect(mixedDest);
     const clienteStream = clienteMix ? clienteMix.stream : null;
@@ -802,6 +806,73 @@
     }
   });
 
+  // ── Microfone ──
+  //
+  // O mesmo microfone que a chamada abriu (remote-audio.js marca o deviceId no
+  // <html>). O padrão do Chrome pode ser outro aparelho, mudo: a voz do
+  // vendedor sumia da gravação e das dicas. Sem a marca (extensão instalada com
+  // a reunião aberta), fica o padrão, como antes.
+  const AUDIO_MIC = { echoCancellation: true, noiseSuppression: true };
+  function microfoneDaChamada() {
+    try { return document.documentElement.dataset.scMicrofone || null; } catch { return null; }
+  }
+  function idDoMicrofone(stream) {
+    try { return stream?.getAudioTracks()[0]?.getSettings?.().deviceId || null; } catch { return null; }
+  }
+  async function abrirMicrofone(deviceId) {
+    if (deviceId && deviceId !== 'default') {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO_MIC, deviceId: { exact: deviceId } } });
+        console.info('Sales Coach: microfone da chamada', idDoMicrofone(s));
+        return s;
+      } catch (e) {
+        console.warn('Sales Coach: microfone da chamada indisponível, usando o padrão', e);
+      }
+    }
+    const s = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_MIC });
+    console.info('Sales Coach: microfone padrão', idDoMicrofone(s));
+    return s;
+  }
+
+  /** Troca o microfone sem parar a gravação nem as dicas ao vivo. */
+  let trocandoMic = false;
+  async function trocarMicrofone(deviceId) {
+    if (trocandoMic || !audioContext || !mixDest) return false;
+    trocandoMic = true;
+    try {
+      const novo = await abrirMicrofone(deviceId);
+      if (!audioContext || !mixDest) { novo.getTracks().forEach((t) => t.stop()); return false; }
+      const antigo = micStream;
+      micStream = novo;
+      try { micSource?.disconnect(); } catch {}
+      micSource = audioContext.createMediaStreamSource(novo);
+      micSource.connect(mixDest);
+      const ch = liveChannels.vendedor;
+      if (ch?.ctx && ch.ctx.state !== 'closed') {
+        try { ch.source?.disconnect(); } catch {}
+        ch.stream = novo;
+        ch.source = ch.ctx.createMediaStreamSource(novo);
+        if (ch.processor) ch.source.connect(ch.processor);
+      }
+      startMeters(micStream, clienteMix ? clienteMix.stream : null);
+      setAlert('mic-mudo', null);
+      antigo?.getTracks().forEach((t) => t.stop());
+      return true;
+    } catch (e) {
+      console.warn('Sales Coach: não foi possível trocar o microfone', e);
+      return false;
+    } finally {
+      trocandoMic = false;
+    }
+  }
+  // O vendedor trocou de microfone nas configurações do Meet: a extensão acompanha.
+  const vigiaMic = new MutationObserver(() => {
+    const id = microfoneDaChamada();
+    const gravando = coachAtivo || (mediaRecorder && mediaRecorder.state === 'recording');
+    if (id && gravando && id !== idDoMicrofone(micStream)) trocarMicrofone(id);
+  });
+  try { vigiaMic.observe(document.documentElement, { attributes: true, attributeFilter: ['data-sc-microfone'] }); } catch {}
+
   function cleanup() {
     stopTimer();
     stopMeters();
@@ -809,6 +880,8 @@
     if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
     if (clienteMix) { clienteMix.parar(); clienteMix = null; }
     if (audioContext) { audioContext.close().catch(() => {}); audioContext = null; }
+    mixDest = null;
+    micSource = null;
     recordedChunks = [];
   }
 
@@ -1356,6 +1429,8 @@
   // mudo por muito tempo, avisa: costuma ser a aba compartilhada sem áudio.
   const CLIENT_SILENCE_MS = 90000;
   const SEM_CHAMADA_MS = 45000;
+  // Microfone que nunca captou som desde o início: provavelmente não é o da chamada.
+  const MIC_MUDO_MS = 30000;
   const OUVIR_PELA_ABA = { label: 'Ouvir o cliente pela aba', onClick: () => ouvirPelaAba() };
 
   /**
@@ -1399,6 +1474,8 @@
         analysers[who] = { a, buf: new Float32Array(a.fftSize) };
       }
       let lastClientSound = Date.now();
+      const micDesde = Date.now();
+      let micJaOuviu = false;
       meterTimer = setInterval(() => {
         for (const who of ['vendedor', 'cliente']) {
           const m = analysers[who];
@@ -1410,8 +1487,19 @@
             const rms = Math.sqrt(sum / m.buf.length);
             level = Math.min(1, Math.sqrt(rms) * 2);
             if (who === 'cliente' && rms > 0.01) lastClientSound = Date.now();
+            if (who === 'vendedor' && rms > 0.01 && !micJaOuviu) {
+              micJaOuviu = true;
+              if (alerts.has('mic-mudo')) setAlert('mic-mudo', null);
+            }
           }
           meterEls[who].style.transform = `scaleX(${level.toFixed(2)})`;
+        }
+        if (analysers.vendedor && !micJaOuviu && Date.now() - micDesde > MIC_MUDO_MS && !alerts.has('mic-mudo')) {
+          setAlert('mic-mudo', {
+            kind: 'warn', title: 'Não estou ouvindo o seu microfone',
+            text: 'Talvez a extensão esteja num microfone diferente do Meet. Clique abaixo para usar o mesmo microfone da chamada; a gravação continua.',
+            action: { label: 'Usar o microfone do Meet', onClick: () => trocarMicrofone(microfoneDaChamada()) },
+          });
         }
         if (analysers.cliente) {
           const st = clienteMix?.estado?.() || { trilhas: 0, temAba: false };
@@ -1629,6 +1717,7 @@
   }
   function encerrarInstancia() {
     try { chrome.runtime.onMessage.removeListener(onMessage); } catch {}
+    try { vigiaMic.disconnect(); } catch {}
     if (window.__salescoachStartRecording === startRecording) window.__salescoachStartRecording = undefined;
     if (window.__salescoachStopRecording === stopRecording) window.__salescoachStopRecording = undefined;
   }
