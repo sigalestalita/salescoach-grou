@@ -956,11 +956,42 @@ export type Database = {
           },
         ]
       }
+      meeting_bot_prefs: {
+        Row: {
+          modo: string
+          org_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          modo?: string
+          org_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          modo?: string
+          org_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_bot_prefs_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_bots: {
         Row: {
           attendees: Json | null
+          automatico: boolean
           calendar_event_id: string | null
           created_at: string
+          escolha: string | null
           id: string
           lead_company: string | null
           lead_email: string | null
@@ -980,8 +1011,10 @@ export type Database = {
         }
         Insert: {
           attendees?: Json | null
+          automatico?: boolean
           calendar_event_id?: string | null
           created_at?: string
+          escolha?: string | null
           id?: string
           lead_company?: string | null
           lead_email?: string | null
@@ -1001,8 +1034,10 @@ export type Database = {
         }
         Update: {
           attendees?: Json | null
+          automatico?: boolean
           calendar_event_id?: string | null
           created_at?: string
+          escolha?: string | null
           id?: string
           lead_company?: string | null
           lead_email?: string | null
@@ -1110,6 +1145,7 @@ export type Database = {
           lead_company: string | null
           lead_email: string | null
           lead_name: string | null
+          meeting_bot_id: string | null
           meeting_date: string | null
           meeting_type: string | null
           meeting_url: string | null
@@ -1146,6 +1182,7 @@ export type Database = {
           lead_company?: string | null
           lead_email?: string | null
           lead_name?: string | null
+          meeting_bot_id?: string | null
           meeting_date?: string | null
           meeting_type?: string | null
           meeting_url?: string | null
@@ -1182,6 +1219,7 @@ export type Database = {
           lead_company?: string | null
           lead_email?: string | null
           lead_name?: string | null
+          meeting_bot_id?: string | null
           meeting_date?: string | null
           meeting_type?: string | null
           meeting_url?: string | null
@@ -1201,6 +1239,13 @@ export type Database = {
           youtube_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "meetings_meeting_bot_id_fkey"
+            columns: ["meeting_bot_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_bots"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "meetings_org_id_fkey"
             columns: ["org_id"]
