@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { supportSession } from "@/lib/support";
 
 /** Dica do dia da tela Início (função daily-tip): sai uma vez por dia, escrita pela IA. */
 export interface DailyTip {
@@ -16,6 +17,11 @@ const hoje = () => {
 };
 
 export async function fetchDailyTip(): Promise<DailyTip> {
+  // Gerar a dica escreve e consome IA; não iniciar essa operação em "Ver conta".
+  const support = await supportSession();
+  if (support && !support.canEdit) {
+    throw new Error("Indisponível no modo suporte (só leitura).");
+  }
   const { data, error } = await supabase.functions.invoke("daily-tip", { body: { day: hoje() } });
   if (error) {
     const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
