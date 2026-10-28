@@ -11,4 +11,4 @@
 # Versão da extensão
 - [x] Aplicar e verificar 20261102090000_versao_extensao.sql com permissões de acesso.
 - [x] Publicar platform-orgs.
-- [ ] Conferir segurança e solicitar publicação do app.
+- [x] Conferir segurança e solicitar publicação do app.
