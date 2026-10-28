@@ -990,6 +990,14 @@ export type Database = {
           attendees: Json | null
           automatico: boolean
           calendar_event_id: string | null
+          copia_detalhe: string | null
+          copia_em: string | null
+          copia_lease: string | null
+          copia_offset: number
+          copia_status: string | null
+          copia_tamanho: number | null
+          copia_tentativas: number
+          copia_upload_url: string | null
           created_at: string
           escolha: string | null
           id: string
@@ -1013,6 +1021,14 @@ export type Database = {
           attendees?: Json | null
           automatico?: boolean
           calendar_event_id?: string | null
+          copia_detalhe?: string | null
+          copia_em?: string | null
+          copia_lease?: string | null
+          copia_offset?: number
+          copia_status?: string | null
+          copia_tamanho?: number | null
+          copia_tentativas?: number
+          copia_upload_url?: string | null
           created_at?: string
           escolha?: string | null
           id?: string
@@ -1036,6 +1052,14 @@ export type Database = {
           attendees?: Json | null
           automatico?: boolean
           calendar_event_id?: string | null
+          copia_detalhe?: string | null
+          copia_em?: string | null
+          copia_lease?: string | null
+          copia_offset?: number
+          copia_status?: string | null
+          copia_tamanho?: number | null
+          copia_tentativas?: number
+          copia_upload_url?: string | null
           created_at?: string
           escolha?: string | null
           id?: string
