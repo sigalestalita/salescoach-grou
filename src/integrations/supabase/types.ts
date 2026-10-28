@@ -956,6 +956,87 @@ export type Database = {
           },
         ]
       }
+      meeting_bots: {
+        Row: {
+          attendees: Json | null
+          calendar_event_id: string | null
+          created_at: string
+          id: string
+          lead_company: string | null
+          lead_email: string | null
+          lead_name: string | null
+          meeting_id: string | null
+          meeting_type: string | null
+          meeting_url: string
+          org_id: string
+          provider: string
+          provider_bot_id: string | null
+          start_at: string | null
+          status: string
+          status_detail: string | null
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attendees?: Json | null
+          calendar_event_id?: string | null
+          created_at?: string
+          id?: string
+          lead_company?: string | null
+          lead_email?: string | null
+          lead_name?: string | null
+          meeting_id?: string | null
+          meeting_type?: string | null
+          meeting_url: string
+          org_id: string
+          provider?: string
+          provider_bot_id?: string | null
+          start_at?: string | null
+          status?: string
+          status_detail?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attendees?: Json | null
+          calendar_event_id?: string | null
+          created_at?: string
+          id?: string
+          lead_company?: string | null
+          lead_email?: string | null
+          lead_name?: string | null
+          meeting_id?: string | null
+          meeting_type?: string | null
+          meeting_url?: string
+          org_id?: string
+          provider?: string
+          provider_bot_id?: string | null
+          start_at?: string | null
+          status?: string
+          status_detail?: string | null
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_bots_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_bots_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_types: {
         Row: {
           analysis_template_id: string | null
