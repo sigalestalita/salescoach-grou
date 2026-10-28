@@ -648,7 +648,7 @@ Deno.serve(async (req) => {
 
     const meetingQuery = admin
       .from("meetings")
-      .select("id, status, seller_id, org_id")
+      .select("id, status, seller_id, org_id, file_url, youtube_url, meeting_bot_id")
       .eq("id", meetingId);
 
     // Do app, a reunião precisa ser da organização de quem chamou.
@@ -662,6 +662,17 @@ Deno.serve(async (req) => {
 
     if (ctx && meeting.seller_id !== ctx.userId && ctx.role !== "admin") {
       return json(req, { error: "Sem permissão para processar esta reunião" }, 403);
+    }
+
+    // Ainda sem gravação (a do robô chega alguns minutos depois que a chamada
+    // acaba, e a análise começa sozinha): não mexe na reunião, que segue esperando.
+    if (!manualTranscript?.trim() && !meeting.file_url && !meeting.youtube_url) {
+      return json(req, {
+        error: meeting.meeting_bot_id
+          ? "A gravação do robô ainda não chegou. A análise começa sozinha alguns minutos depois que a reunião acaba."
+          : "Nenhum arquivo nem link foi fornecido para esta reunião.",
+        code: "sem_gravacao",
+      }, 409);
     }
 
     await assertQuota(admin, meeting.org_id, "analise", 1);

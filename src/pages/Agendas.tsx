@@ -76,6 +76,7 @@ const isMeetingProcessingStalled = (meeting: Pick<Meeting, "status" | "updated_a
   Date.now() - new Date(meeting.updated_at).getTime() > PROCESSING_STALE_AFTER_MS;
 
 const statusLabels: Record<string, string> = {
+  ao_vivo: "Ao vivo",
   enviado: "Enviado",
   baixando: "Baixando",
   transcrevendo: "Transcrevendo",
@@ -85,6 +86,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
+  ao_vivo: "bg-info/10 text-info",
   enviado: "bg-muted text-muted-foreground",
   baixando: "bg-info/10 text-info",
   transcrevendo: "bg-info/10 text-info",
@@ -294,6 +296,16 @@ const Agendas = () => {
   };
 
   const handleReanalyze = async (meeting: Meeting) => {
+    // Sem gravação não há o que analisar: refazer só apagaria o que existe.
+    if (!meeting.file_url && !meeting.youtube_url) {
+      toast({
+        title: "Ainda sem gravação",
+        description: meeting.meeting_bot_id
+          ? "A gravação do robô entra nesta reunião alguns minutos depois que a chamada acaba, e a análise começa sozinha."
+          : "Esta reunião não tem arquivo nem link para analisar.",
+      });
+      return;
+    }
     try {
       // Clear previous analysis data
       await Promise.all([
