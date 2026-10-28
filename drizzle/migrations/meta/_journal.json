@@ -169,6 +169,13 @@
       "when": 1793193285223,
       "tag": "0023_versao_extensao",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793196428988,
+      "tag": "0024_novidades_vistas",
+      "breakpoints": true
     }
   ]
 }
