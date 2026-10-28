@@ -1630,6 +1630,24 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       platform_admins: {
         Row: {
           created_at: string
@@ -1717,6 +1735,8 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          extensao_versao: string | null
+          extensao_vista_em: string | null
           full_name: string | null
           id: string
           org_id: string | null
@@ -2220,6 +2240,10 @@ export type Database = {
         Args: { _email: string; _token: string; _user_id: string }
         Returns: string
       }
+      registrar_extensao: {
+        Args: { _versao: string }
+        Returns: undefined
+      }
       branding_for_host: {
         Args: { _domain?: string; _slug: string }
         Returns: Json
@@ -2290,6 +2314,8 @@ export type Database = {
           ultima_atividade: string
           ultimo_login: string
           user_id: string
+          extensao_versao: string
+          extensao_vista_em: string
         }[]
       }
       platform_org_people: {

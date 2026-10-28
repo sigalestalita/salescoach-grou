@@ -33,6 +33,9 @@ export interface PessoaAtividade {
   assistente: number;
   custo: number;
   ultima_atividade: string | null;
+  /** Versão da extensão do Chrome vista pela última vez e quando. */
+  extensao_versao?: string | null;
+  extensao_vista_em?: string | null;
 }
 
 export const TIPOS: { key: TipoEvento; label: string }[] = [

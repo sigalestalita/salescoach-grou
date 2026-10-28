@@ -12,6 +12,7 @@ import {
   haQuanto, normalizaPessoa, saudePorEmpresa, TIPOS,
   type EmpresaSaude, type Evento, type PessoaAtividade, type TipoEvento,
 } from "@/lib/atividade";
+import { desatualizada } from "@/lib/extensaoVersao";
 
 /**
  * Atividade dos usuários de todas as empresas (tela Plataforma): linha do
@@ -68,6 +69,10 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
   const [eventos, setEventos] = useState<Evento[] | null>(null);
   const [temMais, setTemMais] = useState(false);
   const [pessoas, setPessoas] = useState<PessoaAtividade[] | null>(null);
+  // Versão atual da extensão na loja: abaixo dela, a pessoa vê o aviso no app.
+  const [extensaoAtual, setExtensaoAtual] = useState<string | null>(null);
+  const [extensaoCampo, setExtensaoCampo] = useState("");
+  const [salvandoExtensao, setSalvandoExtensao] = useState(false);
   const [erros, setErros] = useState<Evento[] | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -97,8 +102,10 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
     setCarregando(true);
     setErro(null);
     try {
-      const r = await call<{ people: PessoaAtividade[] }>({ action: "activity_people", desde: desde(Number(periodo)) });
+      const r = await call<{ people: PessoaAtividade[]; extensao_atual?: string | null }>({ action: "activity_people", desde: desde(Number(periodo)) });
       setPessoas(r.people.map(normalizaPessoa));
+      setExtensaoAtual(r.extensao_atual ?? null);
+      setExtensaoCampo(r.extensao_atual ?? "");
     } catch (e) {
       setErro((e as Error).message);
     } finally {
@@ -124,6 +131,20 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
   useEffect(() => { if (aba === "erros") carregarErros(); }, [aba, carregarErros]);
 
   const recarregar = () => (aba === "linha" ? carregarEventos(0) : aba === "erros" ? carregarErros() : carregarPessoas());
+
+  const salvarExtensaoAtual = async () => {
+    setSalvandoExtensao(true);
+    setErro(null);
+    try {
+      const r = await call<{ extensao_atual: string | null }>({ action: "set_extensao_atual", versao: extensaoCampo.trim() });
+      setExtensaoAtual(r.extensao_atual);
+      setExtensaoCampo(r.extensao_atual ?? "");
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setSalvandoExtensao(false);
+    }
+  };
 
   /** Abre a linha do tempo já filtrada pela empresa ou pela pessoa. */
   const verNaLinha = (f: { org?: string; email?: string }) => {
@@ -248,6 +269,25 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
           </TabsContent>
 
           <TabsContent value="pessoas" className="mt-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="font-medium">Versão atual da extensão na loja</span>
+              <Input
+                value={extensaoCampo}
+                onChange={(e) => setExtensaoCampo(e.target.value)}
+                placeholder="ex.: 1.13.1"
+                className="h-8 w-28"
+                aria-label="Versão atual da extensão na loja"
+              />
+              <Button size="sm" variant="outline" disabled={salvandoExtensao || extensaoCampo.trim() === (extensaoAtual ?? "")} onClick={salvarExtensaoAtual}>
+                Salvar
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {extensaoAtual
+                  ? `Quem estiver abaixo da ${extensaoAtual} vê o aviso de extensão desatualizada.${
+                    pessoasFiltradas ? ` Aqui: ${pessoasFiltradas.filter((p) => desatualizada(p.extensao_versao, extensaoAtual)).length} desatualizada(s).` : ""}`
+                  : "Vazio: ninguém recebe o aviso. Preencha quando a loja aprovar uma versão nova."}
+              </span>
+            </div>
             {pessoasFiltradas === null ? <Carregando /> : pessoasFiltradas.length === 0 ? <Vazio texto="Nenhuma pessoa encontrada." /> : (
               <div className="overflow-x-auto rounded-md border">
                 <Table>
@@ -256,6 +296,7 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
                       <TableHead>Pessoa</TableHead>
                       <TableHead>Empresa</TableHead>
                       <TableHead>Último acesso</TableHead>
+                      <TableHead>Extensão</TableHead>
                       <TableHead className="text-right">Logins</TableHead>
                       <TableHead className="text-right">Reuniões</TableHead>
                       <TableHead className="text-right">Análises</TableHead>
@@ -276,6 +317,19 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
                         <TableCell className="text-sm" title={p.ultima_atividade ? new Date(p.ultima_atividade).toLocaleString("pt-BR") : ""}>
                           {haQuanto(p.ultima_atividade)}
                         </TableCell>
+                        <TableCell
+                          className="whitespace-nowrap text-sm"
+                          title={p.extensao_vista_em ? `Vista ${haQuanto(p.extensao_vista_em)} (${new Date(p.extensao_vista_em).toLocaleString("pt-BR")})` : "Nunca vista: a pessoa ainda não abriu o Sales Coach com a extensão instalada"}
+                        >
+                          {p.extensao_versao ? (
+                            <>
+                              <span className="tabular-nums">{p.extensao_versao}</span>
+                              {desatualizada(p.extensao_versao, extensaoAtual) && (
+                                <Badge variant="outline" className="ml-1.5 border-amber-400 text-amber-900">desatualizada</Badge>
+                              )}
+                            </>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
                         <TableCell className="text-right tabular-nums">{p.logins}</TableCell>
                         <TableCell className="text-right tabular-nums">{p.reunioes}</TableCell>
                         <TableCell className="text-right tabular-nums">{p.analises}</TableCell>
@@ -289,7 +343,7 @@ export function Atividade({ orgs }: { orgs: { id: string; name: string }[] }) {
                 </Table>
               </div>
             )}
-            <p className="mt-2 text-xs text-muted-foreground">Clique numa pessoa para ver a linha do tempo dela. "Último acesso" considera login, reunião, treino e assistente.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Clique numa pessoa para ver a linha do tempo dela. "Último acesso" considera login, reunião, treino e assistente. "Extensão" é a versão vista quando a pessoa abriu o Sales Coach no Chrome (passe o mouse para ver quando).</p>
           </TabsContent>
 
           <TabsContent value="empresas" className="mt-0">

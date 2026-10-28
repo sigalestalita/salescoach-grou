@@ -5,11 +5,13 @@ import { useHub } from "@/components/hub/HubContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { Button } from "@/components/ui/button";
-import { Eye, CircleHelp, Pencil } from "lucide-react";
+import { Eye, CircleHelp, Pencil, Puzzle, X } from "lucide-react";
 import { DemoBanner, DemoEndedScreen, FirstPasswordDialog, isDemoOver, useDemoEndsAt } from "@/components/AccountNotices";
 import { exitSupport } from "@/lib/support";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { syncExtensionSession } from "@/lib/extensionBridge";
+import { desatualizada, registrarExtensao, versaoAtualDaLoja } from "@/lib/extensaoVersao";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -29,7 +31,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, profile, role, support, signOut } = useAuth();
   const { branding } = useBranding();
   const demoEndsAt = useDemoEndsAt();
-  useExtensionLogin(support ? null : user?.id ?? null);
+  const extensaoVelha = useExtensionLogin(support ? null : user?.id ?? null);
 
   // Demonstração vencida: o operador da plataforma ainda entra para ver ou
   // configurar; para a empresa, a conta fica bloqueada.
@@ -43,6 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="flex min-w-0 flex-1 flex-col">
             {support && <SupportBanner orgName={support.orgName} until={support.until} canEdit={support.canEdit} />}
             {demoEndsAt && <DemoBanner endsAt={demoEndsAt} />}
+            {extensaoVelha && <ExtensaoDesatualizadaBanner {...extensaoVelha} />}
             <FirstPasswordDialog />
             <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
               <div className="flex items-center gap-3">
@@ -104,19 +107,54 @@ function SupportBanner({ orgName, until, canEdit }: { orgName: string; until: st
  * o app e quando a aba volta ao foco (a extensão pode ter sido instalada com o
  * site aberto). No modo suporte não roda: a extensão gravaria como operador.
  */
-function useExtensionLogin(userId: string | null) {
+function useExtensionLogin(userId: string | null): { instalada: string; atual: string } | null {
+  const [velha, setVelha] = useState<{ instalada: string; atual: string } | null>(null);
   useEffect(() => {
     if (!userId) return;
     let last = 0;
+    let atual: Promise<string | null> | null = null;
     const run = () => {
       if (Date.now() - last < 30_000) return;
       last = Date.now();
       syncExtensionSession(userId).catch(() => {});
+      // Versão da extensão: vai para o perfil (tela Plataforma) e, se estiver
+      // abaixo da atual na loja, mostra o aviso.
+      atual ??= versaoAtualDaLoja().catch(() => null);
+      Promise.all([registrarExtensao(userId), atual])
+        .then(([instalada, loja]) => setVelha(desatualizada(instalada, loja) ? { instalada: instalada!, atual: loja! } : null))
+        .catch(() => {});
     };
     run();
     window.addEventListener("focus", run);
     return () => window.removeEventListener("focus", run);
   }, [userId]);
+  return velha;
+}
+
+/** Extensão abaixo da versão atual na loja. Fechar vale até a próxima versão. */
+function ExtensaoDesatualizadaBanner({ instalada, atual }: { instalada: string; atual: string }) {
+  const chave = `sc-aviso-extensao:${instalada}:${atual}`;
+  const [fechado, setFechado] = useState(() => {
+    try { return sessionStorage.getItem(chave) === "1"; } catch { return false; }
+  });
+  if (fechado) return null;
+  const fechar = () => {
+    try { sessionStorage.setItem(chave, "1"); } catch { /* sem armazenamento */ }
+    setFechado(true);
+  };
+  return (
+    <div role="status" className="flex items-start gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-950 md:px-8">
+      <Puzzle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span className="flex-1">
+        <strong>Sua extensão do Sales Coach está desatualizada</strong> (versão {instalada}; a atual é {atual}). O Chrome
+        atualiza sozinho em algumas horas. Para atualizar agora,{" "}
+        <Link to="/extensao#atualizar" className="font-medium underline underline-offset-2">veja como</Link>.
+      </span>
+      <button type="button" onClick={fechar} className="rounded p-0.5 hover:bg-amber-200" aria-label="Fechar o aviso">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
 }
 
 /** Atalho no topo para a ajuda da tela aberta. */
