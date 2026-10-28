@@ -296,14 +296,18 @@ const Agendas = () => {
   };
 
   const handleReanalyze = async (meeting: Meeting) => {
-    // Sem gravação não há o que analisar: refazer só apagaria o que existe.
-    if (!meeting.file_url && !meeting.youtube_url) {
-      toast({
-        title: "Ainda sem gravação",
-        description: meeting.meeting_bot_id
-          ? "A gravação do robô entra nesta reunião alguns minutos depois que a chamada acaba, e a análise começa sozinha."
-          : "Esta reunião não tem arquivo nem link para analisar.",
-      });
+    // Ainda ao vivo: quem decide é o servidor (espera o robô ou usa a
+    // transcrição do coach ao vivo), sem apagar nada antes.
+    if (meeting.status === "ao_vivo") {
+      const { error } = await supabase.functions.invoke("analyze-meeting", { body: { meetingId: meeting.id } });
+      if (error) {
+        const motivo = await (error as { context?: Response }).context?.json?.()
+          .then((b: { error?: string }) => b?.error).catch(() => null);
+        toast({ title: "Ainda sem gravação", description: motivo || error.message });
+      } else {
+        toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
+        fetchMeetings();
+      }
       return;
     }
     try {
