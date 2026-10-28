@@ -1138,6 +1138,7 @@ export type Database = {
           crm_provider: string | null
           duration_seconds: number | null
           error_message: string | null
+          extensao_versao: string | null
           file_type: string | null
           file_url: string | null
           gravou_tela: boolean | null
@@ -1175,6 +1176,7 @@ export type Database = {
           crm_provider?: string | null
           duration_seconds?: number | null
           error_message?: string | null
+          extensao_versao?: string | null
           file_type?: string | null
           file_url?: string | null
           gravou_tela?: boolean | null
@@ -1212,6 +1214,7 @@ export type Database = {
           crm_provider?: string | null
           duration_seconds?: number | null
           error_message?: string | null
+          extensao_versao?: string | null
           file_type?: string | null
           file_url?: string | null
           gravou_tela?: boolean | null
@@ -1665,6 +1668,24 @@ export type Database = {
           },
         ]
       }
+      platform_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       product_updates: {
         Row: {
           audience: string[]
@@ -1717,6 +1738,8 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          extensao_versao: string | null
+          extensao_vista_em: string | null
           full_name: string | null
           id: string
           org_id: string | null
@@ -1727,6 +1750,8 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          extensao_versao?: string | null
+          extensao_vista_em?: string | null
           full_name?: string | null
           id?: string
           org_id?: string | null
@@ -1737,6 +1762,8 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          extensao_versao?: string | null
+          extensao_vista_em?: string | null
           full_name?: string | null
           id?: string
           org_id?: string | null
@@ -2280,6 +2307,8 @@ export type Database = {
           custo: number
           email: string
           erros: number
+          extensao_versao: string
+          extensao_vista_em: string
           logins: number
           nome: string
           org_id: string
@@ -2329,6 +2358,7 @@ export type Database = {
         }
         Returns: string
       }
+      registrar_extensao: { Args: { _versao: string }; Returns: undefined }
       support_org_id: { Args: never; Returns: string }
       support_read_only: { Args: never; Returns: boolean }
     }
