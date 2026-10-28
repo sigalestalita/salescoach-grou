@@ -1,54 +1,39 @@
-## Diagnóstico
+# Corrigir bloqueios de IA no coach ao vivo e na dica do dia
 
-A funcionalidade ao vivo não está chegando nas funções de backend: não há logs recentes em `live-transcribe` nem em `live-coach`, e no print o indicador `LIVE` não aparece ao lado de `Gravando`. Isso indica que a extensão está gravando, mas o pipeline realtime não inicia.
+## Diagnóstico confirmado
+- `live-coach` transforma respostas de erro da IA, inclusive 403, em erro genérico 500.
+- `daily-tip` trata 402 e 429, mas transforma 403 em erro genérico 500.
+- A extensão continua solicitando sugestões a cada nova fala mesmo depois de um bloqueio; o caminho antigo de transcrição também dispara solicitações. Não existe pausa persistente compartilhada.
+- O registro fornecido identifica um **limite de gastos de IA**, não comprova falta de saldo. Comprar créditos não resolve esse limite quando o saldo já é suficiente.
+- Na verificação atual, o limite mensal está habilitado em **100 créditos**, com **24,00209599 créditos** de uso e sem bloqueio ativo. Não foram encontrados registros recentes que permitam reproduzir o incidente histórico.
 
-Causas encontradas:
+## Resultado esperado
+Mostrar o motivo correto em Início e na extensão, impedir solicitações automáticas durante bloqueios e permitir retomada explícita após a regularização, sem interromper gravação ou transcrição.
 
-1. **A reunião ao vivo não consegue ser criada**
-   - A extensão tenta criar a reunião com `status: 'ao_vivo'` antes de abrir o WebSocket.
-   - A tabela `meetings` tem uma regra que só aceita: `enviado`, `baixando`, `transcrevendo`, `analisando`, `completo`, `erro`.
-   - Resultado: o insert com `ao_vivo` falha, `meetingId` fica vazio e a extensão desliga o live silently. Sem `meetingId`, não abre `live-transcribe`, não há transcrição e não há insights.
+## Alterações
+1. **Mensagens e status corretos**
+   - Compartilhar o tratamento de erros das duas funções, preservando o status e a mensagem segura recebidos da IA.
+   - Para `credit_limit_reached`, orientar que um administrador ajuste o limite de IA em Lovable → Configurações do espaço de trabalho → Limites de uso e alertas.
+   - Diferenciar falta de créditos, limites de gastos, bloqueios de acesso e recusas; não trocar modelos, chaves ou provedores.
+2. **Pausa persistente e retomada segura**
+   - Guardar no servidor a pausa compartilhada dessas funcionalidades quando a IA devolver 402 ou 403. Ambas as funções devem verificar a pausa antes de chamar a IA, inclusive quando acionadas por versões antigas da extensão.
+   - Interromper os pedidos automáticos de coaching e exibir o motivo na extensão. Continuar salvando a transcrição e a gravação.
+   - Exibir o motivo na dica do dia, mantendo acesso a dicas já salvas.
+   - Oferecer retomada explícita a um administrador autorizado da plataforma após regularizar o acesso; um administrador de empresa não poderá desbloquear o gasto de todo o espaço de trabalho. Não retomar sozinho após recarregar páginas.
+   - Negativas de acesso do provedor não terão sondagens automáticas. Recusas encerram a solicitação sem bloquear permanentemente o acesso.
+3. **Publicação e verificação**
+   - Aplicar a alteração necessária no banco antes de publicar as funções modificadas.
+   - Atualizar o pacote da extensão para entregar o tratamento visível do bloqueio.
+   - Testar erros simulados 402/403, preservação de status/motivo, pausa após recarregamento, chamadas simultâneas e retomada autorizada; confirmar que nenhuma nova chamada à IA ocorre durante a pausa.
+   - Verificar Início com sessão autenticada e o fluxo da extensão. Testar as chamadas reais de IA preservando os modelos atuais; parar se houver negativa de acesso ou problema de disponibilidade.
+   - Marcar o alerta como corrigido somente após validar a alteração; distinguir testes simulados de uma reunião real.
 
-2. **A conexão AssemblyAI realtime está incompleta para a API atual**
-   - A documentação atual do AssemblyAI Streaming v3 exige `speech_model` na URL do WebSocket.
-   - O código atual usa `sample_rate=16000&format_turns=true&language_code=pt`, mas não envia `speech_model`.
-   - Isso pode fazer a conexão com AssemblyAI falhar mesmo depois que o WebSocket da extensão passar a abrir.
+## Detalhes técnicos
+- Módulo compartilhado em `supabase/functions/_shared` para interpretação segura dos erros e consulta da pausa.
+- Estado em tabela de aplicação no esquema `public`, acessível somente ao servidor, com permissões explícitas e RLS. A pausa de workspace não deve ficar restrita a uma empresa ou a um processo em memória.
+- Controle de retomada com autenticação e autorização no servidor, reutilizando o acesso administrativo da plataforma; não confiar em armazenamento do navegador.
+- Revisar `extension/content.js` e o disparo legado em `live-transcribe` para impedir continuidade automática; adicionar proteção contra solicitações simultâneas durante a verificação/retomada.
+- Registrar a regra arquitetural em `AGENTS.md` e manter testes junto aos existentes.
 
-3. **Falta observabilidade no overlay**
-   - Hoje, quando o realtime falha, o usuário só vê “Aguardando primeiras falas…” e `...`.
-   - O erro real fica escondido no console, o que mascara falhas de criação da reunião, WebSocket, token, AssemblyAI ou Realtime.
-
-## Plano de correção
-
-1. **Corrigir o status ao vivo no banco**
-   - Criar migration para atualizar a regra de `meetings.status` e incluir `ao_vivo`.
-   - Preservar todos os status atuais.
-   - Garantir que as permissões necessárias continuem disponíveis para usuários autenticados e backend.
-
-2. **Corrigir a abertura da transcrição ao vivo**
-   - Em `supabase/functions/live-transcribe/index.ts`, ajustar a URL do AssemblyAI Streaming v3 para incluir um modelo válido, preferencialmente `speech_model=u3-rt-pro`.
-   - Usar parâmetros compatíveis com áudio PCM16 16k mono, como `encoding=pcm_s16le` e `sample_rate=16000`.
-   - Validar a resposta de geração do token temporário antes de abrir o WebSocket.
-   - Logar status/razão de fechamento da conexão AssemblyAI.
-
-3. **Tornar o erro visível na extensão**
-   - Em `extension/content.js`, quando `preCreateMeeting` falhar, exibir uma mensagem clara no card de transcrição/dicas em vez de só esconder o `LIVE`.
-   - Mostrar estados como: “Live indisponível: reunião não criada”, “Conectando transcrição…”, “Transcrição conectada”, “Erro no WebSocket”.
-   - Manter logs técnicos no console para diagnóstico futuro.
-
-4. **Fortalecer o Realtime dos insights**
-   - Confirmar o `phx_join` do Realtime com tratamento de `phx_reply`.
-   - Se o join falhar, exibir erro no overlay.
-   - Manter inscrição filtrada por `meeting_id` em `live_tips`.
-
-5. **Atualizar e reempacotar a extensão**
-   - Subir a versão do `manifest.json`.
-   - Regenerar `public/sales-coach-extension.zip`.
-   - A página `/extensao` continuará baixando o ZIP atualizado.
-
-6. **Validação final**
-   - Verificar no banco se uma reunião com `status = ao_vivo` é criada ao iniciar gravação.
-   - Verificar logs de `live-transcribe` mostrando conexão do cliente e AssemblyAI.
-   - Verificar inserts em `transcription_segments` após fala real.
-   - Verificar chamada de `live-coach` e inserts em `live_tips`.
-   - Confirmar que o overlay exibe texto transcrito e pelo menos uma dica realtime após alguns segundos de conversa.
+## Fora do escopo
+Não aumentar o limite, comprar créditos, trocar modelos nem alterar gravação, preços ou permissões existentes da equipe. A recuperação do incidente histórico não pode ser comprovada pelos registros atualmente disponíveis.
