@@ -1,6 +1,7 @@
 // Avisos da Recall sobre o robô de reunião (protótipo). Cada mudança de estado
 // atualiza meeting_bots; quando o robô termina (bot.done), a reunião é criada,
-// o vídeo da chamada é copiado para o Storage (os links da Recall expiram) e a
+// o vídeo da chamada é copiado para o Storage em partes (os links da Recall
+// expiram; ver _shared/copiaVideo.ts) e a
 // reunião vai para a mesma análise das gravações da extensão. Se o vendedor
 // ligou o coach ao vivo pela extensão nesta chamada, a gravação entra na
 // reunião que a extensão abriu (meetings.meeting_bot_id), sem duplicar.
@@ -11,6 +12,7 @@
 
 import { adminClient } from "../_shared/tenant.ts";
 import { avisoValido, gravacaoDoRobo } from "../_shared/recall.ts";
+import { chamarCopia } from "../_shared/copiaVideo.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
@@ -121,30 +123,15 @@ async function finalizar(admin: any, robo: any, botId: string) {
     if (!r.ok) console.error("meeting-bot-webhook: análise", r.status, (await r.text()).slice(0, 300));
     if (!video) return;
 
-    // Depois guarda o vídeo no Storage, na pasta do vendedor (como as gravações da
-    // extensão), e o player passa a mostrá-lo. Se a cópia falhar ou for interrompida,
-    // a reunião fica com o áudio do link temporário (a Recall guarda por 7 dias).
-    const caminho = `${robo.user_id}/robo-${reuniao.id}.mp4`;
-    try {
-      const baixar = await fetch(video);
-      if (!baixar.ok || !baixar.body) throw new Error(`download ${baixar.status}`);
-      const tamanho = baixar.headers.get("content-length");
-      const subir = await fetch(`${Deno.env.get("SUPABASE_URL")}/storage/v1/object/meeting-files/${caminho}`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          "Content-Type": "video/mp4",
-          "x-upsert": "true",
-          ...(tamanho ? { "Content-Length": tamanho } : {}),
-        },
-        body: baixar.body,
-        duplex: "half",
-      } as RequestInit);
-      if (!subir.ok) throw new Error(`upload ${subir.status}: ${(await subir.text()).slice(0, 200)}`);
-      await admin.from("meetings").update({ file_url: caminho, file_type: "mp4", gravou_tela: true, youtube_url: null }).eq("id", reuniao.id);
-    } catch (e) {
-      console.error("meeting-bot-webhook: cópia do vídeo", e);
-    }
+    // Depois o vídeo vai para o Storage, na pasta do vendedor (como as gravações
+    // da extensão), em partes e numa chamada à parte (_shared/copiaVideo.ts): uma
+    // reunião longa não cabe no tempo de vida desta função. Até terminar, a
+    // reunião fica com o áudio do link temporário (a Recall guarda por 7 dias).
+    await admin.from("meeting_bots").update({
+      copia_status: "pendente", copia_offset: 0, copia_tamanho: null, copia_upload_url: null,
+      copia_tentativas: 0, copia_detalhe: null, copia_em: null, copia_lease: null,
+    }).eq("id", robo.id);
+    await chamarCopia(robo.id);
   } catch (e) {
     console.error("meeting-bot-webhook:", e);
     await atualizar({ status: "erro", status_detail: "Não foi possível enviar a gravação para análise." });

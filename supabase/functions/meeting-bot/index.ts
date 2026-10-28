@@ -11,7 +11,11 @@
 //                                    "não gravar esta reunião" (versão anterior da tela)
 //   { action: "modo", modo }         robô automático: desligado | clientes | todas
 // POST do agendador (pg_cron), com x-cron-secret = ROBO_CRON_SECRET e { action: "cron" }:
-//   agenda, remarca ou tira os robôs automáticos das próximas 24 horas.
+//   agenda, remarca ou tira os robôs automáticos das próximas 24 horas e
+//   retoma as cópias de vídeo paradas.
+// POST interno (service role ou x-internal-secret) { action: "copiar", id }:
+//   copia em partes o vídeo do robô para o Storage (_shared/copiaVideo.ts) e,
+//   se não terminar no prazo, chama a si mesma para continuar.
 //
 // A gravação pronta chega pela função meeting-bot-webhook.
 
@@ -20,6 +24,9 @@ import { json, preflight } from "../_shared/cors.ts";
 import { adminClient, assertQuota, getCaller, HttpError, isInternalCall } from "../_shared/tenant.ts";
 import { cancelarRobo, criarRobo, plataformaDe, recallAtivo, RecallError } from "../_shared/recall.ts";
 import { agendaEvents } from "../_shared/calendar.ts";
+import { chamarCopia, copiarVideo, depsDeVerdade, MAX_TENTATIVAS, PARADA_MS } from "../_shared/copiaVideo.ts";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 import {
   Acao, Escolha, ESCOLHAS, JANELA_HORAS, ModoRobo, MODOS_ROBO, planejar, ROBO_ATIVO, RoboExistente,
 } from "../_shared/robo.ts";
@@ -162,9 +169,28 @@ function segredoDoAgendador(req: Request): boolean {
   return isInternalCall(req);
 }
 
+/** Copia o vídeo deste robô; se o prazo acabar antes, passa a vez para a próxima chamada. */
+async function copiarEmSequencia(roboId: string) {
+  const resultado = await copiarVideo(roboId, depsDeVerdade(adminClient()));
+  console.log("meeting-bot: cópia do vídeo", roboId, resultado);
+  if (resultado === "continua") await chamarCopia(roboId);
+}
+
+/** Cópias de vídeo paradas (função encerrada, erro passageiro): o agendador retoma. */
+async function retomarCopias(admin: SupabaseClient) {
+  const parada = new Date(Date.now() - PARADA_MS).toISOString();
+  const { data } = await admin.from("meeting_bots").select("id")
+    .in("copia_status", ["pendente", "copiando"]).lt("copia_tentativas", MAX_TENTATIVAS)
+    .or(`copia_em.is.null,copia_em.lt.${parada}`)
+    .order("updated_at", { ascending: true }).limit(5);
+  for (const r of data ?? []) await chamarCopia(r.id);
+  return data?.length ?? 0;
+}
+
 /** Rodada do agendador: todos que ligaram o robô automático, em empresas ativas. */
 async function rodadaAutomatica() {
   const admin = adminClient();
+  const copias = await retomarCopias(admin).catch((e) => { console.error("meeting-bot: retomar cópias", e); return 0; });
   const { data: prefs } = await admin.from("meeting_bot_prefs").select("user_id, org_id, modo").neq("modo", "desligado").limit(2000);
   const orgIds = [...new Set((prefs ?? []).map((p) => p.org_id))];
   const { data: orgs } = orgIds.length
@@ -173,7 +199,7 @@ async function rodadaAutomatica() {
   const ativas = new Set((orgs ?? [])
     .filter((o) => ORGS_ATIVAS.includes(o.status) && !(o.demo_ends_at && new Date(o.demo_ends_at) <= new Date()))
     .map((o) => o.id));
-  const total = { pessoas: 0, criados: 0, remarcados: 0, tirados: 0, falhas: 0 };
+  const total = { pessoas: 0, criados: 0, remarcados: 0, tirados: 0, falhas: 0, copias };
   for (const p of prefs ?? []) {
     if (!ativas.has(p.org_id)) continue;
     total.pessoas++;
@@ -195,6 +221,15 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.clone().json().catch(() => ({}));
+    if (body.action === "copiar") {
+      if (!segredoDoAgendador(req)) throw new HttpError(401, "Não autorizado.");
+      const id = txt(body.id, 64);
+      if (!id) throw new HttpError(400, "Robô inválido.");
+      // Responde já; a cópia segue em segundo plano por até PRAZO_MS.
+      EdgeRuntime.waitUntil(copiarEmSequencia(id).catch((e) => console.error("meeting-bot: cópia", id, e)));
+      return json(req, { ok: true });
+    }
+
     if (body.action === "cron") {
       if (!segredoDoAgendador(req)) throw new HttpError(401, "Não autorizado.");
       if (!recallAtivo()) return json(req, { ok: true, ativo: false });
