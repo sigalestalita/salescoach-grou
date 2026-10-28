@@ -1,13 +1,16 @@
 // Avisos da Recall sobre o robô de reunião (protótipo). Cada mudança de estado
-// atualiza meeting_bots; quando o robô termina (bot.done), a reunião é criada
-// com o áudio da Recall e vai para a mesma análise das gravações da extensão.
+// atualiza meeting_bots; quando o robô termina (bot.done), a reunião é criada,
+// o vídeo da chamada é copiado para o Storage (os links da Recall expiram) e a
+// reunião vai para a mesma análise das gravações da extensão.
 //
 // verify_jwt = false (config.toml): quem chama é a Recall. A autenticidade vem
 // da assinatura (RECALL_WEBHOOK_SECRET). Responde rápido: a Recall espera 15 s
 // e tenta de novo por 24 h se não receber 2xx.
 
 import { adminClient } from "../_shared/tenant.ts";
-import { audioDoRobo, avisoValido } from "../_shared/recall.ts";
+import { avisoValido, gravacaoDoRobo } from "../_shared/recall.ts";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
 const ESTADO: Record<string, string> = {
   "bot.joining_call": "entrando",
@@ -38,7 +41,7 @@ Deno.serve(async (req) => {
 
   const admin = adminClient();
   const { data: robo } = await admin.from("meeting_bots").select("*").eq("provider_bot_id", botId).maybeSingle();
-  if (!robo || robo.status === "cancelado" || robo.meeting_id) return resposta();
+  if (!robo || ["cancelado", "concluido"].includes(robo.status) || robo.meeting_id) return resposta();
   const agora = new Date().toISOString();
   const atualizar = (campos: Record<string, unknown>) =>
     admin.from("meeting_bots").update({ ...campos, updated_at: agora }).eq("id", robo.id);
@@ -51,9 +54,22 @@ Deno.serve(async (req) => {
   }
   if (evento !== "bot.done") return resposta();
 
+  // A cópia do vídeo pode levar mais que os 15 s que a Recall espera: responde já
+  // e termina em segundo plano. Marcar "concluido" antes impede que um aviso
+  // repetido duplique a reunião; se algo falhar, finalizar() troca para "erro".
+  await atualizar({ status: "concluido", status_detail: null });
+  EdgeRuntime.waitUntil(finalizar(admin, robo, botId));
+  return resposta();
+});
+
+// deno-lint-ignore no-explicit-any
+async function finalizar(admin: any, robo: any, botId: string) {
+  const agora = () => new Date().toISOString();
+  const atualizar = (campos: Record<string, unknown>) =>
+    admin.from("meeting_bots").update({ ...campos, updated_at: agora() }).eq("id", robo.id);
   try {
-    const audio = await audioDoRobo(botId);
-    if (!audio) { await atualizar({ status: "erro", status_detail: "A Recall não devolveu a gravação." }); return resposta(); }
+    const { video, audio } = await gravacaoDoRobo(botId);
+    if (!video && !audio) { await atualizar({ status: "erro", status_detail: "A Recall não devolveu a gravação." }); return; }
 
     let tipo = robo.meeting_type as string | null;
     if (!tipo) {
@@ -61,16 +77,16 @@ Deno.serve(async (req) => {
       tipo = tipos?.[0]?.key ?? null;
     }
     const { data: perfil } = await admin.from("profiles").select("team_id").eq("user_id", robo.user_id).maybeSingle();
-    // O áudio fica no link temporário da Recall (alguns dias); a análise usa na hora.
     const { data: reuniao, error } = await admin.from("meetings").insert({
       title: robo.title || "Reunião gravada pelo robô",
       org_id: robo.org_id, seller_id: robo.user_id, team_id: perfil?.team_id ?? null, meeting_type: tipo,
       lead_name: robo.lead_name, lead_company: robo.lead_company, lead_email: robo.lead_email,
       meeting_url: robo.meeting_url, calendar_event_id: robo.calendar_event_id, attendees: robo.attendees,
-      youtube_url: audio, status: "enviado", meeting_date: robo.start_at ?? agora,
+      // A análise começa já, com o link temporário da Recall (o áudio, mais leve).
+      youtube_url: audio ?? video, status: "enviado", meeting_date: robo.start_at ?? agora(),
     }).select("id").single();
     if (error || !reuniao) throw error ?? new Error("meetings: insert");
-    await atualizar({ status: "concluido", status_detail: null, meeting_id: reuniao.id });
+    await atualizar({ meeting_id: reuniao.id });
 
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/analyze-meeting`, {
       method: "POST",
@@ -82,9 +98,34 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ meetingId: reuniao.id }),
     });
     if (!r.ok) console.error("meeting-bot-webhook: análise", r.status, (await r.text()).slice(0, 300));
+    if (!video) return;
+
+    // Depois guarda o vídeo no Storage, na pasta do vendedor (como as gravações da
+    // extensão), e o player passa a mostrá-lo. Se a cópia falhar ou for interrompida,
+    // a reunião fica com o áudio do link temporário (a Recall guarda por 7 dias).
+    const caminho = `${robo.user_id}/robo-${reuniao.id}.mp4`;
+    try {
+      const baixar = await fetch(video);
+      if (!baixar.ok || !baixar.body) throw new Error(`download ${baixar.status}`);
+      const tamanho = baixar.headers.get("content-length");
+      const subir = await fetch(`${Deno.env.get("SUPABASE_URL")}/storage/v1/object/meeting-files/${caminho}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          "Content-Type": "video/mp4",
+          "x-upsert": "true",
+          ...(tamanho ? { "Content-Length": tamanho } : {}),
+        },
+        body: baixar.body,
+        duplex: "half",
+      } as RequestInit);
+      if (!subir.ok) throw new Error(`upload ${subir.status}: ${(await subir.text()).slice(0, 200)}`);
+      await admin.from("meetings").update({ file_url: caminho, file_type: "mp4", gravou_tela: true, youtube_url: null }).eq("id", reuniao.id);
+    } catch (e) {
+      console.error("meeting-bot-webhook: cópia do vídeo", e);
+    }
   } catch (e) {
     console.error("meeting-bot-webhook:", e);
     await atualizar({ status: "erro", status_detail: "Não foi possível enviar a gravação para análise." });
   }
-  return resposta();
-});
+}
