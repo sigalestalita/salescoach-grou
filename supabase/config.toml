@@ -63,3 +63,6 @@ verify_jwt = false
 # Descadastro do e-mail de novidades: quem clica não está logado (token assinado).
 [functions.email-preferences]
 verify_jwt = false
+
+[functions.meeting-bot-webhook]
+verify_jwt = false
