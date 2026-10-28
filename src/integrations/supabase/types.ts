@@ -1686,6 +1686,32 @@ export type Database = {
         }
         Relationships: []
       }
+      product_update_views: {
+        Row: {
+          update_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          update_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          update_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_update_views_update_id_fkey"
+            columns: ["update_id"]
+            isOneToOne: false
+            referencedRelation: "product_updates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_updates: {
         Row: {
           audience: string[]
