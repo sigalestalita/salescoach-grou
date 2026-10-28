@@ -1,7 +1,9 @@
 // Avisos da Recall sobre o robô de reunião (protótipo). Cada mudança de estado
 // atualiza meeting_bots; quando o robô termina (bot.done), a reunião é criada,
 // o vídeo da chamada é copiado para o Storage (os links da Recall expiram) e a
-// reunião vai para a mesma análise das gravações da extensão.
+// reunião vai para a mesma análise das gravações da extensão. Se o vendedor
+// ligou o coach ao vivo pela extensão nesta chamada, a gravação entra na
+// reunião que a extensão abriu (meetings.meeting_bot_id), sem duplicar.
 //
 // verify_jwt = false (config.toml): quem chama é a Recall. A autenticidade vem
 // da assinatura (RECALL_WEBHOOK_SECRET). Responde rápido: a Recall espera 15 s
@@ -50,6 +52,9 @@ Deno.serve(async (req) => {
   if (MOTIVO[evento]) {
     const sub = ev?.data?.data?.sub_code ? ` (${ev.data.data.sub_code})` : "";
     await atualizar({ status: "erro", status_detail: MOTIVO[evento] + sub });
+    // A reunião do coach ao vivo esperava esta gravação: avisa nela.
+    await admin.from("meetings").update({ status: "erro", error_message: `O robô não gravou: ${MOTIVO[evento]}${sub}` })
+      .eq("meeting_bot_id", robo.id).eq("seller_id", robo.user_id).eq("status", "ao_vivo");
     return resposta();
   }
   if (evento !== "bot.done") return resposta();
@@ -76,16 +81,32 @@ async function finalizar(admin: any, robo: any, botId: string) {
       const { data: tipos } = await admin.from("meeting_types").select("key").eq("org_id", robo.org_id).eq("is_active", true).order("sort_order").limit(1);
       tipo = tipos?.[0]?.key ?? null;
     }
-    const { data: perfil } = await admin.from("profiles").select("team_id").eq("user_id", robo.user_id).maybeSingle();
-    const { data: reuniao, error } = await admin.from("meetings").insert({
-      title: robo.title || "Reunião gravada pelo robô",
-      org_id: robo.org_id, seller_id: robo.user_id, team_id: perfil?.team_id ?? null, meeting_type: tipo,
-      lead_name: robo.lead_name, lead_company: robo.lead_company, lead_email: robo.lead_email,
-      meeting_url: robo.meeting_url, calendar_event_id: robo.calendar_event_id, attendees: robo.attendees,
-      // A análise começa já, com o link temporário da Recall (o áudio, mais leve).
-      youtube_url: audio ?? video, status: "enviado", meeting_date: robo.start_at ?? agora(),
-    }).select("id").single();
-    if (error || !reuniao) throw error ?? new Error("meetings: insert");
+    // A análise começa já, com o link temporário da Recall (o áudio, mais leve).
+    const midia = { youtube_url: audio ?? video, status: "enviado" };
+    // Coach ao vivo da extensão nesta chamada: a reunião já existe, com a
+    // transcrição ao vivo. Só a do próprio vendedor (a coluna vem da extensão).
+    const { data: doCoach } = await admin.from("meetings").select("id, meeting_type")
+      .eq("meeting_bot_id", robo.id).eq("seller_id", robo.user_id).in("status", ["ao_vivo", "erro"])
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    let reuniao: { id: string };
+    if (doCoach) {
+      const { error } = await admin.from("meetings").update({
+        ...midia, error_message: null, ...(doCoach.meeting_type ? {} : { meeting_type: tipo }),
+      }).eq("id", doCoach.id);
+      if (error) throw error;
+      reuniao = { id: doCoach.id };
+    } else {
+      const { data: perfil } = await admin.from("profiles").select("team_id").eq("user_id", robo.user_id).maybeSingle();
+      const { data, error } = await admin.from("meetings").insert({
+        title: robo.title || "Reunião gravada pelo robô",
+        org_id: robo.org_id, seller_id: robo.user_id, team_id: perfil?.team_id ?? null, meeting_type: tipo,
+        lead_name: robo.lead_name, lead_company: robo.lead_company, lead_email: robo.lead_email,
+        meeting_url: robo.meeting_url, calendar_event_id: robo.calendar_event_id, attendees: robo.attendees,
+        ...midia, meeting_date: robo.start_at ?? agora(), meeting_bot_id: robo.id,
+      }).select("id").single();
+      if (error || !data) throw error ?? new Error("meetings: insert");
+      reuniao = data;
+    }
     await atualizar({ meeting_id: reuniao.id });
 
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/analyze-meeting`, {

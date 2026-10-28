@@ -38,6 +38,36 @@ export interface RoboExistente {
   provider_bot_id: string | null;
 }
 
+/** Como o vendedor escolheu gravar a reunião, quando não é o robô. */
+export type Escolha = "robo" | "extensao" | "nao_gravar";
+export const ESCOLHAS: Escolha[] = ["robo", "extensao", "nao_gravar"];
+
+/** Robô de pé: agendado, entrando ou na chamada. */
+export const ROBO_ATIVO = ["agendado", "entrando", "sala_de_espera", "na_chamada", "gravando", "processando"];
+
+export interface RoboDaChamada {
+  id: string;
+  calendar_event_id: string | null;
+  meeting_url: string;
+  status: string;
+  escolha: string | null;
+}
+
+/**
+ * O último pedido do vendedor para a chamada aberta na extensão: pelo evento
+ * da agenda ou pelo link da reunião (código do Meet, id do Teams ou do Zoom).
+ * `robos` vem do mais novo para o mais antigo; `chaves` usa meetingKeys().
+ */
+export function roboDaChamada<T extends RoboDaChamada>(
+  robos: T[],
+  q: { eventId: string | null; chaves: string[]; chavesDe: (url: string) => string[] },
+): T | null {
+  return robos.find((r) =>
+    (q.eventId && r.calendar_event_id === q.eventId) ||
+    (q.chaves.length > 0 && q.chavesDe(r.meeting_url).some((k) => q.chaves.includes(k)))
+  ) ?? null;
+}
+
 export type Acao =
   | { tipo: "criar"; ev: EventoAgenda }
   | { tipo: "remarcar"; robo: RoboExistente; ev: EventoAgenda }

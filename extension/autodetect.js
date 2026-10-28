@@ -9,6 +9,10 @@
 // Por que não começa a gravar sozinho: o Chrome só deixa capturar o áudio de
 // uma aba depois de um clique da pessoa (e mostra a confirmação do que
 // compartilhar). O clique em "Gravar" é esse gesto.
+//
+// Robô de reunião: quando o vendedor escolheu o robô para esta reunião (em
+// Minha agenda), quem grava é o robô. O cartão oferece só as dicas ao vivo, e a
+// extensão não grava nada. Com "Não gravar", o cartão não aparece.
 
 (() => {
   if (window.__salescoachAutodetect) return;
@@ -101,29 +105,32 @@
 
     if (offer.key !== callKey()) offer = { key: callKey(), shown: 0, snoozedAt: 0 };
     const opts = { loggedIn, types: s.meetingTypesCache || [], lastType: s.lastMeetingType, gravarTela: s.gravarTela === true };
-    if (offer.shown === 0) {
-      offer.shown = 1;
-      showCard({ ...opts, reminder: false, event: loggedIn ? await eventForCall() : null });
-    } else if (offer.shown === 1 && offer.snoozedAt && now - offer.snoozedAt > REMIND_AFTER_MS) {
-      offer.shown = 2;
-      showCard({ ...opts, reminder: true, event: loggedIn ? await eventForCall() : null });
+    if (offer.shown === 0 || (offer.shown === 1 && offer.snoozedAt && now - offer.snoozedAt > REMIND_AFTER_MS)) {
+      const reminder = offer.shown === 1;
+      offer.shown += 1;
+      const call = loggedIn ? await callInfo() : { event: null, robo: null, escolha: null };
+      // "Não gravar" em Minha agenda: não oferece. Dá para gravar pelo ícone da extensão.
+      if (call.escolha === 'nao_gravar') return;
+      showCard({ ...opts, reminder, event: call.event, robo: call.robo });
     }
   }
 
-  // Evento da agenda desta chamada (consultado uma vez por chamada). Espera no
-  // máximo 4 segundos: sem resposta, o cartão sai com o título da página.
-  let eventCache = { key: null, event: null };
-  async function eventForCall() {
-    if (eventCache.key === callKey()) return eventCache.event;
+  // Evento da agenda desta chamada e o robô dela (consultados uma vez por
+  // chamada). Espera no máximo 4 segundos: sem resposta, o cartão sai com o
+  // título da página e oferece a gravação.
+  const SEM_INFO = { event: null, robo: null, escolha: null };
+  let infoCache = { key: null, info: SEM_INFO };
+  async function callInfo() {
+    if (infoCache.key === callKey()) return infoCache.info;
     const lookup = new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage({ action: 'calendarLookup', meetingUrl: location.href, title: document.title },
-          (res) => resolve(res?.event || null));
-      } catch { resolve(null); }
+          (res) => resolve({ event: res?.event || null, robo: res?.robo || null, escolha: res?.escolha || null }));
+      } catch { resolve(SEM_INFO); }
     });
-    const event = await Promise.race([lookup, new Promise((r) => setTimeout(() => r(null), 4000))]);
-    eventCache = { key: callKey(), event };
-    return event;
+    const info = await Promise.race([lookup, new Promise((r) => setTimeout(() => r(SEM_INFO), 4000))]);
+    infoCache = { key: callKey(), info };
+    return info;
   }
 
   function removeCard() {
@@ -131,7 +138,7 @@
     card = null;
   }
 
-  function showCard({ loggedIn, types, lastType, gravarTela, reminder, event }) {
+  function showCard({ loggedIn, types, lastType, gravarTela, reminder, event, robo }) {
     const host = document.createElement('div');
     host.id = 'salescoach-autodetect';
     host.dataset.loggedIn = String(loggedIn);
@@ -149,13 +156,20 @@
           `<option value="${esc(t.key)}"${t.key === selected ? ' selected' : ''}>${esc(t.label)}</option>`).join('')}</select>`
       : '';
 
+    // Com o robô na reunião, a extensão só liga as dicas ao vivo.
+    const soCoach = loggedIn && !!robo;
     const heading = !loggedIn
       ? 'Conecte o Sales Coach para gravar'
-      : reminder ? 'Esta reunião não está sendo gravada' : 'Gravar esta reunião?';
+      : soCoach ? 'O robô grava esta reunião'
+        : reminder ? 'Esta reunião não está sendo gravada' : 'Gravar esta reunião?';
     const text = !loggedIn
       ? 'Abra o Sales Coach neste navegador com a sua conta e a extensão entra sozinha. Depois, é só voltar aqui.'
-      : 'Grava o áudio, dá dicas ao vivo e analisa quando a chamada terminar.';
-    const primary = loggedIn ? 'Gravar' : 'Abrir o Sales Coach';
+      : soCoach
+        ? (robo.status === 'sala_de_espera'
+          ? 'O robô está na sala de espera: aceite a entrada dele. Quer dicas ao vivo? A extensão só ouve, não grava nada.'
+          : 'Quer dicas ao vivo durante a conversa? A extensão só ouve, não grava nada. A análise vem da gravação do robô.')
+        : 'Grava o áudio, dá dicas ao vivo e analisa quando a chamada terminar.';
+    const primary = !loggedIn ? 'Abrir o Sales Coach' : soCoach ? 'Ligar dicas ao vivo' : 'Gravar';
 
     root.innerHTML = `
       <style>
@@ -182,7 +196,7 @@
         ${loggedIn ? `<div class="t" title="${esc(title)}">${esc(title)}</div>` : ''}
         ${loggedIn && leadLine ? `<div class="t l" title="${esc(leadLine)}">Lead: ${esc(leadLine)}</div>` : ''}
         ${loggedIn ? typeSelect : ''}
-        ${loggedIn ? `<label class="tela"><input type="checkbox" id="t"${gravarTela ? ' checked' : ''}>Gravar também a tela (mais pesado; na próxima tela, clique em Compartilhar)</label>` : ''}
+        ${loggedIn && !soCoach ? `<label class="tela"><input type="checkbox" id="t"${gravarTela ? ' checked' : ''}>Gravar também a tela (mais pesado; na próxima tela, clique em Compartilhar)</label>` : ''}
         <div class="b"><button class="no" id="no">Agora não</button><button class="go" id="go">${esc(primary)}</button></div>
       </div>`;
 
@@ -209,11 +223,14 @@
         meetingUrl: location.href,
         calendarEventId: event?.eventId || null,
         attendees: event?.attendees || [],
-        gravarTela: comTela,
+        gravarTela: soCoach ? false : comTela,
+        // Só o coach ao vivo: a gravação do robô entra nesta mesma reunião.
+        soCoach,
+        meetingBotId: soCoach ? robo.id : null,
       };
       removeCard();
       try {
-        await chrome.storage.local.set({ meetingData, lastMeetingType: meetingType, gravarTela: comTela });
+        await chrome.storage.local.set({ meetingData, lastMeetingType: meetingType, ...(soCoach ? {} : { gravarTela: comTela }) });
         // O gravador (content.js) é o mesmo do botão da extensão. O clique em
         // "Gravar" ainda vale como gesto quando ele pede a tela.
         await chrome.runtime.sendMessage({ action: 'injectRecorder' });

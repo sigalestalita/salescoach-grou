@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { cn } from "@/lib/utils";
 import { AgendaItem, CALENDAR_NAME, calendarApi, CalendarProvider } from "@/lib/calendar";
 import {
-  BOT_ATIVOS, BOT_LABEL, entraSozinho, MeetingBot, meetingBotApi, MODO_LABEL, ModoRobo, robotAceita,
+  BOT_ATIVOS, BOT_LABEL, Escolha, ESCOLHA_LABEL, escolhaAtual, entraSozinho, MeetingBot, meetingBotApi, MODO_LABEL, ModoRobo,
+  robotAceita,
 } from "@/lib/meetingBot";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
@@ -384,24 +386,19 @@ export function MinhaAgenda({ provider, statusLabels, tempLabels }: Props) {
           roboAtivo={robos.ativo}
           modo={robos.modo}
           robo={open ? roboDe(open) : null}
-          onEnviarRobo={async (ev) => {
+          onEscolher={async (ev, escolha) => {
             try {
-              await meetingBotApi.enviar({ id: ev.id, joinUrl: ev.joinUrl!, title: ev.title, start: ev.start, lead: ev.lead, attendees: ev.attendees });
-              toast({ title: "Robô agendado", description: "Ele entra na chamada na hora da reunião. Aceite a entrada dele se ficar na sala de espera." });
+              await meetingBotApi.escolher({ id: ev.id, joinUrl: ev.joinUrl!, title: ev.title, start: ev.start, lead: ev.lead, attendees: ev.attendees }, escolha);
+              toast({
+                title: escolha === "robo" ? "O robô grava esta reunião" : escolha === "extensao" ? "A extensão grava esta reunião" : "Esta reunião não será gravada",
+                description: escolha === "robo"
+                  ? "Ele entra na chamada na hora da reunião. Aceite a entrada dele se ficar na sala de espera. Na chamada, a extensão oferece só as dicas ao vivo."
+                  : escolha === "extensao"
+                    ? "Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."
+                    : "A extensão não vai oferecer a gravação nesta reunião.",
+              });
             } catch (e) {
-              toast({ title: "Não foi possível agendar o robô", description: (e as Error).message, variant: "destructive" });
-            }
-            await recarregarRobos();
-          }}
-          onCancelarRobo={async (id) => {
-            try { await meetingBotApi.cancelar(id); } catch (e) {
-              toast({ title: "Não foi possível cancelar o robô", description: (e as Error).message, variant: "destructive" });
-            }
-            await recarregarRobos();
-          }}
-          onPularRobo={async (ev) => {
-            try { await meetingBotApi.pular({ id: ev.id, joinUrl: ev.joinUrl!, title: ev.title, start: ev.start }); } catch (e) {
-              toast({ title: "Não foi possível tirar o robô", description: (e as Error).message, variant: "destructive" });
+              toast({ title: "Não foi possível mudar a gravação", description: (e as Error).message, variant: "destructive" });
             }
             await recarregarRobos();
           }}
@@ -522,7 +519,7 @@ function DayList({ events, day, now, loading, comRobo, onOpen }: {
   );
 }
 
-function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onAnalysis, roboAtivo, modo, robo, onEnviarRobo, onCancelarRobo, onPularRobo }: {
+function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onAnalysis, roboAtivo, modo, robo, onEscolher }: {
   ev: AgendaItem | null;
   now: Date;
   provider: CalendarProvider;
@@ -533,9 +530,7 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
   roboAtivo: boolean;
   modo: ModoRobo;
   robo: MeetingBot | null;
-  onEnviarRobo: (ev: AgendaItem) => Promise<void>;
-  onCancelarRobo: (id: string) => Promise<void>;
-  onPularRobo: (ev: AgendaItem) => Promise<void>;
+  onEscolher: (ev: AgendaItem, escolha: Escolha) => Promise<void>;
 }) {
   const [ocupado, setOcupado] = useState(false);
   if (!ev) return null;
@@ -544,7 +539,8 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
   const kind = agendaKind(ev, now);
   const aindaVai = fim > now;
   const m = ev.meeting;
-  const roboVem = roboAtivo && (robo ? BOT_ATIVOS.includes(robo.status) : entraSozinho(ev, modo, now));
+  const escolha = roboAtivo ? escolhaAtual(robo, ev, modo, now) : "extensao";
+  const roboVem = escolha === "robo";
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -574,61 +570,57 @@ function EventDialog({ ev, now, provider, statusLabels, tempLabels, onClose, onA
                     ? "Esta reunião com cliente passou sem gravação."
                     : roboVem
                       ? "Reunião com cliente. O robô grava esta reunião."
-                      : "Reunião com cliente. Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."}
+                      : escolha === "nao_gravar"
+                        ? "Reunião com cliente. Você escolheu não gravar."
+                        : "Reunião com cliente. Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."}
             </p>
           )}
 
           {roboAtivo && !m && ev.joinUrl && aindaVai && !ev.declined && robotAceita(ev.joinUrl) && (
-            <div className="space-y-2 rounded-lg border p-3">
+            <div className="space-y-3 rounded-lg border p-3">
               <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Gravação desta reunião
-                <Dica titulo="Robô ou extensão?">
-                  <p><strong>Robô:</strong> entra na chamada como participante e grava áudio e vídeo sem pesar no seu computador. O cliente vê o robô entre os participantes.</p>
-                  <p><strong>Extensão do Chrome:</strong> grava pelo seu navegador, sem participante a mais, e mostra as dicas ao vivo.</p>
-                  <p>Use um dos dois. Com o robô na reunião, não clique em Gravar na extensão, senão a reunião é gravada duas vezes.</p>
-                  <p>Se a reunião tiver sala de espera, aceite a entrada do robô: ele espera até 15 minutos.</p>
+                Como gravar esta reunião
+                <Dica titulo="Robô, extensão ou não gravar?">
+                  <p><strong>Robô:</strong> entra na chamada como participante e grava áudio e vídeo sem pesar no seu computador. O cliente vê o robô entre os participantes. Na chamada, a extensão oferece só as dicas ao vivo, sem gravar de novo.</p>
+                  <p><strong>Extensão:</strong> grava o áudio pelo seu Chrome, sem participante a mais, com as dicas ao vivo. Ao entrar na chamada, clique em Gravar no cartão do Sales Coach.</p>
+                  <p><strong>Não gravar:</strong> nada é gravado e a extensão não oferece a gravação.</p>
+                  <p>Vem marcado pelo seu Robô automático. O que você escolher aqui vale só para esta reunião.</p>
                 </Dica>
               </div>
-              {robo && (BOT_ATIVOS.includes(robo.status) || robo.status === "erro") ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Bot className="h-4 w-4 text-primary" />
-                  <span className="min-w-0 flex-1">
-                    {BOT_LABEL[robo.status] ?? robo.status}
-                    {robo.status_detail && <span className="block text-xs text-muted-foreground">{robo.status_detail}</span>}
-                  </span>
-                  {BOT_ATIVOS.includes(robo.status) && robo.status !== "processando" && (
-                    <Button size="sm" variant="outline" disabled={ocupado}
-                      onClick={async () => { setOcupado(true); await onCancelarRobo(robo.id); setOcupado(false); }}>
-                      Cancelar robô
-                    </Button>
-                  )}
-                </div>
-              ) : null}
-              {robo?.status === "cancelado" && robo.status_detail && (
-                <p className="text-xs text-muted-foreground">{robo.status_detail}</p>
+              <ToggleGroup
+                type="single" variant="outline" size="sm" className="grid grid-cols-3 gap-1"
+                value={escolha}
+                disabled={ocupado || robo?.status === "processando"}
+                onValueChange={async (v) => {
+                  if (!v || v === escolha) return;
+                  setOcupado(true); await onEscolher(ev, v as Escolha); setOcupado(false);
+                }}
+                aria-label="Como gravar esta reunião"
+              >
+                {(["robo", "extensao", "nao_gravar"] as const).map((e) => (
+                  <ToggleGroupItem key={e} value={e} className="data-[state=on]:border-primary data-[state=on]:bg-primary/10 data-[state=on]:text-primary">
+                    {e === "robo" && <Bot className="mr-1.5 h-4 w-4" />}
+                    {ESCOLHA_LABEL[e]}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {robo?.status === "erro" && (
+                <p className="text-xs text-destructive">
+                  {BOT_LABEL.erro}{robo.status_detail ? `: ${robo.status_detail}` : "."} Escolha Robô para mandar de novo.
+                </p>
               )}
-              {!robo && entraSozinho(ev, modo, now) ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Bot className="h-4 w-4 text-primary" />
-                  <span className="min-w-0 flex-1">
-                    O robô automático entra nesta reunião
-                    <span className="block text-xs text-muted-foreground">Ele é agendado nas 24 horas antes. Seu computador não grava nada.</span>
-                  </span>
-                  <Button size="sm" variant="outline" disabled={ocupado}
-                    onClick={async () => { setOcupado(true); await onPularRobo(ev); setOcupado(false); }}>
-                    Não gravar esta reunião
-                  </Button>
-                </div>
-              ) : !robo || !BOT_ATIVOS.includes(robo.status) ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" disabled={ocupado}
-                    onClick={async () => { setOcupado(true); await onEnviarRobo(ev); setOcupado(false); }}>
-                    <Bot className="mr-2 h-4 w-4" />
-                    {robo?.status === "erro" ? "Enviar o robô de novo" : "Enviar o robô"}
-                  </Button>
-                  <span className="text-xs text-muted-foreground">Ele entra na chamada e grava. Seu computador não grava nada.</span>
-                </div>
-              ) : null}
+              <p className="text-xs text-muted-foreground">
+                {escolha === "robo"
+                  ? <>
+                      {robo && BOT_ATIVOS.includes(robo.status)
+                        ? `${BOT_LABEL[robo.status] ?? robo.status}${robo.status_detail ? ` · ${robo.status_detail}` : ""}.`
+                        : "O robô automático entra nesta reunião. Ele é agendado nas 24 horas antes."}
+                      {" "}Na chamada, a extensão oferece só as dicas ao vivo. Seu computador não grava nada.
+                    </>
+                  : escolha === "extensao"
+                    ? "Ao entrar na chamada, clique em Gravar no cartão do Sales Coach."
+                    : "Nada é gravado e a extensão não oferece a gravação nesta reunião."}
+              </p>
             </div>
           )}
 

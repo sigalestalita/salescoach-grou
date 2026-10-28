@@ -240,7 +240,7 @@ function showActiveRecording(mode) {
   formSection.classList.add('hidden');
   activeRecording.classList.remove('hidden');
   uploadStatus.classList.add('hidden');
-  screenStatus.textContent = mode === 'audio_only' ? 'Apenas áudio' : 'Tela + áudio';
+  screenStatus.textContent = mode === 'coach' ? 'Só dicas ao vivo (o robô grava)' : mode === 'audio_only' ? 'Apenas áudio' : 'Tela + áudio';
   startTimer();
 }
 
@@ -337,6 +337,15 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.action === 'recordingStarted') {
     startTime = msg.startTime || Date.now();
     showActiveRecording(msg.mode || 'screen_audio');
+  }
+  if (msg.action === 'coachStarted') {
+    startTime = msg.startTime || Date.now();
+    showActiveRecording('coach');
+  }
+  // Fim das dicas ao vivo: não há envio, o robô manda a gravação.
+  if (msg.action === 'coachEnded') {
+    stopTimer();
+    showRecordingUI();
   }
   if (msg.action === 'uploadStarted') showUploadingState();
   if (msg.action === 'uploadComplete') showDoneState();

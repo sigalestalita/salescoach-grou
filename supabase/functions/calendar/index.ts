@@ -4,8 +4,9 @@
 //   { action: "status" }                      conexão atual e agendas disponíveis
 //   { action: "connect", provider, returnTo } endereço de autorização
 //   { action: "disconnect" }                  remove a conexão e os tokens
-//   { action: "lookup", meetingUrl, title }   evento da reunião aberta agora
-//                                             (usado pela extensão)
+//   { action: "lookup", meetingUrl, title }   evento da reunião aberta agora,
+//                                             o robô dela e como o vendedor
+//                                             escolheu gravar (usado pela extensão)
 //   { action: "events", from, to }            eventos da agenda principal no
 //                                             período, com a gravação de cada
 //                                             um (tela Minha agenda)
@@ -21,8 +22,9 @@ import { signState, verifyState } from "../_shared/crm/crypto.ts";
 import { backTo, safeReturn } from "../_shared/redirect.ts";
 import {
   AGENDA_MAX_DAYS, agendaEvents, authorizeUrl, availableProviders, CalendarError, CalendarProvider, exchangeCode,
-  lookupMeeting, saveAccount,
+  lookupMeeting, meetingKeys, saveAccount,
 } from "../_shared/calendar.ts";
+import { ROBO_ATIVO, roboDaChamada } from "../_shared/robo.ts";
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -84,15 +86,32 @@ Deno.serve(async (req) => {
     if (action === "lookup") {
       const meetingUrl = typeof body.meetingUrl === "string" ? body.meetingUrl.slice(0, 2000) : null;
       const title = typeof body.title === "string" ? body.title.slice(0, 300) : null;
+      let event = null, reconnect = false;
       try {
-        const event = await lookupMeeting(ctx.admin, ctx.userId, ctx.email, { meetingUrl, title });
-        return json(req, { event });
+        event = await lookupMeeting(ctx.admin, ctx.userId, ctx.email, { meetingUrl, title });
       } catch (e) {
         // A gravação não depende da agenda: falha aqui vira "sem evento".
         console.error("calendar lookup:", e);
-        const reconnect = e instanceof CalendarError && e.reconnect;
-        return json(req, { event: null, reconnect });
+        reconnect = e instanceof CalendarError && e.reconnect;
       }
+      // Robô desta chamada (com ou sem agenda conectada): com ele, a extensão
+      // oferece só o coach ao vivo; com "Não gravar", não oferece a gravação.
+      let robo = null, escolha = null;
+      try {
+        const agora = Date.now();
+        const { data: robos } = await ctx.admin.from("meeting_bots")
+          .select("id, calendar_event_id, meeting_url, status, escolha")
+          .eq("user_id", ctx.userId)
+          .gte("start_at", new Date(agora - 6 * 3600_000).toISOString())
+          .lte("start_at", new Date(agora + 3 * 3600_000).toISOString())
+          .order("created_at", { ascending: false }).limit(50);
+        const r = roboDaChamada(robos ?? [], { eventId: event?.eventId ?? null, chaves: meetingKeys([meetingUrl]), chavesDe: (u) => meetingKeys([u]) });
+        if (r && ROBO_ATIVO.includes(r.status)) robo = { id: r.id, status: r.status };
+        else if (r?.status === "cancelado") escolha = r.escolha;
+      } catch (e) {
+        console.error("calendar lookup (robô):", e);
+      }
+      return json(req, { event, reconnect, robo, escolha });
     }
 
     if (action === "events") {

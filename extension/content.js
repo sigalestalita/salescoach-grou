@@ -42,6 +42,9 @@
   let lastToken = null;
   // Gravação principal subindo: fechar a aba agora perderia o vídeo.
   let uploading = false;
+  // Só o coach ao vivo: o robô de reunião grava esta chamada, a extensão só ouve.
+  let soCoach = false;
+  let coachAtivo = false;
 
   // ── Overlay DOM ──
   //
@@ -140,7 +143,11 @@
   // Parar pede confirmação: o botão fica no cabeçalho, perto do minimizar.
   stopBtn.addEventListener('click', () => {
     setMinimized(false);
-    $id('sc-confirm-text').textContent = `A gravação de ${timerEl.textContent} é enviada para análise. O resultado chega em alguns minutos.`;
+    $id('sc-confirm-text').textContent = coachAtivo
+      ? 'As dicas ao vivo param. O robô continua gravando até a reunião acabar.'
+      : `A gravação de ${timerEl.textContent} é enviada para análise. O resultado chega em alguns minutos.`;
+    $id('sc-confirm-yes').textContent = coachAtivo ? 'Encerrar as dicas' : 'Parar e enviar';
+    $id('sc-confirm-no').textContent = coachAtivo ? 'Continuar' : 'Continuar gravando';
     confirmEl.hidden = false;
     $id('sc-confirm-no').focus();
   });
@@ -237,7 +244,7 @@
     if (msg.action === 'stopRecording') stopRecording();
     // O popup confere se há mesmo uma gravação viva antes de mostrar "Enviando…".
     if (msg.action === 'status') {
-      sendResponse({ recording: !!mediaRecorder && mediaRecorder.state === 'recording', uploading, starting });
+      sendResponse({ recording: (!!mediaRecorder && mediaRecorder.state === 'recording') || coachAtivo, uploading, starting });
     }
   };
   chrome.runtime.onMessage.addListener(onMessage);
@@ -313,6 +320,8 @@
         status: 'ao_vivo',
         meeting_date: new Date().toISOString(),
         seller_id: userId,
+        // Só o coach ao vivo: a gravação do robô entra nesta reunião.
+        ...(meta.meetingBotId ? { meeting_bot_id: meta.meetingBotId } : {}),
       }]),
     }, 20000);
     if (!res.ok) {
@@ -340,7 +349,7 @@
     if (!overlay.isConnected) return;
     // Duas gravações ao mesmo tempo produzem um arquivo ilegível. Se já há uma
     // em curso, mantém a que está rodando.
-    if (starting || (mediaRecorder && mediaRecorder.state === 'recording')) {
+    if (starting || coachAtivo || (mediaRecorder && mediaRecorder.state === 'recording')) {
       console.warn('Sales Coach: já existe uma gravação em curso; o pedido foi ignorado.');
       return;
     }
@@ -418,11 +427,14 @@
     initEl.hidden = false;
     recordingEl.hidden = true;
     statusMsgEl.hidden = true;
+    let meta = {};
+    try { meta = (await chrome.storage.local.get(['meetingData'])).meetingData || {}; } catch {}
+    soCoach = meta.soCoach === true;
 
     // Por padrão grava só o áudio: microfone (vendedor) + a voz do cliente que
     // chega pela chamada. Sem seletor de tela e quase sem peso no computador.
     // A tela só entra se a pessoa marcou "Gravar também a tela".
-    if (await querGravarTela()) {
+    if (!soCoach && await querGravarTela()) {
       initEl.textContent = 'Escolha a aba da reunião e clique em Compartilhar.';
       screenStream = await pedirTela(true);
       while (!screenStream) {
@@ -433,13 +445,15 @@
       // A extensão não está ouvindo a chamada (instalada ou atualizada com a
       // reunião já aberta). Com ela ouvindo, o cliente entra sozinho quando
       // chegar na sala. Sem ela, pega o áudio da aba e descarta o vídeo.
-      initEl.textContent = 'Para ouvir o cliente, escolha a aba da reunião e clique em Compartilhar. Só o áudio é gravado.';
+      initEl.textContent = soCoach
+        ? 'Para ouvir o cliente, escolha a aba da reunião e clique em Compartilhar. Nada é gravado.'
+        : 'Para ouvir o cliente, escolha a aba da reunião e clique em Compartilhar. Só o áudio é gravado.';
       screenStream = await pedirTela(false);
       if (screenStream) {
         for (const t of screenStream.getVideoTracks()) { t.stop(); screenStream.removeTrack(t); }
       }
     } else {
-      initEl.textContent = 'Iniciando a gravação…';
+      initEl.textContent = soCoach ? 'Ligando as dicas ao vivo…' : 'Iniciando a gravação…';
     }
     if (screenStream) {
       hasScreen = screenStream.getVideoTracks().length > 0;
@@ -470,6 +484,8 @@
     clienteMix = montarCliente(audioContext, hasSystemAudio ? new MediaStream(screenStream.getAudioTracks()) : null);
     if (clienteMix) clienteMix.saida.connect(mixedDest);
     const clienteStream = clienteMix ? clienteMix.stream : null;
+
+    if (soCoach) { await iniciarSoCoach(meta, clienteStream, hasSystemAudio); return; }
 
     const tracks = [...mixedDest.stream.getAudioTracks()];
     if (hasScreen) tracks.unshift(...screenStream.getVideoTracks());
@@ -597,7 +613,75 @@
     }
   }
 
+  // ── Só o coach ao vivo ──
+  //
+  // O vendedor escolheu o robô de reunião para esta chamada: o robô grava (áudio
+  // e vídeo, pelos servidores) e a extensão só ouve para as dicas ao vivo. Sem
+  // gravador, sem cópia em partes e sem envio no fim: nada pesa no computador.
+  // A reunião criada aqui leva meeting_bot_id, e a gravação do robô entra nela
+  // quando a chamada acaba (meeting-bot-webhook).
+  async function iniciarSoCoach(meta, clienteStream, hasSystemAudio) {
+    coachAtivo = true;
+    startTime = Date.now();
+    initEl.hidden = true;
+    recordingEl.hidden = false;
+    recEl.hidden = false;
+    recEl.classList.add('sc-coach');
+    // "AO VIVO 00:00" é mais largo que "REC": o logo basta no cabeçalho.
+    overlay.classList.add('sc-modo-coach');
+    recEl.querySelector('span').firstChild.nodeValue = 'AO VIVO ';
+    recEl.title = 'Só as dicas ao vivo: quem grava é o robô';
+    stopBtn.hidden = false;
+    stopBtn.title = 'Encerrar as dicas';
+    stopBtn.setAttribute('aria-label', 'Encerrar as dicas');
+    startTimer();
+    startMeters(micStream, clienteStream);
+    if (!hasSystemAudio && !temAudioDaChamada()) {
+      setAlert('sem-cliente', {
+        kind: 'warn', title: 'Não estou ouvindo o cliente',
+        text: 'As dicas usam só a sua voz. Compartilhe a aba da reunião com "Compartilhar áudio da guia" marcado.',
+        action: OUVIR_PELA_ABA,
+      });
+    }
+    safeStorageSet({ recordingState: 'recording', recordingStartTime: startTime, recordingMode: 'coach', isScreenSharing: false });
+    notifyBackground('coachStarted', { mode: 'coach', startTime });
+
+    setLiveText('Conectando a transcrição…');
+    setTipsStatus('Conectando o coach…');
+    try {
+      const token = await getValidToken();
+      if (!token) throw new Error('sessão expirada — refaça login na extensão');
+      meetingId = await preCreateMeeting(token, meta);
+      if (!meetingId) throw new Error('não foi possível criar a reunião.');
+      chrome.storage.local.set({ lastMeetingId: meetingId });
+      await startLive(token, meetingId, { vendedor: micStream, cliente: clienteStream });
+    } catch (e) {
+      console.warn('Live coach off:', e);
+      setLiveText('Transcrição ao vivo desligada nesta reunião.');
+      setTipsStatus(null);
+      tipsEl.innerHTML = '';
+      setAlert('live-off', {
+        kind: 'warn', title: 'Dicas ao vivo indisponíveis',
+        text: 'O robô continua gravando e a análise sai no final.',
+        detail: String(e?.message || e),
+      });
+    }
+  }
+
+  function encerrarCoach() {
+    coachAtivo = false;
+    recordingEl.hidden = true;
+    stopLive();
+    cleanup();
+    safeStorageSet({ recordingState: 'idle' });
+    try { chrome.storage.local.remove(['recordingStartTime', 'recordingMode']); } catch {}
+    notifyBackground('coachEnded', { meetingId });
+    showStatus('success', 'Dicas encerradas. A análise vem da gravação do robô, alguns minutos depois que a reunião acabar.');
+    autoRemove(7000);
+  }
+
   function stopRecording() {
+    if (coachAtivo) { encerrarCoach(); return; }
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.stop();
       recordingEl.hidden = true;

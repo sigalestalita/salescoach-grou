@@ -47,4 +47,9 @@ describe("trecho da ajuda para o assistente", () => {
     const h = helpContextFor("uso o bot ou a extensão pra gravar?", "vendedor");
     expect(h).toContain("Robô ou extensão?");
   });
+
+  it("pergunta sobre dicas ao vivo com o robô leva a resposta certa", () => {
+    const g = helpContextFor("o robô está gravando, ainda tenho as dicas ao vivo?", "vendedor");
+    expect(g).toContain("Ligar dicas ao vivo");
+  });
 });

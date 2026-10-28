@@ -12,8 +12,19 @@ export interface MeetingBot {
   meeting_id: string | null;
   /** Agendado pelo robô automático. */
   automatico?: boolean;
+  /** Como o vendedor escolheu gravar, quando não é o robô. */
+  escolha?: Escolha | null;
   created_at: string;
 }
+
+/** Como gravar uma reunião da agenda. */
+export type Escolha = "robo" | "extensao" | "nao_gravar";
+
+export const ESCOLHA_LABEL: Record<Escolha, string> = {
+  robo: "Robô",
+  extensao: "Extensão",
+  nao_gravar: "Não gravar",
+};
 
 /** Robô automático: em quais reuniões da agenda ele entra sozinho. */
 export type ModoRobo = "desligado" | "clientes" | "todas";
@@ -64,6 +75,22 @@ export function entraSozinho(
   return new Date(ev.end) > now && new Date(ev.start).getTime() > now.getTime() - 20 * 60_000;
 }
 
+/**
+ * Como a reunião vai ser gravada: o robô (agendado ou previsto pelo modo
+ * automático), a extensão (o padrão) ou nada, pela escolha do vendedor.
+ */
+export function escolhaAtual(
+  robo: MeetingBot | null,
+  ev: Parameters<typeof entraSozinho>[0],
+  modo: ModoRobo,
+  now: Date,
+): Escolha {
+  if (robo && BOT_ATIVOS.includes(robo.status)) return "robo";
+  if (robo?.status === "cancelado") return robo.escolha === "nao_gravar" ? "nao_gravar" : "extensao";
+  if (!robo && entraSozinho(ev, modo, now)) return "robo";
+  return "extensao";
+}
+
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("meeting-bot", { body });
   if (error) {
@@ -77,10 +104,12 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
 export const meetingBotApi = {
   listar: (from: Date, to: Date) =>
     call<{ ativo: boolean; modo?: ModoRobo; robos: MeetingBot[] }>({ action: "listar", from: from.toISOString(), to: to.toISOString() }),
-  enviar: (ev: { id: string; joinUrl: string; title: string; start: string; lead: { name: string | null; email: string } | null; attendees: unknown[] }) =>
-    call<{ ok: boolean; id: string }>({ action: "enviar", eventId: ev.id, meetingUrl: ev.joinUrl, title: ev.title, start: ev.start, lead: ev.lead, attendees: ev.attendees }),
-  cancelar: (id: string) => call<{ ok: boolean }>({ action: "cancelar", id }),
-  pular: (ev: { id: string; joinUrl: string; title: string; start: string }) =>
-    call<{ ok: boolean }>({ action: "pular", eventId: ev.id, meetingUrl: ev.joinUrl, title: ev.title, start: ev.start }),
+  escolher: (
+    ev: { id: string; joinUrl: string; title: string; start: string; lead: { name: string | null; email: string } | null; attendees: unknown[] },
+    escolha: Escolha,
+  ) =>
+    call<{ ok: boolean }>({
+      action: "escolher", escolha, eventId: ev.id, meetingUrl: ev.joinUrl, title: ev.title, start: ev.start, lead: ev.lead, attendees: ev.attendees,
+    }),
   modo: (modo: ModoRobo) => call<{ ok: boolean; modo: ModoRobo }>({ action: "modo", modo }),
 };

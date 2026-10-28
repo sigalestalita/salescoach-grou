@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { EventoAgenda, planejar, RoboExistente } from "./robo.ts";
+import { EventoAgenda, planejar, RoboExistente, roboDaChamada } from "./robo.ts";
+import { meetingKeys } from "./calendar.ts";
 
 const agora = new Date("2026-11-03T12:00:00Z");
 const fim = new Date("2026-11-04T12:00:00Z");
@@ -52,4 +53,20 @@ Deno.test("robô automático: remarca, tira e devolve conforme a agenda muda", (
   const enviado = robo("mudou-hora", eventos[0].start, { automatico: false });
   assertEquals(tipos(planejar([eventos[0]], [enviado], "desligado", agora, fim)), []);
   assertEquals(tipos(planejar([eventos[0]], [robo("mudou-hora", eventos[0].start)], "desligado", agora, fim)), ["tirar:mudou-hora"]);
+});
+
+Deno.test("extensão: acha o robô da chamada pelo evento ou pelo link", () => {
+  const linha = (id: string, calendar_event_id: string | null, meeting_url: string, status = "agendado", escolha: string | null = null) =>
+    ({ id, calendar_event_id, meeting_url, status, escolha });
+  const robos = [
+    linha("novo", "ev-1", "https://meet.google.com/abc-defg-hij", "cancelado", "extensao"),
+    linha("velho", "ev-1", "https://meet.google.com/abc-defg-hij"),
+    linha("zoom", null, "https://us02web.zoom.us/j/12345678901?pwd=x"),
+  ];
+  const chavesDe = (u: string) => meetingKeys([u]);
+  // Vale o pedido mais novo: aqui, a troca para a extensão.
+  assertEquals(roboDaChamada(robos, { eventId: "ev-1", chaves: [], chavesDe })?.id, "novo");
+  assertEquals(roboDaChamada(robos, { eventId: null, chaves: meetingKeys(["https://meet.google.com/abc-defg-hij?authuser=0"]), chavesDe })?.id, "novo");
+  assertEquals(roboDaChamada(robos, { eventId: null, chaves: meetingKeys(["https://zoom.us/wc/join/12345678901"]), chavesDe })?.id, "zoom");
+  assertEquals(roboDaChamada(robos, { eventId: "outro", chaves: meetingKeys(["https://meet.google.com/zzz-zzzz-zzz"]), chavesDe }), null);
 });

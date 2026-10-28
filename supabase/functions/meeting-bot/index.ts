@@ -5,8 +5,10 @@
 //   { action: "listar", from, to }   robôs do vendedor no período e se o robô está ativo
 //   { action: "enviar", eventId, meetingUrl, title, start, lead, attendees, meetingType? }
 //   { action: "cancelar", id }       tira da agenda ou faz o robô sair da chamada
+//   { action: "escolher", escolha, eventId, meetingUrl, title, start, lead?, attendees? }
+//                                    como gravar esta reunião: robo | extensao | nao_gravar
 //   { action: "pular", eventId, meetingUrl, title, start }
-//                                    "não gravar esta reunião" (exceção do modo automático)
+//                                    "não gravar esta reunião" (versão anterior da tela)
 //   { action: "modo", modo }         robô automático: desligado | clientes | todas
 // POST do agendador (pg_cron), com x-cron-secret = ROBO_CRON_SECRET e { action: "cron" }:
 //   agenda, remarca ou tira os robôs automáticos das próximas 24 horas.
@@ -18,9 +20,11 @@ import { json, preflight } from "../_shared/cors.ts";
 import { adminClient, assertQuota, getCaller, HttpError, isInternalCall } from "../_shared/tenant.ts";
 import { cancelarRobo, criarRobo, plataformaDe, recallAtivo, RecallError } from "../_shared/recall.ts";
 import { agendaEvents } from "../_shared/calendar.ts";
-import { Acao, JANELA_HORAS, ModoRobo, MODOS_ROBO, planejar, RoboExistente } from "../_shared/robo.ts";
+import {
+  Acao, Escolha, ESCOLHAS, JANELA_HORAS, ModoRobo, MODOS_ROBO, planejar, ROBO_ATIVO, RoboExistente,
+} from "../_shared/robo.ts";
 
-const ATIVOS = ["agendado", "entrando", "sala_de_espera", "na_chamada", "gravando", "processando"];
+const ATIVOS = ROBO_ATIVO;
 const ORGS_ATIVAS = ["trial", "active", "past_due"];
 const txt = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "") || null;
 const agoraIso = () => new Date().toISOString();
@@ -62,10 +66,15 @@ async function agendar(admin: SupabaseClient, dono: Dono, d: DadosReuniao, autom
   return linha.id;
 }
 
-/** Tira o robô da Recall sem travar quando ele já não existe lá. */
-async function desmarcar(providerBotId: string | null) {
+const DETALHE_ESCOLHA: Record<Exclude<Escolha, "robo">, string> = {
+  extensao: "Você escolheu gravar pela extensão.",
+  nao_gravar: "Você escolheu não gravar esta reunião.",
+};
+
+/** Tira o robô da Recall (ou da chamada) sem travar quando ele já não existe lá. */
+async function desmarcar(providerBotId: string | null, jaEntrou = false) {
   if (!providerBotId) return;
-  try { await cancelarRobo(providerBotId, false); } catch (e) {
+  try { await cancelarRobo(providerBotId, jaEntrou); } catch (e) {
     if (!(e instanceof RecallError && e.status === 404)) throw e;
   }
 }
@@ -199,7 +208,7 @@ Deno.serve(async (req) => {
       const from = new Date(String(body.from ?? "")), to = new Date(String(body.to ?? ""));
       if (isNaN(from.getTime()) || isNaN(to.getTime()) || to <= from) throw new HttpError(400, "Período inválido.");
       const { data, error } = await ctx.admin.from("meeting_bots")
-        .select("id, calendar_event_id, meeting_url, title, start_at, status, status_detail, meeting_id, automatico, created_at")
+        .select("id, calendar_event_id, meeting_url, title, start_at, status, status_detail, meeting_id, automatico, escolha, created_at")
         .eq("user_id", ctx.userId)
         .gte("start_at", new Date(from.getTime() - 86400_000).toISOString())
         .lte("start_at", new Date(to.getTime() + 86400_000).toISOString())
@@ -255,9 +264,50 @@ Deno.serve(async (req) => {
       const { error } = await ctx.admin.from("meeting_bots").insert({
         org_id: ctx.orgId, user_id: ctx.userId, calendar_event_id: eventId, meeting_url: meetingUrl,
         title: txt(body.title, 300), start_at: inicio.toISOString(), automatico: true,
-        status: "cancelado", status_detail: "Você tirou o robô desta reunião.",
+        status: "cancelado", status_detail: DETALHE_ESCOLHA.nao_gravar, escolha: "nao_gravar",
       });
       if (error) throw error;
+      return json(req, { ok: true });
+    }
+
+    if (action === "escolher") {
+      const escolha = body.escolha as Escolha;
+      if (!ESCOLHAS.includes(escolha)) throw new HttpError(400, "Escolha inválida.");
+      const eventId = txt(body.eventId, 300), meetingUrl = txt(body.meetingUrl, 2000);
+      const inicio = body.start ? new Date(String(body.start)) : null;
+      if (!eventId || !meetingUrl || !inicio || isNaN(inicio.getTime())) throw new HttpError(400, "Reunião inválida.");
+      const { data: ultimo } = await ctx.admin.from("meeting_bots").select("id, provider_bot_id, status")
+        .eq("user_id", ctx.userId).eq("calendar_event_id", eventId)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+      if (escolha === "robo") {
+        if (ultimo && ATIVOS.includes(ultimo.status)) return json(req, { ok: true, id: ultimo.id });
+        if (!plataformaDe(meetingUrl)) throw new HttpError(400, "O robô entra só em reuniões do Google Meet, Microsoft Teams ou Zoom.");
+        if (inicio.getTime() < Date.now() - 3 * 3600_000) throw new HttpError(400, "Essa reunião já passou.");
+        await assertQuota(ctx.admin, ctx.orgId, "analise", 1);
+        const id = await agendar(ctx.admin, { orgId: ctx.orgId, userId: ctx.userId, primeiroNome: await primeiroNome(ctx.admin, ctx.userId, ctx.email) }, {
+          eventId, meetingUrl, title: txt(body.title, 300), inicio,
+          lead: body.lead && typeof body.lead === "object" ? body.lead : {},
+          attendees: Array.isArray(body.attendees) ? body.attendees.slice(0, 50) : null,
+        }, false);
+        return json(req, { ok: true, id });
+      }
+
+      const campos = { status: "cancelado", escolha, status_detail: DETALHE_ESCOLHA[escolha], updated_at: agoraIso() };
+      if (ultimo && ATIVOS.includes(ultimo.status)) {
+        if (ultimo.status === "processando") throw new HttpError(409, "A reunião já acabou: a gravação do robô está sendo preparada.");
+        await desmarcar(ultimo.provider_bot_id, ultimo.status !== "agendado");
+        await ctx.admin.from("meeting_bots").update(campos).eq("id", ultimo.id);
+      } else if (ultimo?.status === "cancelado") {
+        await ctx.admin.from("meeting_bots").update(campos).eq("id", ultimo.id);
+      } else {
+        // Vira a exceção do robô automático para esta reunião.
+        const { error } = await ctx.admin.from("meeting_bots").insert({
+          org_id: ctx.orgId, user_id: ctx.userId, calendar_event_id: eventId, meeting_url: meetingUrl,
+          title: txt(body.title, 300), start_at: inicio.toISOString(), automatico: true, ...campos,
+        });
+        if (error) throw error;
+      }
       return json(req, { ok: true });
     }
 
