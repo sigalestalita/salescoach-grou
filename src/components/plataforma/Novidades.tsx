@@ -114,8 +114,9 @@ export function Novidades() {
         <div className="space-y-1.5">
           <CardTitle className="flex items-center gap-2 text-lg"><Megaphone className="h-5 w-5" /> Novidades e e-mail semanal</CardTitle>
           <CardDescription className="max-w-2xl">
-            A IA rascunha as novidades a partir das mudanças da semana; você revisa e publica. Publicadas, aparecem no Início
-            de quem usa e saem no e-mail de segunda, com a marca de cada empresa. Semana sem novidade publicada, sem e-mail.
+            A IA rascunha as novidades a partir das mudanças da semana; você revisa e publica. Publicadas, aparecem uma vez
+            numa janela "O que há de novo" quando cada pessoa abre o Sales Coach, ficam no Início por 30 dias e saem no
+            e-mail de segunda, com a marca de cada empresa. Semana sem novidade publicada, sem e-mail.
           </CardDescription>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">

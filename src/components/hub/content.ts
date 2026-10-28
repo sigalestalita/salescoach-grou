@@ -321,6 +321,7 @@ export const ARTICLES: HelpArticle[] = [
           "Seu ritmo: score médio dos últimos 30 dias, a tendência contra os 30 dias anteriores e as reuniões gravadas na semana.",
           "Dica do dia: escrita pela IA uma vez por dia, a partir das suas últimas reuniões analisadas (o critério da metodologia em que você está mais fraco), da metodologia e da base de conhecimento da empresa. Traz uma frase pronta para a próxima reunião.",
           "Você sabia?: um recurso do Sales Coach por dia.",
+          "Novidades: o que mudou no Sales Coach nos últimos 30 dias. Cada novidade aparece uma vez numa janela O que há de novo, quando você abre o Sales Coach, e fica no Início.",
         ],
       },
       {
