@@ -65,6 +65,28 @@ export async function cancelarRobo(id: string, jaEntrou: boolean) {
   else await recall(`/bot/${id}/`, { method: "DELETE" });
 }
 
+/**
+ * Por que o robô saiu da chamada (sub_code do aviso bot.call_ended), em
+ * português. Sem tradução, devolve null e a saída foi normal.
+ */
+export function motivoDaSaida(subCode: string | null | undefined): string | null {
+  const motivos: Record<string, string> = {
+    timeout_exceeded_waiting_room: "ninguém admitiu o robô: ele esperou 15 minutos na sala de espera do Meet e saiu",
+    bot_kicked_from_waiting_room: "o robô foi recusado na sala de espera",
+    timeout_exceeded_noone_joined: "ninguém entrou na reunião em 15 minutos (o link da agenda era o mesmo da chamada?)",
+    bot_kicked_from_call: "o robô foi removido da chamada",
+    timeout_exceeded_recording_permission_denied: "o anfitrião não permitiu a gravação",
+    meeting_not_found: "o link da reunião não existe",
+    meeting_link_invalid: "o link da reunião é inválido",
+    meeting_not_started: "a reunião não tinha começado",
+    meeting_full: "a reunião estava lotada",
+    meeting_requires_sign_in: "a reunião só aceita participantes com login",
+    google_meet_sign_in_required: "a reunião só aceita participantes com login",
+    google_meet_sign_in_failed: "a reunião só aceita participantes com login",
+  };
+  return subCode ? motivos[subCode] ?? null : null;
+}
+
 /** Endereços temporários da gravação (vídeo e áudio), depois que o robô termina. */
 export async function gravacaoDoRobo(id: string): Promise<{ video: string | null; audio: string | null }> {
   const bot = await recall(`/bot/${id}/`);

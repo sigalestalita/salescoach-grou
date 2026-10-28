@@ -11,7 +11,7 @@
 // e tenta de novo por 24 h se não receber 2xx.
 
 import { adminClient } from "../_shared/tenant.ts";
-import { avisoValido, gravacaoDoRobo } from "../_shared/recall.ts";
+import { avisoValido, gravacaoDoRobo, motivoDaSaida } from "../_shared/recall.ts";
 import { chamarCopia } from "../_shared/copiaVideo.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
@@ -50,7 +50,12 @@ Deno.serve(async (req) => {
   const atualizar = (campos: Record<string, unknown>) =>
     admin.from("meeting_bots").update({ ...campos, updated_at: agora }).eq("id", robo.id);
 
-  if (ESTADO[evento]) { await atualizar({ status: ESTADO[evento], status_detail: null }); return resposta(); }
+  if (ESTADO[evento]) {
+    // Ao sair, guarda o motivo: sem gravação, é ele que explica por quê.
+    const saida = evento === "bot.call_ended" ? motivoDaSaida(ev?.data?.data?.sub_code) : null;
+    await atualizar({ status: ESTADO[evento], status_detail: saida });
+    return resposta();
+  }
   if (MOTIVO[evento]) {
     const sub = ev?.data?.data?.sub_code ? ` (${ev.data.data.sub_code})` : "";
     await atualizar({ status: "erro", status_detail: MOTIVO[evento] + sub });
@@ -83,8 +88,10 @@ async function finalizar(admin: any, robo: any, botId: string) {
   try {
     const { video, audio } = await gravacaoDoRobo(botId);
     if (!video && !audio) {
-      await atualizar({ status: "erro", status_detail: "A Recall não devolveu a gravação." });
-      await avisarReuniao(admin, robo, "O robô saiu da reunião sem gravação (a Recall não devolveu o arquivo).");
+      // robo.status_detail traz o motivo da saída, guardado no bot.call_ended.
+      const motivo = robo.status_detail ? `O robô saiu sem gravar: ${robo.status_detail}.` : "A Recall não devolveu a gravação.";
+      await atualizar({ status: "erro", status_detail: motivo });
+      await avisarReuniao(admin, robo, motivo);
       return;
     }
 

@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { avisoValido, plataformaDe } from "./recall.ts";
+import { avisoValido, motivoDaSaida, plataformaDe } from "./recall.ts";
 
 const segredo = "whsec_" + btoa("chave-de-teste-com-32-bytes-ok!!");
 async function assinar(id: string, ts: string, corpo: string) {
@@ -33,4 +33,10 @@ Deno.test("plataformas atendidas pelo robô", () => {
   assertEquals(plataformaDe("https://teams.microsoft.com/l/meetup-join/xyz"), "teams");
   assertEquals(plataformaDe("https://us02web.zoom.us/j/123"), "zoom");
   assertEquals(plataformaDe("https://exemplo.com/reuniao"), null);
+});
+
+Deno.test("motivo da saída do robô", () => {
+  assertEquals(motivoDaSaida("timeout_exceeded_waiting_room")?.includes("sala de espera"), true);
+  assertEquals(motivoDaSaida("call_ended_by_host"), null);
+  assertEquals(motivoDaSaida(undefined), null);
 });
