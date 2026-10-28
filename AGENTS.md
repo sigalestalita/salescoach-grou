@@ -1,0 +1,2 @@
+# Architecture rules
+- Keep calendar support-mode handling in the shared calendar client so automatic reads and connection actions consistently respect read-only support without exposing the operator's calendar.

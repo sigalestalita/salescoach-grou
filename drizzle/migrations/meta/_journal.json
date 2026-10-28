@@ -141,6 +141,13 @@
       "when": 1792789171150,
       "tag": "0019_atividade_plataforma",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793150825422,
+      "tag": "0020_robo_reunioes",
+      "breakpoints": true
     }
   ]
 }
