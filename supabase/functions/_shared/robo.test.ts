@@ -69,4 +69,8 @@ Deno.test("extensão: acha o robô da chamada pelo evento ou pelo link", () => {
   assertEquals(roboDaChamada(robos, { eventId: null, chaves: meetingKeys(["https://meet.google.com/abc-defg-hij?authuser=0"]), chavesDe })?.id, "novo");
   assertEquals(roboDaChamada(robos, { eventId: null, chaves: meetingKeys(["https://zoom.us/wc/join/12345678901"]), chavesDe })?.id, "zoom");
   assertEquals(roboDaChamada(robos, { eventId: "outro", chaves: meetingKeys(["https://meet.google.com/zzz-zzzz-zzz"]), chavesDe }), null);
+  // Link no formato meet.google.com/meet/<código>.
+  assertEquals(meetingKeys(["https://meet.google.com/meet/pad-oqzd-ugp?authuser=0"]), ["meet:pad-oqzd-ugp"]);
+  // Mesmo evento, mas a chamada aberta é em outro link: o robô não está nela.
+  assertEquals(roboDaChamada(robos, { eventId: "ev-1", chaves: meetingKeys(["https://meet.google.com/meet/pad-oqzd-ugp"]), chavesDe }), null);
 });
