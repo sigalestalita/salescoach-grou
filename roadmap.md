@@ -5,5 +5,5 @@
 - [x] Evitar geração da dica do dia no suporte somente leitura e verificar Início.
 
 # Robô automático
-- [ ] Aplicar e verificar a migração 20261101090000_robo_automatico.sql com permissões de acesso.
-- [ ] Publicar meeting-bot, meeting-bot-webhook e calendar; conferir verify_jwt.
+- [x] Aplicar e verificar a migração 20261101090000_robo_automatico.sql com permissões de acesso.
+- [x] Publicar meeting-bot, meeting-bot-webhook e calendar; conferir verify_jwt.
