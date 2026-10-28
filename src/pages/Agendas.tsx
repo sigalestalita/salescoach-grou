@@ -76,6 +76,7 @@ const isMeetingProcessingStalled = (meeting: Pick<Meeting, "status" | "updated_a
   Date.now() - new Date(meeting.updated_at).getTime() > PROCESSING_STALE_AFTER_MS;
 
 const statusLabels: Record<string, string> = {
+  ao_vivo: "Ao vivo",
   enviado: "Enviado",
   baixando: "Baixando",
   transcrevendo: "Transcrevendo",
@@ -85,6 +86,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
+  ao_vivo: "bg-info/10 text-info",
   enviado: "bg-muted text-muted-foreground",
   baixando: "bg-info/10 text-info",
   transcrevendo: "bg-info/10 text-info",
@@ -294,6 +296,20 @@ const Agendas = () => {
   };
 
   const handleReanalyze = async (meeting: Meeting) => {
+    // Ainda ao vivo: quem decide é o servidor (espera o robô ou usa a
+    // transcrição do coach ao vivo), sem apagar nada antes.
+    if (meeting.status === "ao_vivo") {
+      const { error } = await supabase.functions.invoke("analyze-meeting", { body: { meetingId: meeting.id } });
+      if (error) {
+        const motivo = await (error as { context?: Response }).context?.json?.()
+          .then((b: { error?: string }) => b?.error).catch(() => null);
+        toast({ title: "Ainda sem gravação", description: motivo || error.message });
+      } else {
+        toast({ title: "Análise iniciada!", description: "O processamento pode levar alguns minutos." });
+        fetchMeetings();
+      }
+      return;
+    }
     try {
       // Clear previous analysis data
       await Promise.all([

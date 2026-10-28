@@ -11,7 +11,7 @@
 // e tenta de novo por 24 h se não receber 2xx.
 
 import { adminClient } from "../_shared/tenant.ts";
-import { avisoValido, gravacaoDoRobo } from "../_shared/recall.ts";
+import { avisoValido, gravacaoDoRobo, motivoDaSaida } from "../_shared/recall.ts";
 import { chamarCopia } from "../_shared/copiaVideo.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
@@ -50,13 +50,16 @@ Deno.serve(async (req) => {
   const atualizar = (campos: Record<string, unknown>) =>
     admin.from("meeting_bots").update({ ...campos, updated_at: agora }).eq("id", robo.id);
 
-  if (ESTADO[evento]) { await atualizar({ status: ESTADO[evento], status_detail: null }); return resposta(); }
+  if (ESTADO[evento]) {
+    // Ao sair, guarda o motivo: sem gravação, é ele que explica por quê.
+    const saida = evento === "bot.call_ended" ? motivoDaSaida(ev?.data?.data?.sub_code) : null;
+    await atualizar({ status: ESTADO[evento], status_detail: saida });
+    return resposta();
+  }
   if (MOTIVO[evento]) {
     const sub = ev?.data?.data?.sub_code ? ` (${ev.data.data.sub_code})` : "";
     await atualizar({ status: "erro", status_detail: MOTIVO[evento] + sub });
-    // A reunião do coach ao vivo esperava esta gravação: avisa nela.
-    await admin.from("meetings").update({ status: "erro", error_message: `O robô não gravou: ${MOTIVO[evento]}${sub}` })
-      .eq("meeting_bot_id", robo.id).eq("seller_id", robo.user_id).eq("status", "ao_vivo");
+    await avisarReuniao(admin, robo, `O robô não gravou: ${MOTIVO[evento]}${sub}`);
     return resposta();
   }
   if (evento !== "bot.done") return resposta();
@@ -69,6 +72,14 @@ Deno.serve(async (req) => {
   return resposta();
 });
 
+// A reunião do coach ao vivo esperava esta gravação: mostra nela por que não
+// veio (também se já estava em erro, por uma análise pedida antes da hora).
+// deno-lint-ignore no-explicit-any
+async function avisarReuniao(admin: any, robo: any, mensagem: string) {
+  await admin.from("meetings").update({ status: "erro", error_message: mensagem })
+    .eq("meeting_bot_id", robo.id).eq("seller_id", robo.user_id).in("status", ["ao_vivo", "erro"]);
+}
+
 // deno-lint-ignore no-explicit-any
 async function finalizar(admin: any, robo: any, botId: string) {
   const agora = () => new Date().toISOString();
@@ -76,7 +87,13 @@ async function finalizar(admin: any, robo: any, botId: string) {
     admin.from("meeting_bots").update({ ...campos, updated_at: agora() }).eq("id", robo.id);
   try {
     const { video, audio } = await gravacaoDoRobo(botId);
-    if (!video && !audio) { await atualizar({ status: "erro", status_detail: "A Recall não devolveu a gravação." }); return; }
+    if (!video && !audio) {
+      // robo.status_detail traz o motivo da saída, guardado no bot.call_ended.
+      const motivo = robo.status_detail ? `O robô saiu sem gravar: ${robo.status_detail}.` : "A Recall não devolveu a gravação.";
+      await atualizar({ status: "erro", status_detail: motivo });
+      await avisarReuniao(admin, robo, motivo);
+      return;
+    }
 
     let tipo = robo.meeting_type as string | null;
     if (!tipo) {
@@ -135,5 +152,6 @@ async function finalizar(admin: any, robo: any, botId: string) {
   } catch (e) {
     console.error("meeting-bot-webhook:", e);
     await atualizar({ status: "erro", status_detail: "Não foi possível enviar a gravação para análise." });
+    await avisarReuniao(admin, robo, "A gravação do robô chegou, mas não foi possível enviá-la para análise.").catch(() => {});
   }
 }

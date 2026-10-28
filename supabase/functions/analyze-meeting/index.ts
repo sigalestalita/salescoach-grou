@@ -304,6 +304,33 @@ async function transcribeWithGroq(fileData: Blob, fileName: string): Promise<str
 
 // ── Processamento ───────────────────────────────────────────────────────────
 
+/** O robô desta reunião ainda vai entregar a gravação (está na chamada ou processando). */
+const ROBO_ATIVO = ["agendado", "entrando", "sala_de_espera", "na_chamada", "gravando", "processando"];
+
+/**
+ * Transcrição do coach ao vivo (a extensão grava cada fala em
+ * transcription_segments, com quem falou). Serve quando não há gravação: o
+ * robô não gravou e a extensão estava só com as dicas.
+ */
+// deno-lint-ignore no-explicit-any
+async function transcricaoAoVivo(supabase: any, meetingId: string) {
+  const { data } = await supabase.from("transcription_segments")
+    .select("speaker, text, created_at").eq("meeting_id", meetingId).eq("is_final", true)
+    .order("created_at").limit(5000);
+  const falas = ((data ?? []) as { speaker: string | null; text: string; created_at: string }[])
+    .filter((f) => f.text?.trim());
+  if (!falas.length) return null;
+  const quem = (s: string | null) => s === "vendedor" ? "Vendedor" : s === "cliente" ? "Cliente" : "Participante";
+  const inicio = new Date(falas[0].created_at).getTime();
+  return {
+    text: falas.map((f) => `${quem(f.speaker)}: ${f.text.trim()}`).join("\n"),
+    speakers: falas.map((f) => ({
+      speaker: quem(f.speaker), text: f.text.trim(),
+      start: new Date(f.created_at).getTime() - inicio, end: null,
+    })),
+  };
+}
+
 async function processMeeting(meetingId: string, manualTranscript: string | null) {
   const lovableKey = Deno.env.get("LOVABLE_API_KEY")!;
   const supabase = adminClient();
@@ -319,6 +346,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
   const orgId: string = meeting.org_id;
   let transcript = "";
   let speakers: any[] | null = null;
+  let usouAoVivo = false;
 
   try {
     if (manualTranscript && manualTranscript.trim().length > 0) {
@@ -407,15 +435,21 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         unit: "bytes",
       });
     } else {
-      await supabase.from("meetings").update({
-        status: "erro",
-        error_message: "Nenhum arquivo nem link foi fornecido para esta reunião.",
-      }).eq("id", meetingId);
-      return;
+      const aoVivo = await transcricaoAoVivo(supabase, meetingId);
+      if (!aoVivo) {
+        await supabase.from("meetings").update({
+          status: "erro",
+          error_message: "Nenhum arquivo nem link foi fornecido para esta reunião.",
+        }).eq("id", meetingId);
+        return;
+      }
+      transcript = aoVivo.text;
+      speakers = aoVivo.speakers;
+      usouAoVivo = true;
     }
 
-    // Consumo de transcrição, em minutos.
-    if (!manualTranscript) {
+    // Consumo de transcrição, em minutos (a do coach ao vivo já foi contada).
+    if (!manualTranscript && !usouAoVivo) {
       await logUsage(supabase, {
         orgId,
         userId: meeting.seller_id,
@@ -648,7 +682,7 @@ Deno.serve(async (req) => {
 
     const meetingQuery = admin
       .from("meetings")
-      .select("id, status, seller_id, org_id")
+      .select("id, status, seller_id, org_id, file_url, youtube_url, meeting_bot_id")
       .eq("id", meetingId);
 
     // Do app, a reunião precisa ser da organização de quem chamou.
@@ -662,6 +696,29 @@ Deno.serve(async (req) => {
 
     if (ctx && meeting.seller_id !== ctx.userId && ctx.role !== "admin") {
       return json(req, { error: "Sem permissão para processar esta reunião" }, 403);
+    }
+
+    // Sem gravação: se o robô ainda vai entregá-la (chega alguns minutos depois
+    // que a chamada acaba, e a análise começa sozinha), não mexe na reunião. Se
+    // não vem gravação, a análise usa a transcrição do coach ao vivo, quando há.
+    if (!manualTranscript?.trim() && !meeting.file_url && !meeting.youtube_url) {
+      const { data: robo } = meeting.meeting_bot_id
+        ? await admin.from("meeting_bots").select("status").eq("id", meeting.meeting_bot_id).maybeSingle()
+        : { data: null };
+      if (robo && ROBO_ATIVO.includes(robo.status)) {
+        return json(req, {
+          error: "A gravação do robô ainda não chegou. A análise começa sozinha alguns minutos depois que a reunião acaba.",
+          code: "sem_gravacao",
+        }, 409);
+      }
+      if (meeting.status === "ao_vivo" && !robo) {
+        return json(req, { error: "A reunião ainda está sendo gravada.", code: "sem_gravacao" }, 409);
+      }
+      const { count } = await admin.from("transcription_segments")
+        .select("id", { count: "exact", head: true }).eq("meeting_id", meetingId).eq("is_final", true);
+      if (!count) {
+        return json(req, { error: "Nenhum arquivo nem link foi fornecido para esta reunião.", code: "sem_gravacao" }, 409);
+      }
     }
 
     await assertQuota(admin, meeting.org_id, "analise", 1);
