@@ -9,6 +9,14 @@
 //
 // Acesso: chamada interna (live-transcribe) ou usuário autenticado com acesso
 // à reunião.
+//
+// Ritmo (_shared/liveCoach.ts): a extensão manda quem acabou de falar
+// (gatilho). Logo depois de uma dica, a fala do vendedor não chama a IA (ele
+// está lendo ou fazendo a pergunta sugerida), e a dica que for só a anterior
+// com outras palavras é descartada. Para responder mais rápido, o modelo não
+// "pensa" antes (com volta ao formato antigo se o gateway recusar) e o contexto
+// da empresa fica guardado alguns minutos. Cada chamada registra o tempo de
+// cada etapa (log "live-coach tempos").
 
 import { json, preflight } from "../_shared/cors.ts";
 import {
@@ -20,6 +28,7 @@ import {
   logUsage,
 } from "../_shared/tenant.ts";
 import { docMatchesArea, knowledgeAreaFor, loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
+import { dicaRepetida, vaiChamarIa } from "../_shared/liveCoach.ts";
 
 const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 // Mesmo modelo da análise, comprovadamente aceito pelo gateway. LIVE_COACH_MODEL
@@ -31,6 +40,34 @@ const RECENT_TIPS = 6;          // dicas recentes a não repetir
 const KB_DOCS = 4;              // documentos mais relevantes para o momento
 const KB_CHARS_PER_DOC = 900;
 const KB_ITEMS = 30;
+const CONTEXTO_TTL_MS = 5 * 60_000; // contexto da empresa guardado entre chamadas da mesma reunião
+
+// Contexto da empresa (metodologia, tipo de reunião, ofertas, base de
+// conhecimento): muda pouco durante uma reunião e era recarregado a cada dica.
+// Fica na memória da função enquanto ela está quente.
+type Admin = ReturnType<typeof adminClient>;
+function carregarContexto(admin: Admin, orgId: string, meetingType: string | null) {
+  return Promise.all([
+    loadTemplate(admin, orgId, meetingType),
+    loadMeetingTypeContext(admin, orgId, meetingType),
+    admin.from("meeting_types").select("label").eq("org_id", orgId).eq("key", meetingType ?? "").maybeSingle(),
+    admin.from("offer_types").select("label, instructions").eq("org_id", orgId).eq("is_active", true).order("sort_order"),
+    // "*" e não a lista de colunas: antes da migração da área, pedir "area" derrubaria a consulta.
+    admin.from("knowledge_documents").select("*").eq("org_id", orgId).not("extracted_content", "is", null),
+    admin.from("knowledge_items").select("name, item_type, category, description").eq("org_id", orgId).limit(KB_ITEMS),
+  ]);
+}
+const contextos = new Map<string, { em: number; valor: ReturnType<typeof carregarContexto> }>();
+function contextoDaEmpresa(admin: Admin, orgId: string, meetingType: string | null) {
+  const chave = `${orgId}:${meetingType ?? ""}`;
+  const guardado = contextos.get(chave);
+  if (guardado && Date.now() - guardado.em < CONTEXTO_TTL_MS) return guardado.valor;
+  const valor = carregarContexto(admin, orgId, meetingType);
+  contextos.set(chave, { em: Date.now(), valor });
+  valor.catch(() => contextos.delete(chave));
+  if (contextos.size > 200) contextos.delete(contextos.keys().next().value!);
+  return valor;
+}
 
 // ── Relevância da base de conhecimento ──────────────────────────────────────
 // Ranqueia documentos pela sobreposição de termos com a conversa recente. Não
@@ -72,7 +109,10 @@ Deno.serve(async (req) => {
   if (pre) return pre;
 
   try {
-    const { meetingId } = await req.json();
+    const t0 = Date.now();
+    const tempos: Record<string, number> = {};
+    const marca = (etapa: string) => { tempos[etapa] = Date.now() - t0; };
+    const { meetingId, gatilho } = await req.json();
     if (!meetingId) return json(req, { error: "meetingId required" }, 400);
 
     const internal = isInternalCall(req);
@@ -108,12 +148,19 @@ Deno.serve(async (req) => {
         .limit(TRANSCRIPT_WINDOW),
       admin
         .from("live_tips")
-        .select("titulo, categoria, acao")
+        .select("titulo, categoria, acao, emitted_at")
         .eq("meeting_id", meetingId)
         .eq("org_id", orgId)
         .order("emitted_at", { ascending: false })
         .limit(RECENT_TIPS),
     ]);
+
+    marca("conversa");
+    // Logo depois de uma dica, a fala do vendedor não chama a IA: ele está
+    // lendo ou fazendo a pergunta sugerida.
+    if (!vaiChamarIa(gatilho, recent?.[0]?.emitted_at)) {
+      return json(req, { emitted: false, reason: "dica recente", tempos });
+    }
 
     const ordered = (segs || []).reverse();
     // A extensão manda as falas em duas trilhas (microfone = vendedor, aba =
@@ -122,23 +169,21 @@ Deno.serve(async (req) => {
       s.speaker === "vendedor" ? "Vendedor: " : s.speaker === "cliente" ? "Cliente: " : "";
     const transcript = ordered.map((s) => `- ${who(s)}${s.text}`).join("\n");
     const lastTurn = ordered.slice(-4).map((s) => s.text).join(" ");
+    const haQuanto = (iso: string | null) => {
+      if (!iso) return "";
+      const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+      return s < 90 ? ` (há ${s} s)` : ` (há ${Math.round(s / 60)} min)`;
+    };
     const recentStr = (recent || [])
-      .map((t) => `- [${t.categoria}] ${t.titulo}${t.acao ? ` → "${t.acao}"` : ""}`)
+      .map((t) => `- [${t.categoria}] ${t.titulo}${t.acao ? ` → "${t.acao}"` : ""}${haQuanto(t.emitted_at)}`)
       .join("\n");
 
     if (!transcript.trim()) return json(req, { emitted: false, reason: "sem transcrição" });
 
     // ── Contexto da organização ───────────────────────────────────────────
     const [template, typeContext, { data: typeRow }, { data: offers }, { data: docs }, { data: items }] =
-      await Promise.all([
-        loadTemplate(admin, orgId, meeting.meeting_type),
-        loadMeetingTypeContext(admin, orgId, meeting.meeting_type),
-        admin.from("meeting_types").select("label").eq("org_id", orgId).eq("key", meeting.meeting_type ?? "").maybeSingle(),
-        admin.from("offer_types").select("label, instructions").eq("org_id", orgId).eq("is_active", true).order("sort_order"),
-        // "*" e não a lista de colunas: antes da migração da área, pedir "area" derrubaria a consulta.
-        admin.from("knowledge_documents").select("*").eq("org_id", orgId).not("extracted_content", "is", null),
-        admin.from("knowledge_items").select("name, item_type, category, description").eq("org_id", orgId).limit(KB_ITEMS),
-      ]);
+      await contextoDaEmpresa(admin, orgId, meeting.meeting_type);
+    marca("contexto");
 
     // Documentos da área da reunião (e os de "ambos"), ranqueados pelo que está sendo dito agora.
     const area = knowledgeAreaFor(template);
@@ -191,7 +236,7 @@ SUA TAREFA A CADA CHAMADA:
 2. Identifique o momento: o cliente acabou de mostrar um sinal de risco, uma insatisfação, uma dúvida, uma oportunidade, ou a conversa está sem direção?
 3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) tratar um sinal de risco ou reclamação que acabou de surgir; (b) responder uma dúvida com a informação certa da base de conhecimento; (c) puxar uma etapa obrigatória que ainda não aconteceu; (d) registrar um compromisso com prazo;${playbook.expansao_comercial ? " (d2) aproveitar uma oportunidade de expansão que o cliente abriu;" : ""} (e) corrigir postura (ouvir mais, confirmar entendimento).
 4. Escreva a frase EXATA que a pessoa deve dizer, em primeira pessoa, natural, como se fosse falada. Use só informações da base de conhecimento; nunca invente prazo, preço, política ou funcionalidade.
-5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}.
+5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
 
 FORMATO (JSON puro):
 {
@@ -221,7 +266,7 @@ SUA TAREFA A CADA CHAMADA:
 2. Identifique o momento: o lead acabou de levantar uma dor, uma objeção, um sinal de compra, ou a conversa está sem direção?
 3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) responder objeção ou sinal de compra que acabou de surgir; (b) explorar um critério ainda não coberto; (c) conectar uma dor dita pelo lead a algo da base de conhecimento; (d) corrigir postura (falar menos, perguntar mais).
 4. Escreva a frase EXATA que o vendedor deve dizer, em primeira pessoa, natural, como se fosse falada — não uma descrição do que fazer. Se a orientação usar a base de conhecimento, cite o produto/serviço/dado pelo nome que aparece nela e nunca invente número, preço ou funcionalidade que não esteja lá.
-5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}.
+5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
 
 FORMATO (JSON puro):
 {
@@ -241,7 +286,7 @@ Título: ${meeting.title}
 ${playbook ? "Cliente" : "Lead"}: ${meeting.lead_name ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
 Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}${typeContext ? `\n${typeContext.trim()}` : ""}
 
-## Conversa recente (do mais antigo ao mais novo; a transcrição não separa quem fala — deduza pelo conteúdo)
+## Conversa recente (do mais antigo ao mais novo; "Vendedor:" e "Cliente:" dizem quem falou quando a gravação separa as vozes; sem rótulo, deduza pelo conteúdo)
 ${transcript}
 
 ## Orientações já dadas nesta reunião (não repetir)
@@ -252,7 +297,7 @@ ${kbStr || "(sem documentos relacionados)"}
 
 ${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const chamaIa = (semRaciocinio: boolean) => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -263,8 +308,17 @@ ${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
         ],
         response_format: { type: "json_object" },
         temperature: 0.4,
+        // A dica é curta e precisa sair logo: raciocínio longo só atrasa.
+        ...(semRaciocinio ? { reasoning_effort: "none" } : {}),
       }),
     });
+    let aiRes = await chamaIa(true);
+    // Gateway sem o parâmetro: repete no formato antigo em vez de ficar sem dica.
+    if (aiRes.status === 400) {
+      console.warn("live-coach: gateway recusou reasoning_effort, repetindo sem:", (await aiRes.clone().text()).slice(0, 300));
+      aiRes = await chamaIa(false);
+    }
+    marca("ia");
 
     if (!aiRes.ok) {
       const t = await aiRes.text();
@@ -295,7 +349,13 @@ ${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
     try { tip = JSON.parse(content); } catch { tip = {}; }
 
     if (!tip.should_emit || !tip.titulo || !tip.acao) {
-      return json(req, { emitted: false });
+      console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: false }));
+      return json(req, { emitted: false, tempos });
+    }
+    // A mesma orientação com outras palavras troca a dica no meio da leitura.
+    if (dicaRepetida({ acao: String(tip.acao) }, (recent || []).slice(0, 3))) {
+      console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: false, motivo: "repetida" }));
+      return json(req, { emitted: false, reason: "repetida", tempos });
     }
 
     // Referência ao documento usado, quando o modelo citou um da lista.
@@ -320,7 +380,9 @@ ${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
       return json(req, { error: "insert_failed" }, 500);
     }
 
-    return json(req, { emitted: true, tip: inserted, criterios_cobertos: tip.criterios_cobertos ?? [] });
+    marca("gravada");
+    console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: true }));
+    return json(req, { emitted: true, tip: inserted, criterios_cobertos: tip.criterios_cobertos ?? [], tempos });
   } catch (e) {
     if (e instanceof HttpError) return json(req, { error: e.message, code: e.code }, e.status);
     console.error("live-coach error", e);

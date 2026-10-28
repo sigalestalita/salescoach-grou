@@ -942,10 +942,18 @@
   // dispara o coach em chamadas curtas.
 
   const AAI_WS = 'wss://streaming.assemblyai.com/v3/ws?speech_model=u3-rt-pro&encoding=pcm_s16le&sample_rate=16000&format_turns=true';
-  const COACH_EVERY_MS = 8000;
+  // Ritmo do coach. Depois da fala do cliente, chama logo (pode ser uma
+  // objeção). Depois da fala do vendedor, espera: logo depois de uma dica ele
+  // está lendo ou fazendo a pergunta sugerida, e a fala dele disparava uma
+  // versão nova da mesma pergunta. Uma chamada por vez.
+  const COACH_APOS_CLIENTE_MS = 2000;
+  const COACH_APOS_VENDEDOR_MS = 20000;
   const LABEL = { vendedor: 'Você', cliente: 'Cliente' };
   let lastCoachAt = 0;
   let coachTimer = null;
+  let coachTimerAt = 0;
+  let coachEmCurso = false;
+  let coachPendente = null; // quem falou enquanto uma chamada estava em curso
   const liveLines = [];
 
   /** Chamada autenticada a uma função ou ao REST; renova a sessão uma vez se expirou. */
@@ -996,20 +1004,40 @@
     } catch (e) {
       console.warn('Sales Coach: trecho não salvo', e);
     }
-    scheduleCoach(mid);
+    scheduleCoach(mid, who);
   }
 
-  // No máximo uma dica a cada 8 s: abaixo disso elas se atropelam.
-  function scheduleCoach(mid) {
-    if (coachTimer) return;
-    const wait = Math.max(0, COACH_EVERY_MS - (Date.now() - lastCoachAt));
-    coachTimer = setTimeout(() => {
-      coachTimer = null;
-      if (liveStopping) return;
-      lastCoachAt = Date.now();
-      authed('/functions/v1/live-coach', { method: 'POST', body: JSON.stringify({ meetingId: mid }) }, 30000)
-        .catch(() => {});
-    }, wait);
+  function scheduleCoach(mid, who) {
+    if (coachEmCurso) {
+      // Roda de novo quando a chamada atual voltar; a fala do cliente tem prioridade.
+      if (!coachPendente || who === 'cliente') coachPendente = who;
+      return;
+    }
+    const gap = who === 'cliente' ? COACH_APOS_CLIENTE_MS : COACH_APOS_VENDEDOR_MS;
+    const wait = Math.max(0, gap - (Date.now() - lastCoachAt));
+    // Já tem uma chamada marcada: só adianta (fala do cliente), nunca atrasa.
+    if (coachTimer) {
+      if (Date.now() + wait >= coachTimerAt) return;
+      clearTimeout(coachTimer);
+    }
+    coachTimerAt = Date.now() + wait;
+    coachTimer = setTimeout(() => runCoach(mid, who), wait);
+  }
+
+  async function runCoach(mid, who) {
+    coachTimer = null;
+    if (liveStopping) return;
+    coachEmCurso = true;
+    lastCoachAt = Date.now();
+    try {
+      await authed('/functions/v1/live-coach', { method: 'POST', body: JSON.stringify({ meetingId: mid, gatilho: who }) }, 30000);
+    } catch { /* sem dica desta vez */ }
+    coachEmCurso = false;
+    if (coachPendente && !liveStopping) {
+      const quem = coachPendente;
+      coachPendente = null;
+      scheduleCoach(mid, quem);
+    }
   }
 
   function openChannel(mid, who, stream, token, attempt = 0) {
@@ -1234,6 +1262,8 @@
   function stopLive() {
     liveStopping = true;
     if (coachTimer) { clearTimeout(coachTimer); coachTimer = null; }
+    coachPendente = null;
+    if (dicaTimer) { clearTimeout(dicaTimer); dicaTimer = null; }
     const channels = Object.keys(liveChannels);
     for (const ch of Object.values(liveChannels)) {
       try { ch.ws && ch.ws.readyState === 1 && ch.ws.send(JSON.stringify({ type: 'Terminate' })); } catch {}
@@ -1262,7 +1292,33 @@
 
   // Dica mais recente em destaque; as anteriores ficam numa lista recolhida.
   const tipHistory = [];
+  // A dica em destaque fica pelo menos este tempo, para dar tempo de ler e
+  // falar. A que chega antes espera (vale a mais nova); só passa na frente a
+  // urgente de outro assunto (uma objeção, uma pergunta direta do cliente).
+  const DICA_MINIMA_MS = 25000;
+  let dicaEmEspera = null;
+  let dicaTimer = null;
   function addTip(tip) {
+    const atual = tipHistory[0];
+    const naTela = atual ? Date.now() - atual.at : Infinity;
+    const furaFila = tip.urgencia === 'alta' && (!atual || tip.categoria !== atual.categoria);
+    if (naTela < DICA_MINIMA_MS && !furaFila) {
+      dicaEmEspera = tip;
+      if (!dicaTimer) {
+        dicaTimer = setTimeout(() => {
+          dicaTimer = null;
+          const proxima = dicaEmEspera;
+          dicaEmEspera = null;
+          if (proxima && !liveStopping) mostrarDica(proxima);
+        }, DICA_MINIMA_MS - naTela);
+      }
+      return;
+    }
+    if (dicaTimer) { clearTimeout(dicaTimer); dicaTimer = null; }
+    dicaEmEspera = null;
+    mostrarDica(tip);
+  }
+  function mostrarDica(tip) {
     tipHistory.unshift({ ...tip, at: Date.now() });
     if (tipHistory.length > 6) tipHistory.pop();
     const urg = tip.urgencia === 'alta' ? 'alta' : '';
