@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, CircleHelp, Pencil, Puzzle, X } from "lucide-react";
 import { DemoBanner, DemoEndedScreen, FirstPasswordDialog, isDemoOver, useDemoEndsAt } from "@/components/AccountNotices";
 import { exitSupport } from "@/lib/support";
+import { NovidadesPopup } from "@/components/NovidadesPopup";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { syncExtensionSession } from "@/lib/extensionBridge";
@@ -47,6 +48,10 @@ export function AppLayout({ children }: AppLayoutProps) {
             {demoEndsAt && <DemoBanner endsAt={demoEndsAt} />}
             {extensaoVelha && <ExtensaoDesatualizadaBanner {...extensaoVelha} />}
             <FirstPasswordDialog />
+            {/* Novidades: não no modo suporte nem antes de trocar a senha do primeiro acesso. */}
+            {!support && user && role && !user.user_metadata?.must_change_password && (
+              <NovidadesPopup userId={user.id} role={role} contaCriadaEm={user.created_at} />
+            )}
             <header className="flex h-16 items-center justify-between px-4 pt-1 md:px-8">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="rounded-xl text-muted-foreground hover:bg-card hover:text-foreground" />
