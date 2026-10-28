@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { extensionStatus } from "@/lib/extensionBridge";
+import { desatualizada, versaoAtualDaLoja } from "@/lib/extensaoVersao";
 import {
   ExternalLink, Pin, LogIn, MonitorPlay, Volume2, Lightbulb, Send, AlertCircle, Download, ChevronDown, Copy, Check,
   Wrench, Gauge, Cpu, TriangleAlert,
@@ -394,6 +396,59 @@ const manualProblems: { q: string; a: React.ReactNode }[] = [
   },
 ];
 
+/**
+ * Versão da extensão instalada neste navegador e, se estiver abaixo da atual
+ * na loja, como atualizar agora (o aviso do topo do app aponta para cá).
+ */
+function SuaExtensao() {
+  const [info, setInfo] = useState<{ instalada: string; atual: string | null } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    Promise.all([extensionStatus(), versaoAtualDaLoja().catch(() => null)]).then(([st, atual]) => {
+      if (vivo && st?.installed && st.version) setInfo({ instalada: st.version, atual });
+    }).catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+  // Rola até aqui quando o aviso do topo trouxe a pessoa (#atualizar).
+  useEffect(() => {
+    if (info && window.location.hash === "#atualizar") document.getElementById("atualizar")?.scrollIntoView({ block: "start" });
+  }, [info]);
+  if (!info) return null;
+  const velha = desatualizada(info.instalada, info.atual);
+  return (
+    <Card id="atualizar" className={cn("scroll-mt-4 border", velha ? "border-amber-300 bg-amber-50" : "border-border bg-card")}>
+      <CardContent className="space-y-3 pt-6 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-semibold text-foreground">Sua extensão: versão {info.instalada}</h2>
+          {velha ? (
+            <Badge variant="outline" className="border-amber-400 text-amber-900">Desatualizada · a atual é {info.atual}</Badge>
+          ) : info.atual ? (
+            <Badge variant="outline" className="border-success/40 text-success">Em dia</Badge>
+          ) : null}
+        </div>
+        {velha && (
+          <>
+            <p className="text-muted-foreground">
+              O Chrome atualiza a extensão sozinho em algumas horas. Para atualizar agora:
+            </p>
+            <ol className="list-decimal space-y-1.5 pl-5 text-muted-foreground">
+              <li>Abra uma aba nova e cole o endereço abaixo.</li>
+              <li>Ligue o <B>Modo do desenvolvedor</B>, no canto superior direito.</li>
+              <li>Clique em <B>Atualizar</B> e, depois, desligue o Modo do desenvolvedor.</li>
+              <li>Se a reunião já estiver aberta, recarregue a aba dela.</li>
+            </ol>
+            <CopyAddress />
+            <p className="text-xs text-muted-foreground">
+              Instalou pelo arquivo, sem a loja? Essa versão não se atualiza sozinha: remova-a em {EXTENSIONS_PAGE} e
+              instale pelo botão Instalar no Chrome.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ManualInstall() {
   const [open, setOpen] = useState(false);
   if (!MANUAL_VERSION) return null;
@@ -487,6 +542,8 @@ export default function Extensao() {
           </Button>
         </CardContent>
       </Card>
+
+      <SuaExtensao />
 
       <ManualInstall />
 

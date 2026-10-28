@@ -473,6 +473,18 @@ Deno.serve(async (req) => {
       return json(req, { success: true, requeued: requeued?.length ?? 0 });
     }
 
+    // Versão atual da extensão do Chrome na loja: quem estiver abaixo dela vê o
+    // aviso de extensão desatualizada. Vazio desliga o aviso.
+    if (action === "set_extensao_atual") {
+      const versao = typeof body.versao === "string" ? body.versao.trim() : "";
+      if (versao && !/^\d{1,3}(\.\d{1,5}){0,3}$/.test(versao)) return json(req, { error: "Versão inválida. Use o formato 1.13.1." }, 400);
+      const { error } = versao
+        ? await admin.from("platform_settings").upsert({ key: "extensao_atual", value: versao, updated_at: new Date().toISOString() })
+        : await admin.from("platform_settings").delete().eq("key", "extensao_atual");
+      if (error) return json(req, { error: `Não foi possível salvar (${error.message}). Aplique a migração 20261102090000_versao_extensao.sql.` }, 400);
+      return json(req, { success: true, extensao_atual: versao || null });
+    }
+
     // Atividade dos usuários de todas as empresas (só metadados; ver
     // 20261030090000_atividade_plataforma.sql). Período de até 90 dias.
     if (action === "activity" || action === "activity_people") {
@@ -483,7 +495,9 @@ Deno.serve(async (req) => {
       if (action === "activity_people") {
         const { data, error } = await admin.rpc("platform_activity_people", { _desde: desde.toISOString(), _ate: ate.toISOString() });
         if (error) return json(req, { error: `A atividade ainda não está disponível (${error.message}). Aplique a migração 20261030090000_atividade_plataforma.sql.` }, 400);
-        return json(req, { people: data ?? [] });
+        // Versão atual da extensão na loja (20261102090000_versao_extensao.sql); sem a migração, fica vazia.
+        const { data: atual } = await admin.from("platform_settings").select("value").eq("key", "extensao_atual").maybeSingle();
+        return json(req, { people: data ?? [], extensao_atual: typeof atual?.value === "string" ? atual.value : null });
       }
       const tipos = ["login", "reuniao", "analise", "erro", "treino", "assistente", "admin"];
       const { data, error } = await admin.rpc("platform_activity", {

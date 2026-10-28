@@ -300,7 +300,24 @@
   // ── Pre-create meeting (status=ao_vivo) so live channel works ──
   async function preCreateMeeting(token, meta) {
     const userId = (await chrome.storage.local.get(['userId'])).userId;
-    const res = await fetchWithTimeout(`${SUPABASE_URL}/rest/v1/meetings`, {
+    const linha = {
+      title: meta.title || 'Gravação ao vivo',
+      meeting_type: meta.meetingType || null,
+      lead_name: meta.leadName || null,
+      lead_company: meta.leadCompany || null,
+      lead_email: meta.leadEmail || null,
+      meeting_url: meta.meetingUrl || location.href,
+      calendar_event_id: meta.calendarEventId || null,
+      attendees: meta.attendees?.length ? meta.attendees : null,
+      status: 'ao_vivo',
+      meeting_date: new Date().toISOString(),
+      seller_id: userId,
+      // Só o coach ao vivo: a gravação do robô entra nesta reunião.
+      ...(meta.meetingBotId ? { meeting_bot_id: meta.meetingBotId } : {}),
+      // Versão da extensão que gravou (tela Plataforma e investigação de erros).
+      extensao_versao: chrome.runtime.getManifest().version,
+    };
+    const criar = (row) => fetchWithTimeout(`${SUPABASE_URL}/rest/v1/meetings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -308,24 +325,18 @@
         apikey: SUPABASE_ANON_KEY,
         Prefer: 'return=representation',
       },
-      body: JSON.stringify([{
-        title: meta.title || 'Gravação ao vivo',
-        meeting_type: meta.meetingType || null,
-        lead_name: meta.leadName || null,
-        lead_company: meta.leadCompany || null,
-        lead_email: meta.leadEmail || null,
-        meeting_url: meta.meetingUrl || location.href,
-        calendar_event_id: meta.calendarEventId || null,
-        attendees: meta.attendees?.length ? meta.attendees : null,
-        status: 'ao_vivo',
-        meeting_date: new Date().toISOString(),
-        seller_id: userId,
-        // Só o coach ao vivo: a gravação do robô entra nesta reunião.
-        ...(meta.meetingBotId ? { meeting_bot_id: meta.meetingBotId } : {}),
-      }]),
+      body: JSON.stringify([row]),
     }, 20000);
+    let res = await criar(linha);
+    let body = res.ok ? null : await res.text();
+    // Banco ainda sem a coluna da versão (migração não aplicada): grava sem ela,
+    // para a versão nunca impedir uma gravação.
+    if (!res.ok && /extensao_versao/.test(body)) {
+      const { extensao_versao: _semVersao, ...semVersao } = linha;
+      res = await criar(semVersao);
+      body = res.ok ? null : await res.text();
+    }
     if (!res.ok) {
-      const body = await res.text();
       console.error('preCreateMeeting failed', res.status, body);
       let msg = '';
       try { msg = JSON.parse(body).message || ''; } catch {}
@@ -334,6 +345,7 @@
     const rows = await res.json();
     return rows?.[0]?.id || null;
   }
+
 
   function friendlyCreateError(status, msg) {
     if (/row-level security/i.test(msg)) {
