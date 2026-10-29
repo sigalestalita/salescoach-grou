@@ -26,3 +26,4 @@ dist-ssr
 # Cluster temporário do ensaio de migração
 supabase/tests/pgdata*
 supabase/tests/postgres*.log
+dist-extensao-*
