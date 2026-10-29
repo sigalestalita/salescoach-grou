@@ -1014,14 +1014,18 @@
   // concluída vira um trecho em transcription_segments, com quem falou, e
   // dispara o coach em chamadas curtas.
 
-  const AAI_WS = 'wss://streaming.assemblyai.com/v3/ws?speech_model=u3-rt-pro&encoding=pcm_s16le&sample_rate=16000&format_turns=true';
+  // Versão própria para reunião em outro idioma (pacote de scripts/extensao-idioma.mjs):
+  // transcreve no idioma da reunião, traduz para o português o que os outros
+  // disseram e sopra a frase no idioma da reunião. null na versão da loja.
+  const VARIANTE = null;
+  const AAI_WS = `wss://streaming.assemblyai.com/v3/ws?speech_model=${VARIANTE ? 'universal-streaming-multilingual' : 'u3-rt-pro'}&encoding=pcm_s16le&sample_rate=16000&format_turns=true`;
   // Ritmo do coach. Depois da fala do cliente, chama logo (pode ser uma
   // objeção). Depois da fala do vendedor, espera: logo depois de uma dica ele
   // está lendo ou fazendo a pergunta sugerida, e a fala dele disparava uma
   // versão nova da mesma pergunta. Uma chamada por vez.
   const COACH_APOS_CLIENTE_MS = 2000;
   const COACH_APOS_VENDEDOR_MS = 20000;
-  const LABEL = { vendedor: 'Você', cliente: 'Cliente' };
+  const LABEL = { vendedor: 'Você', cliente: VARIANTE?.outros || 'Cliente' };
   let lastCoachAt = 0;
   let coachTimer = null;
   let coachTimerAt = 0;
@@ -1052,14 +1056,14 @@
     return data.tokens;
   }
 
-  function lineHtml(who, text) {
-    return `<b>${escape(LABEL[who])}:</b> ${escape(text)}`;
+  function lineHtml(who, text, pt) {
+    return `<b>${escape(LABEL[who])}:</b> ${escape(text)}${pt ? `<span class="sc-pt">${escape(pt)}</span>` : ''}`;
   }
   function renderLive(partial) {
     const last = partial ? { ...partial, text: `${partial.text}…` } : liveLines[liveLines.length - 1];
-    if (last) liveTextEl.innerHTML = lineHtml(last.who, last.text);
+    if (last) liveTextEl.innerHTML = lineHtml(last.who, last.text, last.pt);
     else setLiveText('Conectado. Aguardando a primeira fala…');
-    const all = liveLines.map((l) => `<div>${lineHtml(l.who, l.text)}</div>`);
+    const all = liveLines.map((l) => `<div>${lineHtml(l.who, l.text, l.pt)}</div>`);
     if (partial) all.push(`<div>${lineHtml(partial.who, `${partial.text}…`)}</div>`);
     const atEnd = txFullEl.scrollHeight - txFullEl.scrollTop - txFullEl.clientHeight < 24;
     txFullEl.innerHTML = all.join('') || '<div>Nenhuma fala ainda.</div>';
@@ -1102,9 +1106,24 @@
     if (liveStopping) return;
     coachEmCurso = true;
     lastCoachAt = Date.now();
+    // Na versão de outro idioma, vão junto as falas dos outros ainda sem tradução.
+    const falas = VARIANTE ? liveLines.filter((l) => l.who === 'cliente' && !l.pt && !l.pedida) : [];
+    falas.forEach((l) => { l.pedida = true; });
     try {
-      await authed('/functions/v1/live-coach', { method: 'POST', body: JSON.stringify({ meetingId: mid, gatilho: who }) }, 30000);
+      const res = await authed('/functions/v1/live-coach', {
+        method: 'POST',
+        body: JSON.stringify({
+          meetingId: mid, gatilho: who,
+          ...(VARIANTE ? { idioma: VARIANTE.idioma, contexto: VARIANTE.contexto, falas: falas.map((l) => l.text) } : {}),
+        }),
+      }, 30000);
+      if (falas.length) {
+        const d = await res.json().catch(() => ({}));
+        (d.traducoes || []).forEach((t, i) => { if (falas[i] && t) falas[i].pt = String(t); });
+        renderLive(null);
+      }
     } catch { /* sem dica desta vez */ }
+    falas.forEach((l) => { if (!l.pt) l.pedida = false; });
     coachEmCurso = false;
     if (coachPendente && !liveStopping) {
       const quem = coachPendente;
@@ -1402,7 +1421,7 @@
           <span class="sc-chip">${escape(tip.categoria || 'dica')}</span>
           <span class="sc-age" id="sc-tip-age">agora</span>
         </div>
-        ${tip.acao ? '<span class="sc-say">Fale agora</span>' : ''}
+        ${tip.acao ? `<span class="sc-say">${VARIANTE ? `Diga em ${escape(VARIANTE.nomeIdioma)}` : 'Fale agora'}</span>` : ''}
         <p class="sc-hero-text">${escape(main)}</p>
         ${tip.acao && tip.titulo ? `<div class="sc-why">${escape(tip.titulo)}</div>` : ''}
       </div>`;

@@ -112,7 +112,11 @@ Deno.serve(async (req) => {
     const t0 = Date.now();
     const tempos: Record<string, number> = {};
     const marca = (etapa: string) => { tempos[etapa] = Date.now() - t0; };
-    const { meetingId, gatilho } = await req.json();
+    const { meetingId, gatilho, idioma, contexto, falas } = await req.json();
+    // Reunião em outro idioma (versão própria da extensão): traduz as falas dos
+    // outros para o português e sopra a frase no idioma da reunião.
+    const lingua = ({ es: "espanhol", en: "inglês" } as Record<string, string>)[String(idioma ?? "")] ?? null;
+    const paraTraduzir: string[] = lingua && Array.isArray(falas) ? falas.slice(0, 8).map((f: unknown) => String(f).slice(0, 600)) : [];
     if (!meetingId) return json(req, { error: "meetingId required" }, 400);
 
     const internal = isInternalCall(req);
@@ -158,7 +162,7 @@ Deno.serve(async (req) => {
     marca("conversa");
     // Logo depois de uma dica, a fala do vendedor não chama a IA: ele está
     // lendo ou fazendo a pergunta sugerida.
-    if (!vaiChamarIa(gatilho, recent?.[0]?.emitted_at)) {
+    if (!paraTraduzir.length && !vaiChamarIa(gatilho, recent?.[0]?.emitted_at)) {
       return json(req, { emitted: false, reason: "dica recente", tempos });
     }
 
@@ -216,7 +220,9 @@ Deno.serve(async (req) => {
 
     const criteriaKeys = template.qualification_criteria.map((c) => c.key);
     const playbook = template.mode === "playbook" ? template.playbook ?? {} : null;
-    const categorias = playbook
+    const categorias = lingua
+      ? ["pergunta", "resposta", "esclarecer", "proximo_passo", "rapport"]
+      : playbook
       ? [...criteriaKeys, "risco", "oportunidade", "duvida", "reclamacao", "compromisso", "postura", ...(playbook.expansao_comercial ? ["oferta"] : [])]
       : [...criteriaKeys, "objecao", "oferta", "proxima_pergunta", "fechamento", "rapport", "talk_ratio"];
 
@@ -251,7 +257,27 @@ FORMATO (JSON puro):
 
 Urgência alta = sinal de risco, reclamação ou o cliente fazendo uma pergunta direta. Não repita orientação já dada. Seja específico ao que foi dito; nada genérico.` : "";
 
-    const system = systemPlaybook || `${template.persona} Você acompanha uma reunião comercial AO VIVO, em português do Brasil, e orienta o vendedor em tempo real.
+    const systemIdioma = lingua ? `Você acompanha AO VIVO uma reunião em ${lingua} e ajuda uma pessoa que fala português do Brasil e entende pouco ${lingua}. Ela é quem aparece como "Vendedor:" na conversa; as outras pessoas aparecem como "Cliente:".
+${contexto ? `\nCONTEXTO DA REUNIÃO (dito por ela):\n${String(contexto).slice(0, 1200)}\n` : ""}
+A CADA CHAMADA:
+1. TRADUÇÃO: traduza para o português do Brasil, de forma fiel e natural, cada fala da lista "Falas para traduzir", na mesma ordem. Nomes próprios e nomes de produto ficam como estão. Se a fala estiver truncada, traduza o que dá para entender.
+2. SOPRO: decida se vale sugerir AGORA uma frase para ela dizer, em ${lingua} simples e natural, fácil de ler em voz alta, em primeira pessoa. Prioridade: (a) responder uma pergunta feita diretamente a ela; (b) pedir que esclareçam algo que ficou vago; (c) uma pergunta que aprofunde o que acabaram de explicar, pensando no objetivo dela descrito no contexto; (d) um comentário curto de interesse ou de concordância, quando for o momento.
+3. Nunca invente fatos sobre a empresa dela, números, prazos ou decisões. Se ela precisar responder algo que você não sabe, sugira uma frase que ganhe tempo ("vou confirmar com o time e retorno") ou que devolva a pergunta.
+4. Se nada agrega agora, ou se a última sugestão saiu há menos de 30 segundos e nada novo e urgente surgiu, retorne "should_emit": false (mas traduza mesmo assim). Nunca repita, com outras palavras, uma sugestão já dada.
+
+FORMATO (JSON puro):
+{
+  "traducoes": ["<tradução de cada fala, na ordem>"],
+  "should_emit": true,
+  "categoria": "<uma de: ${categorias.join(" | ")}>",
+  "urgencia": "<baixa | media | alta>",
+  "titulo": "<em português, até 150 caracteres: o que a frase quer dizer e por que agora>",
+  "acao": "<a frase exata em ${lingua}, até 220 caracteres>"
+}
+
+Urgência alta = fizeram uma pergunta direta a ela.` : "";
+
+    const system = systemIdioma || systemPlaybook || `${template.persona} Você acompanha uma reunião comercial AO VIVO, em português do Brasil, e orienta o vendedor em tempo real.
 
 METODOLOGIA DE QUALIFICAÇÃO (${template.methodology_label}):
 ${criteriaStr}
@@ -281,7 +307,19 @@ FORMATO (JSON puro):
 
 Urgência alta = objeção, sinal de compra ou o lead fazendo uma pergunta direta. Não repita orientação já dada. Seja específico ao que foi dito; nada genérico.`;
 
-    const user = `## Reunião
+    const userIdioma = lingua ? `## Reunião
+Título: ${meeting.title}
+
+## Conversa recente (do mais antigo ao mais novo)
+${transcript}
+
+## Sugestões já dadas nesta reunião (não repetir)
+${recentStr || "(nenhuma)"}
+
+## Falas para traduzir
+${paraTraduzir.length ? paraTraduzir.map((f, i) => `${i + 1}. ${f}`).join("\n") : "(nenhuma: retorne \"traducoes\": [])"}` : "";
+
+    const user = userIdioma || `## Reunião
 Título: ${meeting.title}
 ${playbook ? "Cliente" : "Lead"}: ${meeting.lead_name ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
 Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}${typeContext ? `\n${typeContext.trim()}` : ""}
@@ -347,15 +385,18 @@ ${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
     const content = ai.choices?.[0]?.message?.content ?? "{}";
     let tip: any;
     try { tip = JSON.parse(content); } catch { tip = {}; }
+    const traducoes = paraTraduzir.length && Array.isArray(tip.traducoes)
+      ? tip.traducoes.slice(0, paraTraduzir.length).map((t: unknown) => String(t ?? "").slice(0, 800))
+      : undefined;
 
     if (!tip.should_emit || !tip.titulo || !tip.acao) {
       console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: false }));
-      return json(req, { emitted: false, tempos });
+      return json(req, { emitted: false, tempos, traducoes });
     }
     // A mesma orientação com outras palavras troca a dica no meio da leitura.
     if (dicaRepetida({ acao: String(tip.acao) }, (recent || []).slice(0, 3))) {
       console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: false, motivo: "repetida" }));
-      return json(req, { emitted: false, reason: "repetida", tempos });
+      return json(req, { emitted: false, reason: "repetida", tempos, traducoes });
     }
 
     // Referência ao documento usado, quando o modelo citou um da lista.
@@ -382,7 +423,7 @@ ${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
 
     marca("gravada");
     console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: true }));
-    return json(req, { emitted: true, tip: inserted, criterios_cobertos: tip.criterios_cobertos ?? [], tempos });
+    return json(req, { emitted: true, tip: inserted, criterios_cobertos: tip.criterios_cobertos ?? [], tempos, traducoes });
   } catch (e) {
     if (e instanceof HttpError) return json(req, { error: e.message, code: e.code }, e.status);
     console.error("live-coach error", e);

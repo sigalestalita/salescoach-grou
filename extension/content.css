@@ -188,3 +188,6 @@
 @media (prefers-reduced-motion: reduce) {
   #salescoach-overlay .sc-rec i, #salescoach-overlay .sc-pill-dot, #salescoach-overlay .sc-spin, #salescoach-overlay .sc-hero { animation: none; }
 }
+
+/* Versão de outro idioma: tradução da fala, logo abaixo do original. */
+#salescoach-overlay .sc-pt { display: block; margin-top: 3px; color: #0f2c5c; font-weight: 600; }
