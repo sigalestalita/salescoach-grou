@@ -17,6 +17,7 @@
 
 import { json, preflight } from "../_shared/cors.ts";
 import { getCaller, HttpError } from "../_shared/tenant.ts";
+import { avisarFalhaDeConta, falhaDeConta, MSG_SEM_CREDITO_AO_VIVO } from "../_shared/assembly.ts";
 
 const ASSEMBLY_KEY = Deno.env.get("ASSEMBLYAI_API_KEY") ?? "";
 const CHANNELS = ["vendedor", "cliente"] as const;
@@ -24,7 +25,8 @@ type Channel = (typeof CHANNELS)[number];
 // Uma reunião longa cabe com folga; a AssemblyAI aceita até 3 horas.
 const MAX_SESSION_SECONDS = 3 * 60 * 60;
 
-async function assemblyToken(): Promise<string> {
+// deno-lint-ignore no-explicit-any
+async function assemblyToken(admin: any): Promise<string> {
   const q = new URLSearchParams({
     // Prazo para abrir a conexão; a sessão em si dura até MAX_SESSION_SECONDS.
     expires_in_seconds: "600",
@@ -33,7 +35,12 @@ async function assemblyToken(): Promise<string> {
   const r = await fetch(`https://streaming.assemblyai.com/v3/token?${q}`, { headers: { Authorization: ASSEMBLY_KEY } });
   const body = await r.json().catch(() => ({}));
   if (!r.ok || !body?.token) {
-    console.error("AssemblyAI token:", r.status, JSON.stringify(body));
+    const corpo = JSON.stringify(body);
+    console.error("AssemblyAI token:", r.status, corpo);
+    if (falhaDeConta(r.status, corpo)) {
+      await avisarFalhaDeConta(admin, "dicas ao vivo (live-session)", `HTTP ${r.status} ${corpo}`);
+      throw new HttpError(402, MSG_SEM_CREDITO_AO_VIVO, "sem_credito");
+    }
     throw new HttpError(502, "Transcrição ao vivo indisponível agora.");
   }
   return body.token;
@@ -62,7 +69,7 @@ Deno.serve(async (req) => {
     if (body.action === "start") {
       if (!ASSEMBLY_KEY) throw new HttpError(503, "Transcrição ao vivo não configurada.");
       const tokens: Partial<Record<Channel, string>> = {};
-      await Promise.all(channels.map(async (c: Channel) => { tokens[c] = await assemblyToken(); }));
+      await Promise.all(channels.map(async (c: Channel) => { tokens[c] = await assemblyToken(ctx.admin); }));
       return json(req, { tokens });
     }
 

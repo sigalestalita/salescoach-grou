@@ -18,6 +18,7 @@ import {
   loadTemplate,
   methodologySnapshot,
 } from "../_shared/analysis-template.ts";
+import { avisarFalhaDeConta, falhaDeConta, MSG_SEM_CREDITO } from "../_shared/assembly.ts";
 
 const ANALYSIS_MODEL = Deno.env.get("ANALYSIS_MODEL") ?? "google/gemini-2.5-flash";
 
@@ -157,6 +158,7 @@ async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: strin
 
   if (!startRes.ok) {
     const err = await startRes.text();
+    await semCredito(startRes.status, err);
     throw new Error(`AssemblyAI start failed: ${err}`);
   }
 
@@ -233,6 +235,17 @@ async function repararWebm(blob: Blob): Promise<Blob | null> {
   return null;
 }
 
+// Conta da AssemblyAI sem crédito (ou chave inválida): avisa os operadores e
+// troca o erro técnico por um que diz o que fazer.
+class SemCredito extends Error {
+  constructor() { super(MSG_SEM_CREDITO); }
+}
+async function semCredito(status: number, corpo: string): Promise<void> {
+  if (!falhaDeConta(status, corpo)) return;
+  await avisarFalhaDeConta(adminClient(), "análise de reunião (analyze-meeting)", `HTTP ${status} ${corpo}`);
+  throw new SemCredito();
+}
+
 function mensagemAmigavel(msg: string): string {
   // Link que a AssemblyAI não consegue baixar (página, vídeo do YouTube...).
   if (/disallowed address|audio_url is invalid|direct download link/i.test(msg)) return MSG_LINK.pagina;
@@ -257,6 +270,7 @@ async function uploadToAssemblyAI(fileData: Blob): Promise<string> {
   });
   if (!res.ok) {
     const err = await res.text();
+    await semCredito(res.status, err);
     throw new Error(`AssemblyAI upload failed: ${err}`);
   }
   const { upload_url } = await res.json();
