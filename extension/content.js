@@ -220,7 +220,10 @@
       el.className = `sc-alert ${a.kind}`;
       el.setAttribute('role', 'status');
       const icon = a.kind === 'info' ? '<span class="sc-spin"></span>' : '!';
-      el.innerHTML = `<span class="sc-alert-ic">${icon}</span><div><b>${escape(a.title)}</b><span>${escape(a.text)}</span></div>`;
+      // O motivo fica escrito no aviso: só no title (passar o mouse), ninguém
+      // achava no meio da reunião.
+      const motivo = a.detail ? `<small class="sc-alert-detail">Motivo: ${escape(a.detail)}</small>` : '';
+      el.innerHTML = `<span class="sc-alert-ic">${icon}</span><div><b>${escape(a.title)}</b><span>${escape(a.text)}</span>${motivo}</div>`;
       if (a.detail) el.title = a.detail;
       if (a.action) {
         const b = document.createElement('button');
@@ -617,15 +620,44 @@
         throw new Error('não foi possível criar a reunião.');
       }
     } catch (e) {
-      console.warn('Live coach off:', e);
-      setLiveText('Transcrição ao vivo desligada nesta reunião.');
-      setTipsStatus(null);
-      tipsEl.innerHTML = '';
-      setAlert('live-off', {
-        kind: 'warn', title: 'Dicas ao vivo indisponíveis',
-        text: 'A gravação continua normalmente e a análise sai no final.',
-        detail: String(e?.message || e),
+      dicasOff(e, 'A gravação continua normalmente e a análise sai no final.', {
+        vendedor: micStream,
+        cliente: clienteStream,
       });
+    }
+  }
+
+  // As dicas não ligaram, mas a gravação segue. O aviso mostra o motivo e, se
+  // a reunião já existe, deixa tentar de novo sem parar a gravação (ex.: o
+  // crédito da transcrição foi recarregado no meio da chamada).
+  let religandoDicas = false;
+  function dicasOff(e, texto, streams) {
+    console.warn('Live coach off:', e);
+    setLiveText('Transcrição ao vivo desligada nesta reunião.');
+    setTipsStatus(null);
+    tipsEl.innerHTML = '';
+    setAlert('live-off', {
+      kind: 'warn', title: 'Dicas ao vivo indisponíveis', text: texto,
+      detail: String(e?.message || e),
+      action: meetingId ? { label: 'Tentar de novo', onClick: () => religarDicas(texto, streams) } : null,
+    });
+  }
+
+  async function religarDicas(texto, streams) {
+    const gravando = coachAtivo || (mediaRecorder && mediaRecorder.state === 'recording');
+    if (religandoDicas || !gravando || !meetingId) return;
+    religandoDicas = true;
+    setAlert('live-off', null);
+    setLiveText('Conectando a transcrição…');
+    setTipsStatus('Conectando o coach…');
+    try {
+      const token = await getValidToken();
+      if (!token) throw new Error('sessão expirada — refaça login na extensão');
+      await startLive(token, meetingId, streams);
+    } catch (e) {
+      dicasOff(e, texto, streams);
+    } finally {
+      religandoDicas = false;
     }
   }
 
@@ -672,15 +704,7 @@
       chrome.storage.local.set({ lastMeetingId: meetingId });
       await startLive(token, meetingId, { vendedor: micStream, cliente: clienteStream });
     } catch (e) {
-      console.warn('Live coach off:', e);
-      setLiveText('Transcrição ao vivo desligada nesta reunião.');
-      setTipsStatus(null);
-      tipsEl.innerHTML = '';
-      setAlert('live-off', {
-        kind: 'warn', title: 'Dicas ao vivo indisponíveis',
-        text: 'O robô continua gravando e a análise sai no final.',
-        detail: String(e?.message || e),
-      });
+      dicasOff(e, 'O robô continua gravando e a análise sai no final.', { vendedor: micStream, cliente: clienteStream });
     }
   }
 
