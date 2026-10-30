@@ -64,6 +64,8 @@ export function renderEmail(p: {
   unsubscribeUrl: string;
   firstName: string | null;
   teste?: boolean;
+  /** Onde ficam o banner e o fundo do e-mail da NEXA (padrão: <app>/novidades/email). */
+  assetsUrl?: string;
 }): { subject: string; html: string; text: string } {
   const cor = hslToHex(p.marca.primary_hsl);
   const base = p.appUrl.replace(/\/$/, "");
@@ -86,7 +88,9 @@ export function renderEmail(p: {
     ? `<img src="${esc(p.marca.logo_url)}" alt="${esc(p.marca.product_name)}" height="32" style="height:32px;max-width:200px;border:0">`
     : `<span style="font-size:18px;font-weight:700;color:${cor}">${esc(p.marca.product_name)}</span>`;
 
-  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head>
+  const html = marcaNexa(p.marca)
+    ? htmlNexa({ ...p, subject, ola, intro, link, assets: (p.assetsUrl ?? `${base}/novidades/email`).replace(/\/$/, "") })
+    : `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(subject)}</title></head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:24px 12px"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:14px;overflow:hidden">
@@ -114,6 +118,57 @@ export function renderEmail(p: {
   ].join("\n");
 
   return { subject, html, text };
+}
+
+// ── E-mail com a cara da NEXA ──
+// Só para a marca padrão (Sales Coach, sem logo próprio): empresas com a marca
+// delas continuam com o e-mail claro, na cor e com o logo de cada uma.
+// Fundo escuro com aurora (imagem de fundo, com a cor sólida para quem não
+// mostra imagem de fundo, como o Outlook), banner no topo, cada novidade
+// numerada e o rodapé "um produto NEXA".
+
+export const marcaNexa = (m: Marca) => !m.logo_url && m.product_name === "Sales Coach";
+
+function htmlNexa(p: {
+  novidades: Novidade[];
+  marca: Marca;
+  unsubscribeUrl: string;
+  subject: string;
+  ola: string;
+  intro: string;
+  link: (path: string | null) => string;
+  assets: string;
+}): string {
+  const fonte = "-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
+  const itens = p.novidades.map((n, i) => `
+      <tr><td style="padding:${i ? "28px" : "4px"} 0 30px;${i ? "border-top:1px solid #eceef3;" : ""}">
+        <span style="display:inline-block;background:#d9fb7a;color:#1b2408;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;padding:6px 10px;border-radius:999px">Novidade ${String(i + 1).padStart(2, "0")}</span>
+        <h2 style="margin:14px 0 10px;font-size:21px;line-height:1.3;color:#141726;letter-spacing:-.01em">${esc(n.title)}</h2>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#4a5064">${esc(n.body).replace(/\n/g, "<br>")}</p>
+        ${n.image_url ? `<img src="${esc(n.image_url)}" alt="" width="528" style="display:block;width:100%;max-width:528px;height:auto;margin:6px 0 18px;border:1px solid #e3e6ef;border-radius:14px">` : ""}
+        ${n.cta_label ? `<a href="${esc(p.link(n.cta_path))}" style="display:inline-block;background:#16264f;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 22px;border-radius:999px">${esc(n.cta_label)} &rarr;</a>` : ""}
+      </td></tr>`).join("");
+
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(p.subject)}</title></head>
+<body style="margin:0;padding:0;background:#070b1d;font-family:${fonte}">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0b1433" background="${esc(p.assets)}/fundo.jpg" style="background:#0b1433 url('${esc(p.assets)}/fundo.jpg') center top / cover no-repeat">
+    <tr><td align="center" style="padding:32px 12px 36px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+        <tr><td style="line-height:0"><img src="${esc(p.assets)}/banner.jpg" alt="${esc(p.subject)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;border-radius:20px 20px 0 0"></td></tr>
+        <tr><td style="background:#ffffff;border-radius:0 0 20px 20px;padding:32px 36px 6px">
+          <p style="margin:0 0 6px;font-size:20px;color:#141726;font-weight:700;letter-spacing:-.01em">${p.ola}</p>
+          <p style="margin:0 0 26px;font-size:15px;color:#6b7186">${p.intro}</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${itens}</table>
+        </td></tr>
+        <tr><td align="center" style="padding:30px 20px 4px">
+          <img src="${esc(p.assets)}/nexa-branco.png" alt="NEXA" width="84" height="16" style="display:block;margin:0 auto;width:84px;height:16px;border:0;opacity:.85">
+          <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#aab4d8">O ${esc(p.marca.product_name)} é um produto NEXA. Você recebe este e-mail porque usa o ${esc(p.marca.product_name)}.${p.marca.support_email ? `<br>Dúvidas: <a href="mailto:${esc(p.marca.support_email)}" style="color:#d9e0ff">${esc(p.marca.support_email)}</a>` : ""}</p>
+          <p style="margin:8px 0 0;font-size:12px"><a href="${esc(p.unsubscribeUrl)}" style="color:#aab4d8">Não quero mais receber as novidades</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
 }
 
 // ── Rascunho pela IA ──
