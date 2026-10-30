@@ -7,7 +7,8 @@
 //   { action: "delete", id }                             só rascunho
 //   { action: "draft", notes?, days? }                   a IA rascunha a partir dos PRs
 //                                                        da semana (GITHUB_TOKEN) e das notas
-//   { action: "test_email" }                             manda o e-mail para quem pediu
+//   { action: "test_email" }                             manda o e-mail para quem pediu (e diz quantos receberiam)
+//   { action: "destinatarios" }                          quantas pessoas e empresas recebem o envio
 //   { action: "send_now" }                               manda agora o e-mail da semana
 // POST com o cabeçalho x-cron-secret = NOVIDADES_CRON_SECRET e { action: "cron" }:
 //   o envio semanal (pg_cron, segunda de manhã). Sem novidade nova, não manda nada.
@@ -114,8 +115,10 @@ Deno.serve(async (req) => {
         const marcas = await marcasDe(admin, perfil?.org_id ? [perfil.org_id] : []);
         const marca = (perfil?.org_id && marcas.get(perfil.org_id)) || MARCA_PADRAO;
         await enviarLote([await montar({ userId: user.id, email: user.email, nome: perfil?.full_name ?? null, marca, novidades: lista, appUrl: APP_URL, teste: true })]);
-        return json(req, { ok: true, to: user.email, count: lista.length });
+        return json(req, { ok: true, to: user.email, count: lista.length, destinatarios: resumoPublico(await publico(admin)) });
       }
+      case "destinatarios":
+        return json(req, resumoPublico(await publico(admin)));
       case "send_now":
         return json(req, await enviarSemana(admin));
       default:
@@ -146,7 +149,9 @@ function limpar(b: Record<string, unknown>) {
   const label = typeof b.cta_label === "string" && b.cta_label.trim() ? b.cta_label.trim().slice(0, 40) : null;
   const papeis = Array.isArray(b.audience) ? b.audience.filter((r) => ["admin", "gestor", "vendedor"].includes(String(r))) : [];
   if (!papeis.length) throw new Falha("Escolha para quem é a novidade.");
-  return { title, body, cta_path: path, cta_label: path ? label ?? "Ver na plataforma" : null, audience: papeis };
+  const img = typeof b.image_url === "string" ? b.image_url.trim() : "";
+  if (img && !/^https:\/\/\S+$/.test(img)) throw new Falha("A imagem precisa ser um endereço https.");
+  return { title, body, cta_path: path, cta_label: path ? label ?? "Ver na plataforma" : null, audience: papeis, image_url: img ? img.slice(0, 500) : null };
 }
 
 // ── Rascunho pela IA ──
@@ -195,11 +200,11 @@ async function prsDaSemana(dias: number): Promise<MudancaFonte[]> {
 // ── Envio ──
 
 const pendentes = async (admin: SupabaseClient): Promise<Novidade[]> =>
-  ((await admin.from("product_updates").select("id, title, body, cta_label, cta_path, audience, published_at")
+  ((await admin.from("product_updates").select("id, title, body, cta_label, cta_path, audience, published_at, image_url")
     .eq("status", "publicado").is("emailed_at", null).order("published_at")).data ?? []) as Novidade[];
 
 const rascunhos = async (admin: SupabaseClient): Promise<Novidade[]> =>
-  ((await admin.from("product_updates").select("id, title, body, cta_label, cta_path, audience")
+  ((await admin.from("product_updates").select("id, title, body, cta_label, cta_path, audience, image_url")
     .eq("status", "rascunho").order("created_at").limit(4)).data ?? []) as Novidade[];
 
 async function marcasDe(admin: SupabaseClient, orgIds: string[]): Promise<Map<string, Marca>> {
@@ -257,13 +262,8 @@ async function enviarLote(emails: Email[]): Promise<{ ok: boolean; ids: (string 
   return { ok: true, ids };
 }
 
-/** O e-mail da semana: novidades publicadas e ainda não enviadas, para quem usa a plataforma. */
-async function enviarSemana(admin: SupabaseClient) {
-  const novidades = await pendentes(admin);
-  if (!novidades.length) return { sent: 0, failed: 0, skipped: 0, message: "Nenhuma novidade publicada para enviar." };
-  // Quem deu erro numa tentativa anterior entra de novo (os enviados ficam de fora).
-  await admin.from("email_sends").delete().eq("kind", "novidades").eq("status", "erro");
-
+/** Quem recebe o e-mail: usuários com e-mail confirmado, de empresas ativas, que não saíram da lista. */
+async function publico(admin: SupabaseClient) {
   const [{ data: papeis }, { data: orgs }, { data: perfis }, { data: prefs }] = await Promise.all([
     admin.from("user_roles").select("user_id, org_id, role"),
     admin.from("organizations").select("id, status, custom_domain"),
@@ -284,17 +284,35 @@ async function enviarSemana(admin: SupabaseClient) {
     if (data.users.length < 1000) break;
   }
 
-  const fila: Email[] = [];
+  const pessoas: { userId: string; orgId: string; role: string; email: string; nome: string | null }[] = [];
   const vistos = new Set<string>();
   for (const r of papeis ?? []) {
     if (vistos.has(r.user_id) || !orgOk.has(r.org_id) || fora.has(r.user_id) || !emails.has(r.user_id)) continue;
     vistos.add(r.user_id);
+    pessoas.push({ userId: r.user_id, orgId: r.org_id, role: r.role, email: emails.get(r.user_id)!, nome: nomes.get(r.user_id) ?? null });
+  }
+  return { pessoas, orgOk, marcas };
+}
+
+const resumoPublico = (p: Awaited<ReturnType<typeof publico>>) =>
+  ({ pessoas: p.pessoas.length, empresas: new Set(p.pessoas.map((x) => x.orgId)).size });
+
+/** O e-mail da semana: novidades publicadas e ainda não enviadas, para quem usa a plataforma. */
+async function enviarSemana(admin: SupabaseClient) {
+  const novidades = await pendentes(admin);
+  if (!novidades.length) return { sent: 0, failed: 0, skipped: 0, message: "Nenhuma novidade publicada para enviar." };
+  // Quem deu erro numa tentativa anterior entra de novo (os enviados ficam de fora).
+  await admin.from("email_sends").delete().eq("kind", "novidades").eq("status", "erro");
+
+  const { pessoas, orgOk, marcas } = await publico(admin);
+  const fila: Email[] = [];
+  for (const r of pessoas) {
     const minhas = paraPapel(novidades, r.role);
     if (!minhas.length) continue;
-    const org = orgOk.get(r.org_id)!;
+    const org = orgOk.get(r.orgId)!;
     fila.push(await montar({
-      userId: r.user_id, email: emails.get(r.user_id)!, nome: nomes.get(r.user_id) ?? null,
-      marca: marcas.get(r.org_id) ?? MARCA_PADRAO, novidades: minhas,
+      userId: r.userId, email: r.email, nome: r.nome,
+      marca: marcas.get(r.orgId) ?? MARCA_PADRAO, novidades: minhas,
       appUrl: org.custom_domain ? `https://${org.custom_domain}` : APP_URL,
     }));
   }

@@ -9,6 +9,8 @@ export interface Novidade {
   cta_path: string | null;
   audience: string[];
   published_at?: string | null;
+  /** Print da tela (endereço público https), embaixo do texto no e-mail. */
+  image_url?: string | null;
 }
 
 export interface Marca {
@@ -75,7 +77,8 @@ export function renderEmail(p: {
   const itens = p.novidades.map((n) => `
       <tr><td style="padding:0 0 28px">
         <h2 style="margin:0 0 8px;font-size:18px;line-height:1.3;color:#0f172a">${esc(n.title)}</h2>
-        <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#334155">${esc(n.body)}</p>
+        <p style="margin:0 0 12px;font-size:15px;line-height:1.6;color:#334155">${esc(n.body).replace(/\n/g, "<br>")}</p>
+        ${n.image_url ? `<img src="${esc(n.image_url)}" alt="" width="504" style="display:block;width:100%;max-width:504px;height:auto;margin:4px 0 16px;border:1px solid #e2e8f0;border-radius:10px">` : ""}
         ${n.cta_label ? `<a href="${esc(link(n.cta_path))}" style="display:inline-block;background:${cor};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 18px;border-radius:8px">${esc(n.cta_label)}</a>` : ""}
       </td></tr>`).join("");
 

@@ -26,6 +26,7 @@ interface Update {
   cta_label: string | null;
   cta_path: string | null;
   audience: string[];
+  image_url: string | null;
   status: "rascunho" | "publicado" | "arquivado";
   source: "manual" | "ia";
   published_at: string | null;
@@ -60,6 +61,10 @@ const PAPEIS = [
 ];
 const SEM_BOTAO = "_nenhum";
 
+interface Publico { pessoas: number; empresas: number }
+const fmtPublico = (p: Publico) =>
+  `${p.pessoas} ${p.pessoas === 1 ? "pessoa" : "pessoas"} em ${p.empresas} ${p.empresas === 1 ? "empresa" : "empresas"}`;
+
 async function call<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke("product-updates", { body });
   if (error) {
@@ -81,6 +86,13 @@ export function Novidades() {
   const [notas, setNotas] = useState("");
   const [dias, setDias] = useState("7");
   const [confirmarEnvio, setConfirmarEnvio] = useState(false);
+  const [publico, setPublico] = useState<Publico | null>(null);
+  // Ao abrir a confirmação do envio, quantas pessoas e empresas vão receber.
+  useEffect(() => {
+    if (!confirmarEnvio) return;
+    setPublico(null);
+    call<Publico>({ action: "destinatarios" }).then(setPublico).catch(() => setPublico(null));
+  }, [confirmarEnvio]);
 
   const load = useCallback(async () => {
     try {
@@ -138,8 +150,11 @@ export function Novidades() {
             <div className="ml-auto flex flex-wrap gap-2">
               <Button size="sm" variant="outline" disabled={!!busy || !res.resendConfigured}
                 onClick={() => run("teste", async () => {
-                  const r = await call<{ to: string; count: number }>({ action: "test_email" });
-                  toast({ title: "E-mail de teste enviado", description: `Para ${r.to}, com ${r.count} ${r.count === 1 ? "novidade" : "novidades"}.` });
+                  const r = await call<{ to: string; count: number; destinatarios?: Publico }>({ action: "test_email" });
+                  toast({
+                    title: "E-mail de teste enviado",
+                    description: `Para ${r.to}, com ${r.count} ${r.count === 1 ? "novidade" : "novidades"}.${r.destinatarios ? ` O envio vai para ${fmtPublico(r.destinatarios)}.` : ""}`,
+                  });
                 })}>
                 <Mail className="mr-1.5 h-4 w-4" />{busy === "teste" ? "Enviando…" : "Enviar teste para mim"}
               </Button>
@@ -168,6 +183,7 @@ export function Novidades() {
                   </div>
                   <h3 className="font-semibold">{u.title}</h3>
                   <p className="text-sm text-muted-foreground">{u.body}</p>
+                  {u.image_url && <img src={u.image_url} alt="" className="max-h-40 rounded-md border" />}
                   {u.cta_label && <p className="text-xs text-primary">Botão: {u.cta_label} → {TELAS.find((t) => t.path === u.cta_path)?.label ?? u.cta_path}</p>}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -259,6 +275,11 @@ export function Novidades() {
                 <Label>Texto</Label>
                 <Textarea rows={5} maxLength={900} value={editando.body ?? ""} onChange={(e) => setEditando({ ...editando, body: e.target.value })} />
               </div>
+              <div className="space-y-1.5">
+                <Label>Imagem (opcional)</Label>
+                <Input maxLength={500} value={editando.image_url ?? ""} placeholder="https://… (print da tela, aparece embaixo do texto no e-mail)"
+                  onChange={(e) => setEditando({ ...editando, image_url: e.target.value || null })} />
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Botão leva para</Label>
@@ -312,7 +333,7 @@ export function Novidades() {
           <DialogHeader>
             <DialogTitle>Enviar agora?</DialogTitle>
             <DialogDescription>
-              Vai para todos os usuários das empresas ativas, cada um com as novidades do próprio papel ({aEnviar.length}{" "}
+              Vai para {publico ? fmtPublico(publico) : "todos os usuários das empresas ativas"}, cada um com as novidades do próprio papel ({aEnviar.length}{" "}
               {aEnviar.length === 1 ? "novidade publicada" : "novidades publicadas"}). Quem já recebeu não recebe de novo.
               Mande antes um teste para você.
             </DialogDescription>
