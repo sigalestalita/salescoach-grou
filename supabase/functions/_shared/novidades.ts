@@ -161,7 +161,7 @@ function htmlNexa(p: {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${itens}</table>
         </td></tr>
         <tr><td align="center" style="padding:30px 20px 4px">
-          <img src="${esc(p.assets)}/nexa-branco.png" alt="NEXA" width="84" height="16" style="display:block;width:84px;height:16px;border:0;opacity:.85">
+          <img src="${esc(p.assets)}/nexa-branco.png" alt="NEXA" width="84" height="16" style="display:block;margin:0 auto;width:84px;height:16px;border:0;opacity:.85">
           <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#aab4d8">O ${esc(p.marca.product_name)} é um produto NEXA. Você recebe este e-mail porque usa o ${esc(p.marca.product_name)}.${p.marca.support_email ? `<br>Dúvidas: <a href="mailto:${esc(p.marca.support_email)}" style="color:#d9e0ff">${esc(p.marca.support_email)}</a>` : ""}</p>
           <p style="margin:8px 0 0;font-size:12px"><a href="${esc(p.unsubscribeUrl)}" style="color:#aab4d8">Não quero mais receber as novidades</a></p>
         </td></tr>
