@@ -136,6 +136,28 @@ Deno.serve(async (req) => {
         if (!team) return json(req, { error: "Time não pertence a esta organização" }, 400);
       }
 
+      // Já existe convite pendente para este e-mail (mesmo vencido)? Renova esse em vez
+      // de criar outro: o índice único só permite um convite pendente por e-mail.
+      const { data: pendente } = await admin
+        .from("organization_invites")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("email", email.trim().toLowerCase())
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (pendente) {
+        const { data: renovado, error: renovaError } = await admin
+          .from("organization_invites")
+          .update({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString(), role: role || "vendedor", team_id: team_id || null })
+          .eq("id", pendente.id)
+          .select("id, token, expires_at")
+          .single();
+        if (renovaError) throw renovaError;
+        await writeAudit(admin, { orgId, actorUserId: ctx.userId, action: "invite.renewed", entity: "invite", entityId: renovado.id, metadata: { email } });
+        return json(req, { success: true, invite_id: renovado.id, token: renovado.token, expires_at: renovado.expires_at, renovado: true });
+      }
+
       const { data: invite, error: inviteError } = await admin
         .from("organization_invites")
         .insert({
@@ -178,6 +200,25 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return json(req, { invites: data ?? [] });
+    }
+
+    if (action === "renew_invite") {
+      // Mais 7 dias para um convite pendente (inclusive vencido). O link continua o mesmo.
+      const { invite_id } = body;
+      if (!invite_id) return json(req, { error: "invite_id é obrigatório" }, 400);
+      const { data, error } = await admin
+        .from("organization_invites")
+        .update({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString() })
+        .eq("id", invite_id)
+        .eq("org_id", orgId)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .select("id, token, expires_at")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return json(req, { error: "Convite não encontrado ou já usado" }, 404);
+      await writeAudit(admin, { orgId, actorUserId: ctx.userId, action: "invite.renewed", entity: "invite", entityId: data.id, metadata: {} });
+      return json(req, { success: true, token: data.token, expires_at: data.expires_at });
     }
 
     if (action === "revoke_invite") {
