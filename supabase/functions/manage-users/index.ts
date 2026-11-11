@@ -44,6 +44,56 @@ Deno.serve(async (req) => {
       ]);
     };
 
+    /**
+     * Cria o convite para o e-mail, ou renova o pendente (mesmo vencido): o índice
+     * único só permite um convite pendente por e-mail.
+     */
+    const convidar = async (email: string, role: string | undefined, team_id: string | null | undefined) => {
+      const emailNorm = email.trim().toLowerCase();
+      const { data: pendente } = await admin
+        .from("organization_invites")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("email", emailNorm)
+        .is("accepted_at", null)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (pendente) {
+        const { data: renovado, error: renovaError } = await admin
+          .from("organization_invites")
+          .update({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString(), role: role || "vendedor", team_id: team_id || null })
+          .eq("id", pendente.id)
+          .select("id, token, expires_at")
+          .single();
+        if (renovaError) throw renovaError;
+        await writeAudit(admin, { orgId, actorUserId: ctx.userId, action: "invite.renewed", entity: "invite", entityId: renovado.id, metadata: { email: emailNorm } });
+        return { invite_id: renovado.id, token: renovado.token, expires_at: renovado.expires_at, renovado: true };
+      }
+
+      const { data: invite, error: inviteError } = await admin
+        .from("organization_invites")
+        .insert({
+          org_id: orgId,
+          email: emailNorm,
+          role: role || "vendedor",
+          team_id: team_id || null,
+          invited_by: ctx.userId,
+        })
+        .select("id, token, expires_at")
+        .single();
+      if (inviteError) throw inviteError;
+
+      await writeAudit(admin, {
+        orgId,
+        actorUserId: ctx.userId,
+        action: "invite.created",
+        entity: "invite",
+        entityId: invite.id,
+        metadata: { email: emailNorm, role: role || "vendedor" },
+      });
+      return { invite_id: invite.id, token: invite.token, expires_at: invite.expires_at, renovado: false };
+    };
+
     if (action === "list_users") {
       const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }] =
         await Promise.all([
@@ -95,7 +145,16 @@ Deno.serve(async (req) => {
         user_metadata: { full_name },
       });
 
-      if (createError) throw createError;
+      if (createError) {
+        // O e-mail já tem conta (a pessoa se cadastrou antes, ou é de outra empresa).
+        // Não dá para definir a senha de uma conta que não é nossa: em vez de
+        // falhar, gera o convite. A pessoa entra com a senha dela e aceita, pelo
+        // link ou pela tela "Acesso pendente".
+        const jaExiste = createError.code === "email_exists" ||
+          /already (been )?registered/i.test(createError.message ?? "");
+        if (!jaExiste) throw createError;
+        return json(req, { success: true, conta_existente: true, ...(await convidar(email, role, team_id)) });
+      }
 
       // O gatilho cria o perfil sem organização; o vínculo é feito aqui.
       const { error: profileError } = await admin
@@ -136,59 +195,9 @@ Deno.serve(async (req) => {
         if (!team) return json(req, { error: "Time não pertence a esta organização" }, 400);
       }
 
-      // Já existe convite pendente para este e-mail (mesmo vencido)? Renova esse em vez
-      // de criar outro: o índice único só permite um convite pendente por e-mail.
-      const { data: pendente } = await admin
-        .from("organization_invites")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("email", email.trim().toLowerCase())
-        .is("accepted_at", null)
-        .is("revoked_at", null)
-        .maybeSingle();
-      if (pendente) {
-        const { data: renovado, error: renovaError } = await admin
-          .from("organization_invites")
-          .update({ expires_at: new Date(Date.now() + 7 * 864e5).toISOString(), role: role || "vendedor", team_id: team_id || null })
-          .eq("id", pendente.id)
-          .select("id, token, expires_at")
-          .single();
-        if (renovaError) throw renovaError;
-        await writeAudit(admin, { orgId, actorUserId: ctx.userId, action: "invite.renewed", entity: "invite", entityId: renovado.id, metadata: { email } });
-        return json(req, { success: true, invite_id: renovado.id, token: renovado.token, expires_at: renovado.expires_at, renovado: true });
-      }
-
-      const { data: invite, error: inviteError } = await admin
-        .from("organization_invites")
-        .insert({
-          org_id: orgId,
-          email: email.toLowerCase(),
-          role: role || "vendedor",
-          team_id: team_id || null,
-          invited_by: ctx.userId,
-        })
-        .select("id, token, expires_at")
-        .single();
-
-      if (inviteError) throw inviteError;
-
-      await writeAudit(admin, {
-        orgId,
-        actorUserId: ctx.userId,
-        action: "invite.created",
-        entity: "invite",
-        entityId: invite.id,
-        metadata: { email, role: role || "vendedor" },
-      });
-
       // O envio do e-mail fica a cargo de quem operar o SaaS; o link é
       // devolvido para poder ser copiado agora.
-      return json(req, {
-        success: true,
-        invite_id: invite.id,
-        token: invite.token,
-        expires_at: invite.expires_at,
-      });
+      return json(req, { success: true, ...(await convidar(email, role, team_id)) });
     }
 
     if (action === "list_invites") {
