@@ -95,7 +95,13 @@ Deno.serve(async (req) => {
         user_metadata: { full_name },
       });
 
-      if (createError) throw createError;
+      if (createError) {
+        const msg = createError.message?.toLowerCase() ?? "";
+        if (msg.includes("already been registered") || (createError as { code?: string }).code === "email_exists") {
+          return json(req, { error: "Já existe uma conta com este e-mail. Envie um convite para essa pessoa entrar na empresa." }, 409);
+        }
+        throw createError;
+      }
 
       // O gatilho cria o perfil sem organização; o vínculo é feito aqui.
       const { error: profileError } = await admin
