@@ -16,7 +16,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Check, Copy, KeyRound, Mail, Pencil, Plus, Shield, Trash2, User, UserCheck, UserPlus, Users, X,
+  Check, Copy, KeyRound, Mail, Pencil, Plus, RefreshCw, Shield, Trash2, User, UserCheck, UserPlus, Users, X,
 } from "lucide-react";
 
 /**
@@ -143,7 +143,8 @@ const Equipe = () => {
           manageUsers<{ invites: Invite[] }>({ action: "list_invites" }),
         ]);
         emails = new Map(users.map((u) => [u.user_id, u.email]));
-        setInvites(inv.filter((i) => !i.accepted_at && !i.revoked_at && new Date(i.expires_at) > new Date()));
+        // Pendentes, inclusive os vencidos: o admin precisa vê-los para renovar.
+        setInvites(inv.filter((i) => !i.accepted_at && !i.revoked_at));
       } catch (e) {
         toast({ title: "Não foi possível carregar os acessos", description: (e as Error).message, variant: "destructive" });
       }
@@ -297,19 +298,32 @@ const Equipe = () => {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Mail className="h-4 w-4" /> Convites pendentes</CardTitle>
-            <CardDescription>A pessoa cria a própria senha pelo link. Ele vale até a data indicada.</CardDescription>
+            <CardDescription>A pessoa cria a própria senha pelo link, ou entra com a conta que já tem. Convite vencido? Renove e o mesmo link volta a valer por 7 dias.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {invites.map((i) => (
+            {invites.map((i) => {
+              const vencido = new Date(i.expires_at) <= new Date();
+              return (
               <div key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 px-3 py-2">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{i.email}</div>
+                  <div className="flex items-center gap-2 truncate text-sm font-medium">{i.email}
+                    {vencido && <Badge variant="outline" className="border-destructive/40 text-destructive">Vencido</Badge>}
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    {ROLE_LABEL[i.role]} · vale até {new Date(i.expires_at).toLocaleDateString("pt-BR")}
+                    {ROLE_LABEL[i.role]} · {vencido ? "venceu em" : "vale até"} {new Date(i.expires_at).toLocaleDateString("pt-BR")}
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  {i.token && (
+                  {vencido && (
+                    <Button variant="ghost" size="sm" disabled={busy}
+                      onClick={() => run(async () => {
+                        const r = await manageUsers<{ token: string }>({ action: "renew_invite", invite_id: i.id });
+                        await navigator.clipboard.writeText(inviteLink(r.token)).catch(() => {});
+                      }, "Convite renovado por 7 dias. Link copiado.")}>
+                      <RefreshCw className="h-4 w-4 mr-1" /> Renovar
+                    </Button>
+                  )}
+                  {i.token && !vencido && (
                     <Button variant="ghost" size="sm" onClick={() => copy(inviteLink(i.token!))}>
                       <Copy className="h-4 w-4 mr-1" /> Copiar link
                     </Button>
@@ -320,7 +334,8 @@ const Equipe = () => {
                   </Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
