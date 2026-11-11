@@ -2314,6 +2314,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      invite_status: { Args: { _token: string }; Returns: Json }
       is_platform_admin: { Args: { _user_id?: string }; Returns: boolean }
       knowledge_docs_preview: {
         Args: { _area?: string; _chars?: number; _org_id: string }
@@ -2326,6 +2327,14 @@ export type Database = {
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
       org_quota_status: { Args: { _org_id: string }; Returns: Json }
       org_usage: { Args: { _metric: string; _org_id: string }; Returns: number }
+      pending_invites_for_email: {
+        Args: { _email: string }
+        Returns: {
+          empresa: string
+          expires_at: string
+          token: string
+        }[]
+      }
       platform_activity: {
         Args: {
           _ate: string
