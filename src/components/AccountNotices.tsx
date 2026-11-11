@@ -19,9 +19,25 @@ import { Clock, Lock } from "lucide-react";
  *   plataforma, no modo suporte, vê a faixa mas não é bloqueado.
  * - Primeiro acesso: quem recebeu uma senha gerada pelo painel da plataforma
  *   cria a própria senha antes de usar o app.
+ * - "Esqueci minha senha": o link do e-mail abre uma sessão, mas não pedia a
+ *   senha nova. Agora pede, com a mesma janela.
  */
 
 const DAY = 864e5;
+
+// O link de "Esqueci minha senha" dispara PASSWORD_RECOVERY quando o cliente lê a
+// sessão da URL, antes de qualquer tela montar. Escuta no carregamento do módulo e
+// guarda na aba, para a janela de senha nova abrir em qualquer rota.
+const RECUPERACAO = "sc-recuperacao-senha";
+supabase.auth.onAuthStateChange((event) => {
+  if (event === "PASSWORD_RECOVERY") {
+    try { sessionStorage.setItem(RECUPERACAO, "1"); } catch { /* sem storage: segue sem a janela */ }
+    window.dispatchEvent(new Event(RECUPERACAO));
+  }
+});
+const emRecuperacao = () => {
+  try { return sessionStorage.getItem(RECUPERACAO) === "1"; } catch { return false; }
+};
 
 // demo_ends_at ainda não está nos tipos gerados do Supabase.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,16 +101,23 @@ export function isDemoOver(endsAt: string | null): boolean {
   return !!endsAt && new Date(endsAt).getTime() <= Date.now();
 }
 
-/** Troca da senha gerada no primeiro acesso. Não fecha sem salvar. */
+/** Troca da senha gerada no primeiro acesso, ou depois do "Esqueci minha senha". Não fecha sem salvar. */
 export function FirstPasswordDialog() {
   const { user, support } = useAuth();
+  const [recuperacao, setRecuperacao] = useState(emRecuperacao);
+  useEffect(() => {
+    const on = () => setRecuperacao(true);
+    window.addEventListener(RECUPERACAO, on);
+    return () => window.removeEventListener(RECUPERACAO, on);
+  }, []);
   const { toast } = useToast();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
 
-  const open = !support && !done && !!user?.user_metadata?.must_change_password;
+  const primeiroAcesso = !!user?.user_metadata?.must_change_password;
+  const open = !support && !done && !!user && (primeiroAcesso || recuperacao);
   const tooShort = password.length > 0 && password.length < 8;
   const mismatch = confirm.length > 0 && confirm !== password;
 
@@ -107,18 +130,20 @@ export function FirstPasswordDialog() {
       toast({ title: "Não foi possível salvar a senha", description: error.message, variant: "destructive" });
       return;
     }
+    try { sessionStorage.removeItem(RECUPERACAO); } catch { /* nada a limpar */ }
     setDone(true);
-    toast({ title: "Senha criada", description: "Use esta senha nos próximos acessos." });
+    toast({ title: "Senha salva", description: "Use esta senha nos próximos acessos." });
   };
 
   return (
     <Dialog open={open}>
       <DialogContent className="[&>button]:hidden" onEscapeKeyDown={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Crie sua senha</DialogTitle>
+          <DialogTitle>{primeiroAcesso ? "Crie sua senha" : "Crie uma nova senha"}</DialogTitle>
           <DialogDescription>
-            Você entrou com a senha provisória enviada pela equipe do Sales Coach. Escolha uma senha sua para os próximos
-            acessos.
+            {primeiroAcesso
+              ? "Você entrou com a senha provisória enviada pela equipe do Sales Coach. Escolha uma senha sua para os próximos acessos."
+              : "Você entrou pelo link de redefinição. Escolha a senha nova para os próximos acessos."}
           </DialogDescription>
         </DialogHeader>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save(); }}>

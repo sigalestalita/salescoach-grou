@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
 import { Button } from "@/components/ui/button";
 import { Eye, CircleHelp, Pencil, Puzzle, X } from "lucide-react";
-import { DemoBanner, DemoEndedScreen, FirstPasswordDialog, isDemoOver, useDemoEndsAt } from "@/components/AccountNotices";
+import { DemoBanner, DemoEndedScreen, isDemoOver, useDemoEndsAt } from "@/components/AccountNotices";
 import { exitSupport } from "@/lib/support";
 import { NovidadesPopup } from "@/components/NovidadesPopup";
 import { useEffect, useState } from "react";
@@ -47,7 +47,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             {support && <SupportBanner orgName={support.orgName} until={support.until} canEdit={support.canEdit} />}
             {demoEndsAt && <DemoBanner endsAt={demoEndsAt} />}
             {extensaoVelha && <ExtensaoDesatualizadaBanner {...extensaoVelha} />}
-            <FirstPasswordDialog />
             {/* Novidades: não no modo suporte nem antes de trocar a senha do primeiro acesso. */}
             {!support && user && role && !user.user_metadata?.must_change_password && (
               <NovidadesPopup userId={user.id} role={role} contaCriadaEm={user.created_at} />
