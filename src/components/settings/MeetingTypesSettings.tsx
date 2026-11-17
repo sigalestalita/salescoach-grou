@@ -206,8 +206,8 @@ export function MeetingTypesSettings() {
                         <Label>Instruções para a análise (opcional)</Label>
                         <Textarea rows={4} value={d.prompt_context}
                           onChange={(e) => setDraft({ ...draft, [r.id]: { ...d, prompt_context: e.target.value } })}
-                          placeholder="Ex.: numa reunião de diagnóstico, o vendedor deve mapear o processo atual, o decisor e o prazo. Não cobre preço." />
-                        <p className="text-xs text-muted-foreground">A IA segue estas instruções ao analisar reuniões deste tipo.</p>
+                          placeholder="Ex.: numa reunião de diagnóstico, o vendedor deve mapear o processo atual, o decisor e o prazo. Não cobre preço. Não ofereça nem avalie o produto X neste tipo de reunião." />
+                        <p className="text-xs text-muted-foreground">A análise e o coach ao vivo seguem estas instruções nas reuniões deste tipo, acima da base de conhecimento. Para tirar um produto ou serviço do escopo, escreva aqui que ele não deve ser oferecido nem avaliado.</p>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={busy} onClick={() => remove(r)}>
