@@ -1106,7 +1106,6 @@ export type Database = {
           label: string
           org_id: string
           prompt_context: string | null
-          roteiro: string | null
           sort_order: number
           updated_at: string
         }
@@ -1119,7 +1118,6 @@ export type Database = {
           label: string
           org_id: string
           prompt_context?: string | null
-          roteiro?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -1132,7 +1130,6 @@ export type Database = {
           label?: string
           org_id?: string
           prompt_context?: string | null
-          roteiro?: string | null
           sort_order?: number
           updated_at?: string
         }
