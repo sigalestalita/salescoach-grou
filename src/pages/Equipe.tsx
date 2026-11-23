@@ -120,6 +120,8 @@ const Equipe = () => {
   const [addOpen, setAddOpen] = useState(false);
   const [add, setAdd] = useState({ full_name: "", email: "", password: "", role: "vendedor" as Role, team_id: NO_TEAM });
   const [createdLink, setCreatedLink] = useState<string | null>(null);
+  // O e-mail já tinha conta: em vez de criar com senha, saiu um convite.
+  const [contaExistente, setContaExistente] = useState(false);
   const [edit, setEdit] = useState<Member | null>(null);
   const [editForm, setEditForm] = useState({ full_name: "", role: "vendedor" as Role, team_id: NO_TEAM });
   const [resetFor, setResetFor] = useState<Member | null>(null);
@@ -185,6 +187,7 @@ const Equipe = () => {
   const openAdd = () => {
     setAdd({ full_name: "", email: "", password: "", role: "vendedor", team_id: NO_TEAM });
     setCreatedLink(null);
+    setContaExistente(false);
     setAddOpen(true);
   };
 
@@ -204,11 +207,25 @@ const Equipe = () => {
   };
 
   const createUser = async () => {
-    const ok = await run(() => manageUsers({
-      action: "create_user", email: add.email.trim(), password: add.password, full_name: add.full_name.trim(),
-      role: add.role, team_id: teamOrNull(add.team_id),
-    }).then(() => {}), "Usuário criado. Ele já pode entrar com o e-mail e a senha.");
-    if (ok) setAddOpen(false);
+    setBusy(true);
+    try {
+      const r = await manageUsers<{ conta_existente?: boolean; token?: string }>({
+        action: "create_user", email: add.email.trim(), password: add.password, full_name: add.full_name.trim(),
+        role: add.role, team_id: teamOrNull(add.team_id),
+      });
+      await load();
+      if (r.conta_existente && r.token) {
+        setContaExistente(true);
+        setCreatedLink(inviteLink(r.token));
+        return;
+      }
+      toast({ title: "Usuário criado. Ele já pode entrar com o e-mail e a senha." });
+      setAddOpen(false);
+    } catch (e) {
+      toast({ title: "Algo deu errado", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const copy = async (text: string) => {
@@ -404,7 +421,13 @@ const Equipe = () => {
           {createdLink ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-success"><Check className="h-4 w-4" /> Convite criado</div>
-              <p className="text-sm text-muted-foreground">Envie este link para {add.email}. Por ele, a pessoa cria a própria senha e entra já na sua empresa.</p>
+              {contaExistente ? (
+                <p className="text-sm text-muted-foreground">
+                  {add.email} já tem conta no Sales Coach, então a senha continua a dela. Envie este link: a pessoa entra com a senha que já usa e passa a fazer parte da sua empresa. Se ela abrir o Sales Coach antes, o convite também aparece na tela de acesso pendente.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Envie este link para {add.email}. Por ele, a pessoa cria a própria senha e entra já na sua empresa.</p>
+              )}
               <div className="flex gap-2">
                 <Input readOnly value={createdLink} onFocus={(e) => e.currentTarget.select()} />
                 <Button onClick={() => copy(createdLink)}><Copy className="h-4 w-4" /></Button>
