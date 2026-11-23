@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink, BrainCircuit, Loader2, Trash2 } from "lucide-react";
+import { Plus, FileText, Package, Briefcase, Award, Search, BookOpen, Upload, Link, AlignLeft, ExternalLink, BrainCircuit, Loader2, Trash2, Eye } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
+import { DocViewer } from "@/components/knowledge/DocViewer";
 
 type KnowledgeDoc = Tables<"knowledge_documents">;
 type KnowledgeItem = Tables<"knowledge_items">;
@@ -68,6 +69,7 @@ const docTypeLabels: Record<string, string> = {
 
 const Conhecimento = () => {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
+  const [openDoc, setOpenDoc] = useState<KnowledgeDoc | null>(null);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("todas");
@@ -473,10 +475,10 @@ const Conhecimento = () => {
                 return (
                   <Card key={doc.id}>
                     <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <DocIcon className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <h4 className="font-medium">{doc.title}</h4>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <DocIcon className="h-5 w-5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <button type="button" className="font-medium text-left hover:underline" onClick={() => setOpenDoc(doc)}>{doc.title}</button>
                           <p className="text-xs text-muted-foreground">
                             {docTypeLabels[doc.doc_type] || doc.doc_type.toUpperCase()}
                             {doc.doc_type === "link" && doc.file_url && (
@@ -494,6 +496,9 @@ const Conhecimento = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="h-8" onClick={() => setOpenDoc(doc)}>
+                          <Eye className="h-4 w-4 mr-1" /> {isAdmin ? "Ver e editar" : "Ver"}
+                        </Button>
                         {doc.category && <Badge variant="secondary">{doc.category}</Badge>}
                         {isAdmin ? (
                           <Select value={doc.area ?? "ambos"} onValueChange={(v) => handleAreaChange(doc.id, v)}>
@@ -631,6 +636,8 @@ const Conhecimento = () => {
           )}
         </TabsContent>
       </Tabs>
+      <DocViewer doc={openDoc} canEdit={isAdmin} onClose={() => setOpenDoc(null)}
+        onSaved={(d) => { setDocs((ds) => ds.map((x) => (x.id === d.id ? d : x))); setOpenDoc(null); }} />
     </div>
   );
 };
