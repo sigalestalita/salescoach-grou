@@ -197,6 +197,13 @@
       "when": 1795443074093,
       "tag": "0027_roteiro_tipo_reuniao",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795472129767,
+      "tag": "0028_novidades_imagem_slugs_restritos",
+      "breakpoints": true
     }
   ]
 }

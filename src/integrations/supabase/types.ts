@@ -1749,6 +1749,7 @@ export type Database = {
           cta_path: string | null
           emailed_at: string | null
           id: string
+          image_url: string | null
           published_at: string | null
           source: string
           status: string
@@ -1764,6 +1765,7 @@ export type Database = {
           cta_path?: string | null
           emailed_at?: string | null
           id?: string
+          image_url?: string | null
           published_at?: string | null
           source?: string
           status?: string
@@ -1779,6 +1781,7 @@ export type Database = {
           cta_path?: string | null
           emailed_at?: string | null
           id?: string
+          image_url?: string | null
           published_at?: string | null
           source?: string
           status?: string
