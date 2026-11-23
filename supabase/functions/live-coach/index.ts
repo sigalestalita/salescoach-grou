@@ -50,7 +50,8 @@ function carregarContexto(admin: Admin, orgId: string, meetingType: string | nul
   return Promise.all([
     loadTemplate(admin, orgId, meetingType),
     loadMeetingTypeContext(admin, orgId, meetingType),
-    admin.from("meeting_types").select("label").eq("org_id", orgId).eq("key", meetingType ?? "").maybeSingle(),
+    // "*" e não a lista de colunas: antes da migração do roteiro, pedir "roteiro" derrubaria a consulta.
+    admin.from("meeting_types").select("*").eq("org_id", orgId).eq("key", meetingType ?? "").maybeSingle(),
     admin.from("offer_types").select("label, instructions").eq("org_id", orgId).eq("is_active", true).order("sort_order"),
     // "*" e não a lista de colunas: antes da migração da área, pedir "area" derrubaria a consulta.
     admin.from("knowledge_documents").select("*").eq("org_id", orgId).not("extracted_content", "is", null),
@@ -210,6 +211,12 @@ Deno.serve(async (req) => {
       .map((o) => `- ${o.label}${o.instructions ? `: ${o.instructions.split("\n")[0]}` : ""}`)
       .join("\n");
 
+    // Roteiro de perguntas do tipo de reunião: a extensão mostra a lista inteira e
+    // o coach sugere a próxima, na ordem, em vez de inventar outra pergunta.
+    const roteiro = String((typeRow as { roteiro?: string | null } | null)?.roteiro ?? "")
+      .split("\n").map((l) => l.trim()).filter(Boolean);
+    const roteiroStr = roteiro.map((q, i) => `${i + 1}. ${q}`).join("\n");
+
     const criteriaStr = template.qualification_criteria
       .map((c) => `- ${c.key}: ${c.label}${c.description ? ` — ${c.description}` : ""}`)
       .join("\n");
@@ -286,7 +293,10 @@ FAIXAS DE TEMPERATURA:
 ${levelsStr}
 
 ${offersStr ? `OFERTAS QUE O VENDEDOR PODE APRESENTAR:\n${offersStr}\n` : ""}
-${template.extra_instructions ? `REGRAS DESTA OPERAÇÃO:\n${template.extra_instructions}\n` : ""}
+${template.extra_instructions ? `REGRAS DESTA OPERAÇÃO:\n${template.extra_instructions}\n` : ""}${roteiroStr ? `ROTEIRO DE PERGUNTAS DESTA REUNIÃO (o vendedor vê a lista inteira na tela):
+${roteiroStr}
+Quando a melhor orientação for uma pergunta (categoria "proxima_pergunta" ou um critério ainda não coberto), use a PRÓXIMA pergunta do roteiro que ainda não apareceu na conversa, na ordem, com as mesmas palavras ou adaptada ao que o cliente acabou de dizer. Não pule perguntas sem motivo e não sugira pergunta que o vendedor já fez. Objeções e perguntas diretas do cliente continuam tendo prioridade.
+` : ""}
 SUA TAREFA A CADA CHAMADA:
 1. Avalie, pela conversa até agora, quais critérios da metodologia já foram cobertos e quais ainda não.
 2. Identifique o momento: o lead acabou de levantar uma dor, uma objeção, um sinal de compra, ou a conversa está sem direção?

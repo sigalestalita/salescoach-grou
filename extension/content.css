@@ -192,3 +192,29 @@
 
 /* Versão de outro idioma: tradução da fala, logo abaixo do original. */
 #salescoach-overlay .sc-pt { display: block; margin-top: 3px; color: #0f2c5c; font-weight: 600; }
+
+/* Navegação entre dicas */
+#salescoach-overlay .sc-nav { display: flex; align-items: center; gap: 6px; margin-top: -2px; }
+#salescoach-overlay .sc-nav .sc-ibtn { width: 26px; height: 26px; font-size: 16px; line-height: 1; border: 1px solid var(--sc-line); border-radius: 8px; background: var(--sc-bg); color: var(--sc-strong); cursor: pointer; }
+#salescoach-overlay .sc-nav .sc-ibtn:disabled { opacity: .35; cursor: default; }
+#salescoach-overlay .sc-nav-pos { font-size: 11.5px; color: var(--sc-faint); }
+#salescoach-overlay .sc-nova { border: 0; border-radius: 99px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; background: var(--sc-accent); color: #fff; cursor: pointer; animation: sc-in .3s ease; }
+#salescoach-overlay .sc-hero.feita { opacity: .75; }
+#salescoach-overlay .sc-feita { font-size: 11px; font-weight: 700; color: var(--sc-ok); }
+
+/* Roteiro de perguntas */
+#salescoach-overlay .sc-roteiro { border: 1px solid var(--sc-line); border-radius: 12px; padding: 10px 10px 8px; display: flex; flex-direction: column; gap: 6px; }
+#salescoach-overlay .sc-rot-head { display: flex; align-items: center; gap: 8px; }
+#salescoach-overlay .sc-rot-count { font-size: 11.5px; color: var(--sc-faint); font-variant-numeric: tabular-nums; }
+#salescoach-overlay .sc-rot-bar { height: 4px; border-radius: 99px; background: var(--sc-track); overflow: hidden; }
+#salescoach-overlay .sc-rot-bar i { display: block; height: 100%; width: 0; background: var(--sc-ok); transition: width .3s ease; }
+#salescoach-overlay .sc-rot-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+#salescoach-overlay .sc-rot-list li { display: flex; align-items: flex-start; gap: 7px; padding: 5px 6px; border-radius: 8px; font-size: 12.5px; line-height: 1.35; color: var(--sc-text); cursor: pointer; }
+#salescoach-overlay .sc-rot-list li:hover { background: var(--sc-bg2); }
+#salescoach-overlay .sc-rot-list li.prox { background: var(--sc-accent-soft); color: var(--sc-strong); font-weight: 600; }
+#salescoach-overlay .sc-rot-list li.feita .sc-rot-q { color: var(--sc-faint); text-decoration: line-through; }
+#salescoach-overlay .sc-rot-check { flex: none; width: 15px; height: 15px; margin-top: 1px; border: 1.5px solid var(--sc-faint); border-radius: 4px; font-size: 10px; line-height: 12px; text-align: center; color: #fff; }
+#salescoach-overlay .sc-rot-list li.feita .sc-rot-check { background: var(--sc-ok); border-color: var(--sc-ok); }
+#salescoach-overlay .sc-rot-n { flex: none; color: var(--sc-faint); font-size: 11px; margin-top: 1px; min-width: 16px; }
+#salescoach-overlay .sc-rot-trocar { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--sc-soft); }
+#salescoach-overlay .sc-rot-trocar select { flex: 1; font-size: 12px; padding: 3px 6px; border: 1px solid var(--sc-line); border-radius: 6px; background: var(--sc-bg); color: var(--sc-text); }
