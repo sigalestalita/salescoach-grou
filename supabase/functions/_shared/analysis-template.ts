@@ -214,6 +214,23 @@ export async function loadMeetingTypeContext(
   return data?.prompt_context ? `\n${data.prompt_context}\n` : "";
 }
 
+/**
+ * As instruções do tipo de reunião viram regras com prioridade sobre a base de
+ * conhecimento. Antes ficavam só no CONTEXTO, e a instrução geral da base
+ * ("identifique cross-sell e upsell") passava por cima: numa reunião com
+ * consultoria parceira, por exemplo, a análise cobrava a oferta de um serviço
+ * que não se vende nesse tipo de reunião.
+ */
+export function meetingTypeRules(context: string): string {
+  const c = context.trim();
+  if (!c) return "";
+  return `
+REGRAS DESTE TIPO DE REUNIÃO (valem acima da base de conhecimento e das instruções gerais):
+${c}
+- Se estas regras disserem que um produto, serviço ou assunto não deve ser oferecido ou avaliado neste tipo de reunião, ele fica fora da análise: não o sugira (próximos passos, sugestões, scripts, cross-sell ou upsell), não o conte como oportunidade perdida, não o cite em "o que faltou" e não reduza nenhuma nota por ele não ter sido oferecido.
+`;
+}
+
 function criteriaSchema(criteria: QualificationCriterion[]): string {
   return criteria
     .map((c) => `"${c.key}": { "score": <0-${c.max_score ?? 25}>, "reason": "<justificativa>" }`)
@@ -294,9 +311,9 @@ CONTEXTO:
 - Título da reunião: ${input.meetingTitle}
 - Tipo de reunião: ${input.meetingTypeLabel || "não especificado"}
 - Data da reunião: ${input.meetingDate || "não informada"}
-${input.meetingTypeContext}${input.scenarioContext ? `
+${input.scenarioContext ? `
 ${input.scenarioContext}
-` : ""}${knowledgeSection}
+` : ""}${knowledgeSection}${meetingTypeRules(input.meetingTypeContext)}
 
 CRITÉRIOS OBRIGATÓRIOS PARA CLASSIFICAÇÃO DE TEMPERATURA (metodologia ${t.methodology_label}):
 
@@ -389,12 +406,12 @@ CONTEXTO:
 - Título da reunião: ${input.meetingTitle}
 - Tipo de reunião: ${input.meetingTypeLabel || "não especificado"}
 - Data da reunião: ${input.meetingDate || "não informada"}
-${input.meetingTypeContext}${input.scenarioContext ? `
+${input.scenarioContext ? `
 ${input.scenarioContext}
 ` : ""}${hasKnowledge ? `
 BASE DE CONHECIMENTO DA EMPRESA (produtos, processos e políticas; use para checar se as respostas dadas ao cliente estão corretas):
 ${input.knowledgeContext}
-` : ""}
+` : ""}${meetingTypeRules(input.meetingTypeContext)}
 PLAYBOOK "${t.methodology_label}"
 ${p.objetivo ? `Objetivo da conversa: ${p.objetivo}\n` : ""}
 ETAPAS DO PLAYBOOK (a soma dos pesos é ${total}):

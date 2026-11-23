@@ -31,6 +31,7 @@ interface MeetingTypeRow {
   key: string;
   label: string;
   prompt_context: string | null;
+  roteiro: string | null;
   sort_order: number;
   is_active: boolean;
   analysis_template_id: string | null;
@@ -55,14 +56,22 @@ export function MeetingTypesSettings() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, { label: string; prompt_context: string; template: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { label: string; prompt_context: string; roteiro: string; template: string }>>({});
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [newLabel, setNewLabel] = useState("");
 
   const load = useCallback(async () => {
+    // Sem a migração do roteiro (coluna nova), carrega sem ele em vez de não mostrar os tipos.
+    const tipos = async () => {
+      const r = await supabase.from("meeting_types")
+        .select("id, key, label, prompt_context, roteiro, sort_order, is_active, analysis_template_id").order("sort_order").order("label");
+      if (!r.error || !/roteiro/.test(r.error.message)) return r;
+      const v = await supabase.from("meeting_types")
+        .select("id, key, label, prompt_context, sort_order, is_active, analysis_template_id").order("sort_order").order("label");
+      return { ...v, data: v.data?.map((x) => ({ ...x, roteiro: null })) ?? null };
+    };
     const [{ data, error }, { data: tpls }] = await Promise.all([
-      supabase.from("meeting_types")
-        .select("id, key, label, prompt_context, sort_order, is_active, analysis_template_id").order("sort_order").order("label"),
+      tipos(),
       supabase.from("analysis_templates").select("id, methodology_label, is_default, mode").order("is_default", { ascending: false }).order("created_at"),
     ]);
     if (error) toast({ title: "Não foi possível carregar os tipos", description: error.message, variant: "destructive" });
@@ -107,6 +116,7 @@ export function MeetingTypesSettings() {
       .update({
         label: d.label.trim() || r.label,
         prompt_context: d.prompt_context.trim() || null,
+        roteiro: d.roteiro.split("\n").map((l) => l.trim()).filter(Boolean).join("\n") || null,
         analysis_template_id: d.template === DEFAULT_METHOD ? null : d.template,
       }).eq("id", r.id);
     if (error) throw error;
@@ -143,7 +153,7 @@ export function MeetingTypesSettings() {
 
   const openRow = (r: MeetingTypeRow) => {
     setOpenId(openId === r.id ? null : r.id);
-    setDraft((d) => ({ ...d, [r.id]: d[r.id] ?? { label: r.label, prompt_context: r.prompt_context ?? "", template: r.analysis_template_id ?? DEFAULT_METHOD } }));
+    setDraft((d) => ({ ...d, [r.id]: d[r.id] ?? { label: r.label, prompt_context: r.prompt_context ?? "", roteiro: r.roteiro ?? "", template: r.analysis_template_id ?? DEFAULT_METHOD } }));
   };
 
   return (
@@ -175,6 +185,7 @@ export function MeetingTypesSettings() {
                         <Badge variant="outline" className="text-[10px]">{optionLabel(templates.find((t) => t.id === r.analysis_template_id)!)}</Badge>
                       )}
                       {r.prompt_context && <Badge variant="secondary" className="text-[10px]">com instruções</Badge>}
+                      {r.roteiro && <Badge variant="secondary" className="text-[10px]">roteiro com {r.roteiro.split("\n").filter(Boolean).length} perguntas</Badge>}
                       {!r.is_active && <Badge variant="outline" className="text-[10px]">inativo</Badge>}
                       <ChevronDown className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
                     </button>
@@ -206,8 +217,15 @@ export function MeetingTypesSettings() {
                         <Label>Instruções para a análise (opcional)</Label>
                         <Textarea rows={4} value={d.prompt_context}
                           onChange={(e) => setDraft({ ...draft, [r.id]: { ...d, prompt_context: e.target.value } })}
-                          placeholder="Ex.: numa reunião de diagnóstico, o vendedor deve mapear o processo atual, o decisor e o prazo. Não cobre preço." />
-                        <p className="text-xs text-muted-foreground">A IA segue estas instruções ao analisar reuniões deste tipo.</p>
+                          placeholder="Ex.: numa reunião de diagnóstico, o vendedor deve mapear o processo atual, o decisor e o prazo. Não cobre preço. Não ofereça nem avalie o produto X neste tipo de reunião." />
+                        <p className="text-xs text-muted-foreground">A análise e o coach ao vivo seguem estas instruções nas reuniões deste tipo, acima da base de conhecimento. Para tirar um produto ou serviço do escopo, escreva aqui que ele não deve ser oferecido nem avaliado.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Roteiro de perguntas (opcional)</Label>
+                        <Textarea rows={6} value={d.roteiro}
+                          onChange={(e) => setDraft({ ...draft, [r.id]: { ...d, roteiro: e.target.value } })}
+                          placeholder={"Uma pergunta por linha, na ordem. Ex.:\nQual é o objetivo de vocês com este projeto?\nComo vocês vendem hoje?\nQuem mais participa da decisão?"} />
+                        <p className="text-xs text-muted-foreground">Na extensão, o vendedor vê todas as perguntas durante a call e marca as que já fez (as que ele fizer são marcadas sozinhas). O coach ao vivo sugere a próxima pergunta do roteiro.</p>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={busy} onClick={() => remove(r)}>

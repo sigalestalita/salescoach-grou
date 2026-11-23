@@ -81,9 +81,25 @@
         </div>
         <div id="sc-alerts" class="sc-section" hidden></div>
         <div id="sc-tips"><div class="sc-empty">Conectando o coach…</div></div>
-        <div id="sc-older" hidden>
-          <button type="button" class="sc-link" id="sc-older-btn" aria-expanded="false"></button>
-          <ul class="sc-older-list" id="sc-older-list" hidden></ul>
+        <div class="sc-nav" id="sc-nav" hidden>
+          <button type="button" class="sc-ibtn" id="sc-prev" title="Dica anterior" aria-label="Dica anterior">‹</button>
+          <span class="sc-nav-pos" id="sc-nav-pos"></span>
+          <button type="button" class="sc-ibtn" id="sc-next" title="Próxima dica" aria-label="Próxima dica">›</button>
+          <span class="sc-spacer"></span>
+          <button type="button" class="sc-nova" id="sc-nova" hidden></button>
+        </div>
+        <div class="sc-roteiro" id="sc-roteiro" hidden>
+          <div class="sc-rot-head">
+            <span class="sc-label" id="sc-rot-title">Roteiro</span>
+            <span class="sc-rot-count" id="sc-rot-count"></span>
+            <span class="sc-spacer"></span>
+            <button type="button" class="sc-link" id="sc-rot-toggle" aria-expanded="true">recolher</button>
+          </div>
+          <div class="sc-rot-bar"><i id="sc-rot-bar"></i></div>
+          <ol class="sc-rot-list" id="sc-rot-list"></ol>
+          <label class="sc-rot-trocar" id="sc-rot-trocar-wrap" hidden>Trocar roteiro
+            <select id="sc-rot-trocar"></select>
+          </label>
         </div>
         <div class="sc-meters" aria-label="Nível de áudio">
           <span>Você</span><div class="sc-bar"><i id="sc-meter-vendedor"></i></div>
@@ -119,9 +135,19 @@
   const confirmEl = $id('sc-confirm');
   const alertsEl = $id('sc-alerts');
   const tipsEl = $id('sc-tips');
-  const olderEl = $id('sc-older');
-  const olderBtn = $id('sc-older-btn');
-  const olderList = $id('sc-older-list');
+  const navEl = $id('sc-nav');
+  const navPos = $id('sc-nav-pos');
+  const prevBtn = $id('sc-prev');
+  const nextBtn = $id('sc-next');
+  const novaBtn = $id('sc-nova');
+  const rotEl = $id('sc-roteiro');
+  const rotList = $id('sc-rot-list');
+  const rotCount = $id('sc-rot-count');
+  const rotBar = $id('sc-rot-bar');
+  const rotToggle = $id('sc-rot-toggle');
+  const rotTitle = $id('sc-rot-title');
+  const rotTrocarWrap = $id('sc-rot-trocar-wrap');
+  const rotTrocar = $id('sc-rot-trocar');
   const liveTextEl = $id('sc-live-text');
   const txFullEl = $id('sc-tx-full');
   const txBtn = $id('sc-tx-btn');
@@ -157,12 +183,24 @@
   $id('sc-confirm-no').addEventListener('click', () => { confirmEl.hidden = true; });
   $id('sc-confirm-yes').addEventListener('click', () => { confirmEl.hidden = true; stopRecording(); });
 
-  olderBtn.addEventListener('click', () => {
-    const open = olderList.hidden;
-    olderList.hidden = !open;
-    olderBtn.setAttribute('aria-expanded', String(open));
-    renderOlderLabel();
+  prevBtn.addEventListener('click', () => verDica(tipIdx - 1));
+  nextBtn.addEventListener('click', () => verDica(tipIdx + 1));
+  novaBtn.addEventListener('click', () => verDica(tips.length - 1));
+  rotToggle.addEventListener('click', () => {
+    const open = rotList.hidden;
+    rotList.hidden = !open;
+    rotTrocarWrap.hidden = !open || rotTrocar.options.length < 2;
+    rotToggle.setAttribute('aria-expanded', String(open));
+    rotToggle.textContent = open ? 'recolher' : 'ver perguntas';
   });
+  rotList.addEventListener('click', (e) => {
+    const li = e.target.closest('li[data-i]');
+    if (!li) return;
+    const i = +li.dataset.i;
+    roteiro.feitas[i] = roteiro.feitas[i] ? 0 : 1;
+    renderRoteiro();
+  });
+  rotTrocar.addEventListener('change', () => usarRoteiro(rotTrocar.value));
   txBtn.addEventListener('click', () => {
     const open = txFullEl.hidden;
     txFullEl.hidden = !open;
@@ -1188,6 +1226,7 @@
           if (liveLines.length > 60) liveLines.shift();
           renderLive(null);
           if (text.length > 2) saveSegment(mid, who, text);
+          if (who === 'vendedor') falaDoVendedor(text);
         } else {
           renderLive({ who, text });
         }
@@ -1257,6 +1296,7 @@
       // O aviso "Não estou ouvindo o cliente" já está no painel.
     }
     startTipsRealtime(token, mid);
+    if (!roteiro.tipos.length) carregarRoteiro();
   }
 
   function nextRealtimeRef() { return String(realtimeRef++); }
@@ -1379,7 +1419,6 @@
     liveStopping = true;
     if (coachTimer) { clearTimeout(coachTimer); coachTimer = null; }
     coachPendente = null;
-    if (dicaTimer) { clearTimeout(dicaTimer); dicaTimer = null; }
     const channels = Object.keys(liveChannels);
     for (const ch of Object.values(liveChannels)) {
       try { ch.ws && ch.ws.readyState === 1 && ch.ws.send(JSON.stringify({ type: 'Terminate' })); } catch {}
@@ -1406,65 +1445,144 @@
     }
   }
 
-  // Dica mais recente em destaque; as anteriores ficam numa lista recolhida.
-  const tipHistory = [];
-  // A dica em destaque fica pelo menos este tempo, para dar tempo de ler e
-  // falar. A que chega antes espera (vale a mais nova); só passa na frente a
-  // urgente de outro assunto (uma objeção, uma pergunta direta do cliente).
-  const DICA_MINIMA_MS = 25000;
-  let dicaEmEspera = null;
-  let dicaTimer = null;
+  // Dicas: uma em destaque, com setas para voltar e avançar. A dica nova não
+  // troca a que está na tela (o vendedor pode estar no meio da pergunta): ela
+  // fica na fila, com o aviso "dica nova", e entra quando o vendedor avança ou
+  // quando ele já fez a pergunta da dica atual. Só a urgente de outro assunto
+  // (objeção, pergunta direta do cliente) entra na hora, e dá para voltar.
+  const tips = [];
+  let tipIdx = -1;
+  const MAX_DICAS = 40;
   function addTip(tip) {
-    const atual = tipHistory[0];
-    const naTela = atual ? Date.now() - atual.at : Infinity;
+    tips.push({ ...tip, at: Date.now() });
+    if (tips.length > MAX_DICAS) { tips.shift(); tipIdx = Math.max(0, tipIdx - 1); }
+    const atual = tips[tipIdx];
     const furaFila = tip.urgencia === 'alta' && (!atual || tip.categoria !== atual.categoria);
-    if (naTela < DICA_MINIMA_MS && !furaFila) {
-      dicaEmEspera = tip;
-      if (!dicaTimer) {
-        dicaTimer = setTimeout(() => {
-          dicaTimer = null;
-          const proxima = dicaEmEspera;
-          dicaEmEspera = null;
-          if (proxima && !liveStopping) mostrarDica(proxima);
-        }, DICA_MINIMA_MS - naTela);
-      }
-      return;
-    }
-    if (dicaTimer) { clearTimeout(dicaTimer); dicaTimer = null; }
-    dicaEmEspera = null;
-    mostrarDica(tip);
+    const naUltima = tipIdx >= tips.length - 2;
+    if (tipIdx < 0 || (furaFila && naUltima) || (atual && atual.feita && naUltima)) verDica(tips.length - 1);
+    else renderNav();
+    if (overlay.classList.contains('minimized')) { unseenTips += 1; updatePill(); }
   }
-  function mostrarDica(tip) {
-    tipHistory.unshift({ ...tip, at: Date.now() });
-    if (tipHistory.length > 6) tipHistory.pop();
+  function verDica(i) {
+    if (!tips.length) return;
+    tipIdx = Math.max(0, Math.min(tips.length - 1, i));
+    const tip = tips[tipIdx];
+    tip.vistaEm = tip.vistaEm || Date.now();
     const urg = tip.urgencia === 'alta' ? 'alta' : '';
     const main = tip.acao || tip.titulo || '';
     tipsEl.innerHTML = `
-      <div class="sc-hero ${urg}">
+      <div class="sc-hero ${urg}${tip.feita ? ' feita' : ''}">
         <div class="sc-hero-top">
-          <span class="sc-chip">${escape(tip.categoria || 'dica')}</span>
-          <span class="sc-age" id="sc-tip-age">agora</span>
+          <span class="sc-chip">${escape(String(tip.categoria || 'dica').replace(/_/g, ' '))}</span>
+          ${tip.feita ? '<span class="sc-feita">✓ feita</span>' : ''}
+          <span class="sc-age" id="sc-tip-age">${idade(tip.at)}</span>
         </div>
         ${tip.acao ? `<span class="sc-say">${VARIANTE ? `Diga em ${escape(VARIANTE.nomeIdioma)}` : 'Fale agora'}</span>` : ''}
         <p class="sc-hero-text">${escape(main)}</p>
         ${tip.acao && tip.titulo ? `<div class="sc-why">${escape(tip.titulo)}</div>` : ''}
       </div>`;
-    const older = tipHistory.slice(1);
-    olderEl.hidden = older.length === 0;
-    olderList.innerHTML = older.map((t) => `<li>${escape(t.acao || t.titulo || '')}</li>`).join('');
-    renderOlderLabel();
-    if (overlay.classList.contains('minimized')) { unseenTips += 1; updatePill(); }
+    renderNav();
   }
-  function renderOlderLabel() {
-    const n = tipHistory.length - 1;
-    const arrow = olderList.hidden ? '▸' : '▾';
-    olderBtn.textContent = `${arrow} ${n === 1 ? '1 dica anterior' : `${n} dicas anteriores`}`;
+  function renderNav() {
+    navEl.hidden = tips.length < 2;
+    navPos.textContent = `${tipIdx + 1} de ${tips.length}`;
+    prevBtn.disabled = tipIdx <= 0;
+    nextBtn.disabled = tipIdx >= tips.length - 1;
+    const novas = tips.length - 1 - tipIdx;
+    novaBtn.hidden = novas < 1;
+    novaBtn.textContent = novas === 1 ? 'Dica nova →' : `${novas} dicas novas →`;
+  }
+  function idade(at) {
+    const min = Math.floor((Date.now() - at) / 60000);
+    return min < 1 ? 'agora' : `há ${min} min`;
+  }
+
+  // ── Roteiro de perguntas ──
+  // O tipo de reunião pode ter um roteiro (Configurações → Tipos de reunião).
+  // A lista inteira fica visível; a próxima pergunta em destaque. O vendedor
+  // marca e desmarca com um clique, e as que ele fizer são marcadas sozinhas
+  // pela transcrição da voz dele.
+  const roteiro = { tipos: [], key: null, perguntas: [], feitas: [], auto: [] };
+  async function carregarRoteiro() {
+    try {
+      const { meetingData } = await chrome.storage.local.get(['meetingData']);
+      const r = await authed('/rest/v1/meeting_types?select=key,label,roteiro&is_active=eq.true&order=sort_order', {}, 10000);
+      if (!r.ok) return; // sem a coluna (versão antiga do banco): segue sem roteiro
+      const tipos = (await r.json()).filter((t) => t.roteiro && t.roteiro.trim());
+      if (!tipos.length) return;
+      roteiro.tipos = tipos;
+      rotTrocar.innerHTML = tipos.map((t) => `<option value="${escape(t.key)}">${escape(t.label)}</option>`).join('');
+      const tipo = meetingData?.meetingType;
+      usarRoteiro(tipos.some((t) => t.key === tipo) ? tipo : tipos[0].key, !tipos.some((t) => t.key === tipo));
+    } catch (e) {
+      console.warn('Sales Coach: roteiro não carregou', e);
+    }
+  }
+  function usarRoteiro(key, recolhido = false) {
+    const t = roteiro.tipos.find((x) => x.key === key);
+    if (!t) return;
+    roteiro.key = key;
+    roteiro.perguntas = t.roteiro.split('\n').map((l) => l.trim()).filter(Boolean);
+    roteiro.feitas = roteiro.perguntas.map(() => 0);
+    roteiro.auto = roteiro.perguntas.map(() => false);
+    rotTrocar.value = key;
+    rotTitle.textContent = `Roteiro · ${t.label}`;
+    rotEl.hidden = false;
+    if (recolhido && !rotList.hidden) rotToggle.click();
+    rotTrocarWrap.hidden = rotList.hidden || roteiro.tipos.length < 2;
+    renderRoteiro();
+  }
+  function renderRoteiro() {
+    const n = roteiro.perguntas.length;
+    const feitas = roteiro.feitas.filter(Boolean).length;
+    const prox = roteiro.feitas.findIndex((f) => !f);
+    rotCount.textContent = `${feitas}/${n}`;
+    rotBar.style.width = `${n ? (feitas / n) * 100 : 0}%`;
+    rotList.innerHTML = roteiro.perguntas.map((q, i) => `
+      <li data-i="${i}" class="${roteiro.feitas[i] ? 'feita' : ''}${i === prox ? ' prox' : ''}" title="${roteiro.feitas[i] ? 'Desmarcar' : 'Marcar como feita'}">
+        <span class="sc-rot-check" aria-hidden="true">${roteiro.feitas[i] ? '✓' : ''}</span>
+        <span class="sc-rot-n">${i + 1}.</span>
+        <span class="sc-rot-q">${escape(q)}</span>
+      </li>`).join('');
+    // A próxima pergunta fica à vista, sem precisar rolar a lista.
+    const el = rotList.querySelector('li.prox');
+    if (el && !rotList.hidden) rotList.scrollTop = Math.max(0, el.offsetTop - rotList.offsetTop - 40);
+  }
+
+  // Semelhança entre a fala do vendedor e uma pergunta: quanto das palavras
+  // que importam na pergunta aparece no que ele acabou de dizer.
+  const PARADAS = new Set('a o as os um uma uns umas de da do das dos em na no nas nos por para pra pro com sem que qual quais quanto quantos quantas como e ou se voce voces vc vcs eu nos ele ela eles elas isso esse essa este esta hoje ja tem ter sao sua seu suas seus meu minha mais muito bem aqui la ai entao tipo ne'.split(' '));
+  const palavras = (t) => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !PARADAS.has(w));
+  function parecida(pergunta, fala) {
+    const q = [...new Set(palavras(pergunta))];
+    if (!q.length) return false;
+    const f = new Set(palavras(fala).map((w) => w.slice(0, 5)));
+    const hits = q.filter((w) => f.has(w.slice(0, 5))).length;
+    return q.length <= 2 ? hits === q.length : hits >= 2 && hits / q.length >= 0.6;
+  }
+  const falasVendedor = [];
+  function falaDoVendedor(text) {
+    falasVendedor.push(text);
+    if (falasVendedor.length > 3) falasVendedor.shift();
+    const janela = falasVendedor.join(' ');
+    let mudou = false;
+    roteiro.perguntas.forEach((q, i) => {
+      if (!roteiro.feitas[i] && parecida(q, janela)) { roteiro.feitas[i] = 1; roteiro.auto[i] = true; mudou = true; }
+    });
+    if (mudou) renderRoteiro();
+    // Dica da tela: se o vendedor já fez a pergunta dela, a próxima dica pode entrar.
+    const atual = tips[tipIdx];
+    if (atual && !atual.feita && atual.acao && parecida(atual.acao, janela)) {
+      atual.feita = true;
+      if (tipIdx < tips.length - 1) setTimeout(() => { if (tips[tipIdx] === atual) verDica(tipIdx + 1); }, 2500);
+      else verDica(tipIdx);
+    }
   }
   function updateTipAge() {
     const el = document.getElementById('sc-tip-age');
-    if (!el || !tipHistory[0]) return;
-    const min = Math.floor((Date.now() - tipHistory[0].at) / 60000);
-    el.textContent = min < 1 ? 'agora' : `há ${min} min`;
+    if (!el || !tips[tipIdx]) return;
+    el.textContent = idade(tips[tipIdx].at);
   }
 
   // ── Medidores de áudio ──

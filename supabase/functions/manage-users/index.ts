@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
         // Não dá para definir a senha de uma conta que não é nossa: em vez de
         // falhar, gera o convite. A pessoa entra com a senha dela e aceita, pelo
         // link ou pela tela "Acesso pendente".
-        const jaExiste = createError.code === "email_exists" ||
+        const jaExiste = (createError as { code?: string }).code === "email_exists" ||
           /already (been )?registered/i.test(createError.message ?? "");
         if (!jaExiste) throw createError;
         return json(req, { success: true, conta_existente: true, ...(await convidar(email, role, team_id)) });

@@ -22,6 +22,7 @@ import SharedMeeting from "./pages/SharedMeeting";
 import AgendaRetorno from "./pages/AgendaRetorno";
 import AcceptInvite from "./pages/AcceptInvite";
 import SemOrganizacao from "./pages/SemOrganizacao";
+import { FirstPasswordDialog } from "@/components/AccountNotices";
 import Plataforma from "./pages/Plataforma";
 import { usePlatformAdmin } from "@/hooks/usePlatformAdmin";
 
@@ -96,6 +97,8 @@ const App = () => (
             <Route path="/extensao" element={<ProtectedRoute><Extensao /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          {/* Fora das rotas: a senha nova é pedida também em "Acesso pendente" e no convite. */}
+          <FirstPasswordDialog />
           </BrandingProvider>
         </AuthProvider>
       </BrowserRouter>

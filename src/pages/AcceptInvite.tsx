@@ -62,8 +62,11 @@ const AcceptInvite = () => {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.functions.invoke("accept-invite", { body: { token, acao: "status" } });
-      const s: Situacao = data?.status ? data : { status: "invalido" };
+      const { data, error } = await supabase.functions.invoke("accept-invite", { body: { token, acao: "status" } });
+      // Sem resposta de situação (falha de rede ou função ainda sem a ação "status"):
+      // não dá para afirmar que o convite é inválido. Mostra o formulário de sempre,
+      // e o aceite confere o convite de verdade.
+      const s: Situacao = data?.status ? data : error ? { status: "valido" } : { status: "invalido" };
       setSituacao(s);
       if (s.email) setEmail(s.email);
       if (s.conta_existe) setMode("login");
