@@ -27,7 +27,7 @@ import {
   HttpError,
   logUsage,
 } from "../_shared/tenant.ts";
-import { docMatchesArea, knowledgeAreaFor, loadMeetingTypeContext, loadTemplate } from "../_shared/analysis-template.ts";
+import { docMatchesArea, knowledgeAreaFor, loadMeetingTypeContext, loadTemplate, meetingTypeRules } from "../_shared/analysis-template.ts";
 import { dicaRepetida, vaiChamarIa } from "../_shared/liveCoach.ts";
 
 const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY")!;
@@ -332,7 +332,7 @@ ${paraTraduzir.length ? paraTraduzir.map((f, i) => `${i + 1}. ${f}`).join("\n") 
     const user = userIdioma || `## Reunião
 Título: ${meeting.title}
 ${playbook ? "Cliente" : "Lead"}: ${meeting.lead_name ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
-Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}${typeContext ? `\n${typeContext.trim()}` : ""}
+Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}
 
 ## Conversa recente (do mais antigo ao mais novo; "Vendedor:" e "Cliente:" dizem quem falou quando a gravação separa as vozes; sem rótulo, deduza pelo conteúdo)
 ${transcript}
@@ -343,7 +343,8 @@ ${recentStr || "(nenhuma)"}
 ## Base de conhecimento — trechos mais relacionados ao que está sendo dito
 ${kbStr || "(sem documentos relacionados)"}
 
-${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}`;
+${itemsStr ? `## Portfólio cadastrado\n${itemsStr}` : ""}
+${typeContext.trim() ? `\n## ${meetingTypeRules(typeContext).trim().replace(/^REGRAS DESTE TIPO DE REUNIÃO/, "Regras deste tipo de reunião")}\nIsso vale também para a base de conhecimento, o portfólio e as ofertas: o que estiver fora do escopo deste tipo não vira orientação.` : ""}`;
 
     const chamaIa = (semRaciocinio: boolean) => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
