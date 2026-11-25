@@ -131,6 +131,16 @@ Deno.serve(async (req) => {
 
     if (!meeting) return json(req, { error: "meeting not found" }, 404);
 
+    // Nome de quem vende: a dica nunca pode tratar o vendedor como o cliente.
+    // Quando o lead da reunião ficou com o nome do próprio vendedor (evento
+    // interno, agenda de outra pessoa, título com o nome dele), o lead some do
+    // prompt em vez de virar o destinatário da frase sugerida.
+    const { data: perfilVendedor } = await admin.from("profiles").select("full_name").eq("user_id", meeting.seller_id).maybeSingle();
+    const nomeVendedor = (perfilVendedor?.full_name ?? "").trim();
+    const primeiro = (s: string | null | undefined) => (s ?? "").trim().split(/\s+/)[0]?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() ?? "";
+    const leadEhVendedor = !!nomeVendedor && !!meeting.lead_name && primeiro(meeting.lead_name) === primeiro(nomeVendedor);
+    const leadNome = leadEhVendedor ? null : meeting.lead_name;
+
     if (!internal) {
       const ctx = await getCaller(req);
       if (ctx.orgId !== meeting.org_id) return json(req, { error: "forbidden" }, 403);
@@ -301,7 +311,7 @@ SUA TAREFA A CADA CHAMADA:
 1. Avalie, pela conversa até agora, quais critérios da metodologia já foram cobertos e quais ainda não.
 2. Identifique o momento: o lead acabou de levantar uma dor, uma objeção, um sinal de compra, ou a conversa está sem direção?
 3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) responder objeção ou sinal de compra que acabou de surgir; (b) explorar um critério ainda não coberto; (c) conectar uma dor dita pelo lead a algo da base de conhecimento; (d) corrigir postura (falar menos, perguntar mais).
-4. Escreva a frase EXATA que o vendedor deve dizer, em primeira pessoa, natural, como se fosse falada — não uma descrição do que fazer. Se a orientação usar a base de conhecimento, cite o produto/serviço/dado pelo nome que aparece nela e nunca invente número, preço ou funcionalidade que não esteja lá.
+4. Escreva a frase EXATA que o vendedor deve dizer, em primeira pessoa, natural, como se fosse falada — não uma descrição do que fazer. A frase é dita PARA o cliente: nunca chame o cliente pelo nome do vendedor. Só use o nome do cliente se ele estiver no campo Lead/Cliente ou se o próprio cliente se apresentou na conversa; na dúvida, não use nome nenhum. Se a orientação usar a base de conhecimento, cite o produto/serviço/dado pelo nome que aparece nela e nunca invente número, preço ou funcionalidade que não esteja lá.
 5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
 
 FORMATO (JSON puro):
@@ -331,7 +341,8 @@ ${paraTraduzir.length ? paraTraduzir.map((f, i) => `${i + 1}. ${f}`).join("\n") 
 
     const user = userIdioma || `## Reunião
 Título: ${meeting.title}
-${playbook ? "Cliente" : "Lead"}: ${meeting.lead_name ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
+${playbook ? "Cliente" : "Lead"}: ${leadNome ?? "?"}${meeting.lead_company ? ` (${meeting.lead_company})` : ""}
+${nomeVendedor ? `Vendedor (quem recebe a orientação): ${nomeVendedor}` : ""}
 Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}
 
 ## Conversa recente (do mais antigo ao mais novo; "Vendedor:" e "Cliente:" dizem quem falou quando a gravação separa as vozes; sem rótulo, deduza pelo conteúdo)
