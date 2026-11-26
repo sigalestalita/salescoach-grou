@@ -32,6 +32,7 @@ novo entra como mais um conector, sem mudar o resto. Cada organização usa um C
 | Conector HubSpot | `supabase/functions/_shared/crm/hubspot.ts` |
 | Conector Pipedrive | `supabase/functions/_shared/crm/pipedrive.ts` |
 | Conector Kommo | `supabase/functions/_shared/crm/kommo.ts` |
+| Conector CRM do Lumi (token) | `supabase/functions/_shared/crm/lumi.ts` (verificado em `_shared/crm/tests/lumi_check.ts`) |
 | Dado → campo, anotação, tarefa | `supabase/functions/_shared/crm/mapping.ts` (testado em `src/test/crm-mapping.test.ts`) |
 | Tela de configuração | `src/components/settings/CrmSettings.tsx` |
 | Cartão na reunião | `src/components/CrmMeetingCard.tsx` |
@@ -138,6 +139,21 @@ Diferenças entre os CRMs que o núcleo já trata:
   enquanto o app estiver instalado. O token de longa duração do Kommo não
   renova: quando vence ou é revogado, a conexão fica em "Precisa reconectar" e
   o admin cola um token novo.
+
+## CRM do Lumi
+
+Conector por token, no mesmo contrato do NEXA CRM, para o CRM comercial do Lumi (`crm.applumi.io`, repositório
+`applumi/lumi-crm`, endpoint `api/integracao.ts`). Só aparece para quem entra com e-mail dos domínios em
+`LUMI_CRM_DOMINIOS` (padrão `applumi.io`); o endereço só é aceito nos hosts de `LUMI_CRM_HOSTS` (padrão `crm.applumi.io`).
+
+- **Conectar:** no CRM do Lumi, Configurações → Integração com o Sales Coach → *Gerar token* (aparece uma vez). No Sales
+  Coach, Configurações → Integração com CRM → CRM do Lumi → cole o endereço (`https://crm.applumi.io/api/integracao`) e o token.
+- **Vínculo da reunião:** pelo e-mail de quem participa, o CRM devolve os negócios do funil de vendas da empresa da pessoa.
+  Sem negócio aberto, devolve a empresa (`conta:<id>`); sem empresa, o contato (`contato:<id>`) ou o lead (`lead:<id>`),
+  então toda reunião fica ligada a alguém. O vendedor pode trocar o vínculo no cartão do CRM da reunião.
+- **O que é gravado:** a anotação vira uma atividade "reunião" na linha do tempo; a tarefa vira tarefa do dono do negócio ou
+  da empresa, com a data do próximo passo; os campos mapeados ficam no negócio (ou na empresa).
+- **Banco do Sales Coach:** aplicar `20261126120000_crm_lumi.sql` (libera o provedor `lumi`). **Banco do CRM:** migração `0004`.
 
 ## Limitações desta primeira versão
 
