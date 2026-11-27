@@ -34,13 +34,15 @@ const DISPONIVEIS: [CrmProvider, string][] = [
 const EXTRAS: Partial<Record<CrmProvider, string>> = {
   nexa: "CRM comercial da NEXA. Cole o endereço e o token gerados em Ajustes → Integração com o Sales Coach, no próprio CRM.",
   lumi: "CRM comercial do Lumi. Cole o endereço e o token gerados em Configurações → Integração com o Sales Coach, no próprio CRM.",
+  compass: "CRM da Grou. Cole o endereço e o token gerados pela gestão em Configurações → Integração com o Sales Coach, no Compass.",
 };
 /** CRMs que conectam só por token colado, sem autorização no site do CRM. */
-const SO_TOKEN: CrmProvider[] = ["nexa", "lumi"];
+const SO_TOKEN: CrmProvider[] = ["nexa", "lumi", "compass"];
 /** Textos do formulário de token de cada CRM que conecta só por token. */
 const TOKEN_FORM: Partial<Record<CrmProvider, { onde: string; url: string; token: string }>> = {
   nexa: { onde: "No NEXA CRM, em Ajustes e importar → Integração com o Sales Coach, copie o endereço e gere um token. Cole os dois aqui.", url: "https://….supabase.co/functions/v1/integracao", token: "nexa_…" },
   lumi: { onde: "No CRM do Lumi, em Configurações → Integração com o Sales Coach, gere um token e copie o endereço. Cole os dois aqui. As reuniões passam a ficar ligadas ao negócio, à empresa ou ao contato do CRM pelo e-mail de quem participa.", url: "https://crm.applumi.io/api/integracao", token: "lumi_…" },
+  compass: { onde: "No Compass, em Configurações → Integração com o Sales Coach (gestão), gere um token e copie o endereço. Cole os dois aqui. As reuniões ficam ligadas ao negócio, à empresa ou ao lead do Compass pelo e-mail de quem participa.", url: "https://compass.grougp.com/api/public/integracao", token: "compass_…" },
 };
 
 /** Dados que valem um campo próprio no CRM; o resto já vai na anotação. */

@@ -3,7 +3,7 @@
 O Sales Coach grava no negócio do CRM do cliente o resultado de cada análise:
 campos (nota, temperatura, critérios, próximo passo…), uma anotação com o resumo
 e uma tarefa com o próximo passo. CRMs disponíveis: **RD Station CRM (API v2)**,
-**HubSpot (CRM API v3)**, **Pipedrive (API v2)** e **Kommo (API v4)**. Um CRM
+**HubSpot (CRM API v3)**, **Pipedrive (API v2)** e **Kommo (API v4)**, além dos CRMs internos por token (NEXA CRM, CRM do Lumi e Compass). Um CRM
 novo entra como mais um conector, sem mudar o resto. Cada organização usa um CRM por vez: conectar um desliga o outro.
 
 ## Como funciona
@@ -33,6 +33,7 @@ novo entra como mais um conector, sem mudar o resto. Cada organização usa um C
 | Conector Pipedrive | `supabase/functions/_shared/crm/pipedrive.ts` |
 | Conector Kommo | `supabase/functions/_shared/crm/kommo.ts` |
 | Conector CRM do Lumi (token) | `supabase/functions/_shared/crm/lumi.ts` (verificado em `_shared/crm/tests/lumi_check.ts`) |
+| Conector Compass (token) | `supabase/functions/_shared/crm/compass.ts` (verificado em `_shared/crm/tests/compass_check.ts`) |
 | Dado → campo, anotação, tarefa | `supabase/functions/_shared/crm/mapping.ts` (testado em `src/test/crm-mapping.test.ts`) |
 | Tela de configuração | `src/components/settings/CrmSettings.tsx` |
 | Cartão na reunião | `src/components/CrmMeetingCard.tsx` |
@@ -154,6 +155,28 @@ Conector por token, no mesmo contrato do NEXA CRM, para o CRM comercial do Lumi 
 - **O que é gravado:** a anotação vira uma atividade "reunião" na linha do tempo; a tarefa vira tarefa do dono do negócio ou
   da empresa, com a data do próximo passo; os campos mapeados ficam no negócio (ou na empresa).
 - **Banco do Sales Coach:** aplicar `20261126120000_crm_lumi.sql` (libera o provedor `lumi`). **Banco do CRM:** migração `0004`.
+
+## Compass (CRM da Grou)
+
+Conector por token, no mesmo contrato do CRM do Lumi, para o Compass (`compass.grougp.com`, repositório
+`sigalestalita/sdr-grou-9605613b`, endpoint `src/routes/api/public/integracao.ts` com a lógica em
+`src/lib/integracao-sales-coach.server.ts`). Só aparece para quem entra com e-mail dos domínios em `COMPASS_CRM_DOMINIOS`
+(padrão `grougp.com.br,grougp.com`); o endereço só é aceito nos hosts de `COMPASS_CRM_HOSTS` (padrão
+`compass.grougp.com`) e no caminho `/api/public/integracao`. O `sdr-grou.lovable.app` fica de fora: ele redireciona para
+`compass.grougp.com` e o token se perde no redirecionamento.
+
+- **Conectar:** no Compass, Configurações → Integração com o Sales Coach → *Gerar token* (só a gestão; aparece uma vez).
+  No Sales Coach, Configurações → Integração com CRM → Compass → cole o endereço
+  (`https://compass.grougp.com/api/public/integracao`) e o token (`compass_…`).
+- **Vínculo da reunião:** pelo e-mail de quem participa (contato, lead ou contato do negócio), o Compass devolve os negócios
+  da empresa da pessoa, abertos primeiro. Sem negócio aberto, devolve a empresa (`conta:<id>`); sem empresa, o contato
+  (`contato:<id>`) ou o lead (`lead:<id>`).
+- **O que é gravado:** a anotação vira atividade "reunião" na linha do tempo do negócio (ou da empresa, ou nota do lead); a
+  tarefa vira o próximo passo do negócio (ou do lead), com aviso no sino para o dono; numa empresa sem negócio, o próximo
+  passo vai como atividade. Os campos mapeados ficam em `deals.sales_coach` (ou `companies.sales_coach`).
+- **Banco do Sales Coach:** aplicar `20261127140000_crm_compass.sql` (libera o provedor `compass`). **Banco do Compass:**
+  migração `20261127100000_integracao_sales_coach.sql`.
+- **Verificar:** `deno run --allow-env _shared/crm/tests/compass_check.ts` (em `supabase/functions`).
 
 ## Limitações desta primeira versão
 

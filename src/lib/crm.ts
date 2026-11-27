@@ -2,7 +2,7 @@
 // valida papel e organização; o app não lê as tabelas de CRM direto.
 import { supabase } from "@/integrations/supabase/client";
 
-export type CrmProvider = "rdstation" | "hubspot" | "pipedrive" | "kommo" | "nexa" | "lumi";
+export type CrmProvider = "rdstation" | "hubspot" | "pipedrive" | "kommo" | "nexa" | "lumi" | "compass";
 
 export const CRM_NAME: Record<CrmProvider, string> = {
   rdstation: "RD Station CRM",
@@ -11,6 +11,7 @@ export const CRM_NAME: Record<CrmProvider, string> = {
   kommo: "Kommo",
   nexa: "NEXA CRM",
   lumi: "CRM do Lumi",
+  compass: "Compass",
 };
 
 export interface CrmSettings {
