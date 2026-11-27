@@ -5,13 +5,15 @@
 // Sales Coach → "Gerar token" (só a gestão); cola-se aqui o endereço e o token. Não há OAuth nem renovação;
 // revogado, reconecta.
 //
-// - Negócio = negócio do Compass. Quem não tem negócio aberto aparece como a empresa ("conta:<id>"), o contato
-//   ("contato:<id>") ou o lead ("lead:<id>"): toda reunião fica ligada a alguém.
-// - A nota vira uma atividade "reunião" na linha do tempo do negócio (ou da empresa, ou do lead); a tarefa vira o
-//   próximo passo do negócio (ou do lead), com aviso no sino para o dono. Os campos ficam guardados no negócio
-//   (ou na empresa).
+// - Cada reunião vira um registro próprio no Compass (não um negócio), sempre ligado à empresa, com os campos da
+//   análise, o resumo e o próximo passo. Por isso o conector manda junto a reunião (setMeeting): id, tipo (venda ou
+//   atendimento), quem conduziu, participante, data e link.
+// - O "negócio" devolvido diz onde a reunião fica: um negócio do Compass (só reunião de venda de quem é responsável
+//   por ele) ou a empresa ("conta:<id>"), o contato ("contato:<id>") ou o lead ("lead:<id>"). Atendimento nunca
+//   cai em negócio comercial.
+// - O próximo passo é de quem conduziu: venda → próximo passo do negócio; atendimento → tarefa do CS no cliente.
 
-import { CrmConnector, CrmDeal, CrmError, CrmField } from "./types.ts";
+import { CrmConnector, CrmDeal, CrmError, CrmField, MeetingContext } from "./types.ts";
 
 /**
  * O Compass é o CRM interno da Grou: a opção só aparece para quem entra com e-mail da Grou
@@ -81,11 +83,25 @@ export async function compassAccountName(token: string, base: string): Promise<s
 export function compassConnector(token: string, apiDomain: string | null): CrmConnector {
   const base = compassBase(apiDomain);
   if (!base) throw new CrmError("Conexão com o Compass sem endereço válido. Reconecte o CRM.", "auth");
-  const go = (action: string, payload?: Json) => call(base, token, action, payload);
+  // A reunião em envio vai junto em cada chamada: no Compass ela vira um registro próprio (não um negócio).
+  let reuniao: Json | null = null;
+  const go = (action: string, payload: Json = {}) => call(base, token, action, reuniao ? { ...payload, reuniao } : payload);
   const list = (r: Json) => (Array.isArray(r.negocios) ? (r.negocios as Json[]) : []).map(toDeal);
 
   return {
     provider: "compass",
+
+    setMeeting(m: MeetingContext) {
+      reuniao = {
+        id: m.id,
+        tipo: m.tipo,
+        titulo: m.titulo,
+        data: m.data,
+        conduzida_por: m.conduzidaPor,
+        participante: m.participante,
+        link: m.link,
+      };
+    },
 
     async listDealFields() {
       const r = await go("campos");
@@ -112,7 +128,8 @@ export function compassConnector(token: string, apiDomain: string | null): CrmCo
     },
 
     async updateDealFields(id, fields) {
-      if (!Object.keys(fields).length) return;
+      // Com a reunião, envia mesmo sem campos: é assim que ela passa a existir no Compass.
+      if (!Object.keys(fields).length && !reuniao) return;
       await go("atualizar", { id, valores: fields });
     },
 

@@ -29,6 +29,11 @@ globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => 
 }) as typeof fetch;
 
 const crm = compassConnector("compass_tokendeteste1234567890abc", "https://compass.grougp.com/api/public/integracao");
+crm.setMeeting?.({
+  id: "reuniao-1", tipo: "atendimento", titulo: "Check-in", data: "2026-11-27T14:00:00Z",
+  conduzidaPor: { email: "cs@grougp.com.br", nome: "Fulana do CS" }, participante: { email: "ana@acme.com.br", nome: "Ana" },
+  link: "https://salescoach.grougp.com.br/agendas/reuniao-1",
+});
 const deals = await crm.dealsForEmail("ana@acme.com.br");
 ok(deals.length === 1 && deals[0].id.startsWith("conta:") && deals[0].status === "ongoing", "sem negócio aberto, liga à empresa");
 const d = await crm.getDeal(deals[0].id, ["nota"]);
@@ -38,6 +43,12 @@ await crm.createNote(d.id, "Resumo da reunião");
 await crm.createTask(d.id, { name: "Enviar proposta", description: "Combinado na reunião", dueDate: "2026-12-01" });
 ok(chamadas.map((c) => c.action).join(",") === "por_email,negocio,atualizar,nota,tarefa", "chama as ações do contrato na ordem");
 ok(chamadas.find((c) => c.action === "tarefa")?.corpo.vencimento === "2026-12-01", "manda o prazo da tarefa");
+ok(chamadas.every((c) => (c.corpo.reuniao as { id?: string; tipo?: string } | undefined)?.id === "reuniao-1"), "manda a reunião em todas as chamadas");
+const r0 = chamadas[0].corpo.reuniao as { tipo: string; conduzida_por: { email: string } };
+ok(r0.tipo === "atendimento" && r0.conduzida_por.email === "cs@grougp.com.br", "manda o tipo e quem conduziu");
+const antes = chamadas.length;
+await crm.updateDealFields(d.id, {});
+ok(chamadas.length === antes + 1 && chamadas.at(-1)?.action === "atualizar", "com a reunião, envia mesmo sem campos (a reunião passa a existir)");
 
 const ruim = compassConnector("compass_tokenerrado00000000000000", "https://compass.grougp.com/api/public/integracao");
 try { await ruim.dealsForEmail("x@y.com"); ok(false, "deveria recusar"); } catch (e) { ok(e instanceof CrmError && e.kind === "auth", "token recusado vira erro de autenticação (pede reconexão)"); }

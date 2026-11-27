@@ -40,8 +40,25 @@ export class CrmError extends Error {
   }
 }
 
+/**
+ * A reunião que está sendo enviada. Só o conector do Compass usa: lá cada reunião vira um registro próprio, ligado
+ * à empresa, e o próximo passo vai para quem conduziu. Os outros CRMs ignoram.
+ */
+export interface MeetingContext {
+  id: string;
+  /** "atendimento" quando a análise foi por playbook; senão "venda". */
+  tipo: "venda" | "atendimento";
+  titulo: string | null;
+  data: string | null;
+  conduzidaPor: { email: string | null; nome: string | null };
+  participante: { email: string | null; nome: string | null };
+  link: string | null;
+}
+
 export interface CrmConnector {
   provider: CrmProvider;
+  /** Recebe a reunião antes do envio (opcional; ver MeetingContext). */
+  setMeeting?(meeting: MeetingContext): void;
   listDealFields(): Promise<CrmField[]>;
   createDealField(label: string, type: "number" | "text" | "date" | "option" | "hyperlink", options?: string[]): Promise<CrmField>;
   /** Negócios ligados ao contato com este e-mail (abertos primeiro). */
