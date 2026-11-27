@@ -171,9 +171,16 @@ Conector por token, no mesmo contrato do CRM do Lumi, para o Compass (`compass.g
 - **Vínculo da reunião:** pelo e-mail de quem participa (contato, lead ou contato do negócio), o Compass devolve os negócios
   da empresa da pessoa, abertos primeiro. Sem negócio aberto, devolve a empresa (`conta:<id>`); sem empresa, o contato
   (`contato:<id>`) ou o lead (`lead:<id>`).
-- **O que é gravado:** a anotação vira atividade "reunião" na linha do tempo do negócio (ou da empresa, ou nota do lead); a
-  tarefa vira o próximo passo do negócio (ou do lead), com aviso no sino para o dono; numa empresa sem negócio, o próximo
-  passo vai como atividade. Os campos mapeados ficam em `deals.sales_coach` (ou `companies.sales_coach`).
+- **Cada reunião é um registro próprio** (`reunioes_analisadas` no Compass), não um negócio: o conector manda junto a
+  reunião (`setMeeting`: id, tipo venda/atendimento, quem conduziu, participante, data, link). Ela fica sempre na
+  empresa, com os campos mapeados, o resumo e o próximo passo; nada sobrescreve outra reunião. A ficha da empresa no
+  Compass mostra todas, com filtro por tipo, contato e pessoa.
+- **Onde cai:** reunião de venda de quem é responsável por um negócio aberto da empresa → esse negócio; de quem não é →
+  a empresa (não vira negócio); atendimento (análise por playbook) → a empresa, nunca um negócio comercial.
+- **O que é gravado:** a anotação vira atividade "reunião" na linha do tempo do negócio (ou da empresa, ou nota do lead),
+  assinada por quem conduziu. O próximo passo é de quem conduziu: venda → próximo passo do negócio; atendimento →
+  tarefa do CS na ficha do cliente; lead → próxima ação do lead; senão, aviso no sino.
+- **Sem o contexto da reunião** (versão antiga), o Compass recusa gravar e pede para publicar a versão nova.
 - **Banco do Sales Coach:** aplicar `20261127140000_crm_compass.sql` (libera o provedor `compass`). **Banco do Compass:**
   migração `20261127100000_integracao_sales_coach.sql`.
 - **Verificar:** `deno run --allow-env _shared/crm/tests/compass_check.ts` (em `supabase/functions`).

@@ -8,7 +8,7 @@ import { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 import { loadTemplate } from "../analysis-template.ts";
 import { activeConnection, ConnectionRow, connectorFor, refreshConnection } from "./connection.ts";
 import { buildFieldUpdate, buildNote, buildTask, FieldMapping, sourceValues, SourceContext } from "./mapping.ts";
-import { CrmConnector, CrmDeal, CrmError } from "./types.ts";
+import { CrmConnector, CrmDeal, CrmError, MeetingContext } from "./types.ts";
 
 export const MAX_ATTEMPTS = 5;
 
@@ -77,6 +77,35 @@ async function withAuthRetry<T>(admin: SupabaseClient, conn: ConnectionRow, run:
     }
     throw e;
   }
+}
+
+/** Quem conduziu a reunião (e-mail e nome do vendedor ou de quem atendeu), para o CRM saber de quem é o próximo passo. */
+async function meetingContext(
+  admin: SupabaseClient,
+  meeting: Record<string, unknown>,
+  mode: string | undefined,
+  link: string | null | undefined,
+): Promise<MeetingContext> {
+  const sellerId = meeting.seller_id ? String(meeting.seller_id) : null;
+  const [{ data: perfil }, usuario] = sellerId
+    ? await Promise.all([
+      admin.from("profiles").select("full_name").eq("user_id", sellerId).maybeSingle(),
+      Promise.resolve().then(() => admin.auth.admin.getUserById(sellerId)).catch(() => ({ data: { user: null } })),
+    ])
+    : [{ data: null }, { data: { user: null } }];
+  const s = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return {
+    id: String(meeting.id),
+    tipo: mode === "playbook" ? "atendimento" : "venda",
+    titulo: s(meeting.title),
+    data: s(meeting.meeting_date) ?? s(meeting.created_at),
+    conduzidaPor: {
+      email: s((usuario as { data: { user: { email?: string } | null } }).data.user?.email),
+      nome: s((perfil as { full_name?: string } | null)?.full_name),
+    },
+    participante: { email: s(meeting.lead_email), nome: s(meeting.lead_name) },
+    link: link ?? null,
+  };
 }
 
 /** Escolhe o negócio: o vinculado na reunião; senão, o único aberto do e-mail do lead. */
@@ -168,7 +197,10 @@ export async function processJob(admin: SupabaseClient, job: JobRow): Promise<Jo
       playbookLabel: (analysis.methodology as { label?: string } | null)?.label ?? template.methodology_label,
     };
 
+    const reuniao = await meetingContext(admin, meeting, ctx.mode, ctx.analysisUrl);
+
     return await withAuthRetry(admin, conn, async (crm) => {
+      crm.setMeeting?.(reuniao);
       const fieldKeys = ((mappings ?? []) as FieldMapping[]).map((m) => m.target_field);
       const { deal, reason } = await resolveDeal(admin, crm, meeting, job.provider, fieldKeys);
       if (!deal) {
