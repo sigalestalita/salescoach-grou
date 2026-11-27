@@ -13,7 +13,8 @@
 // Ritmo (_shared/liveCoach.ts): a extensão manda quem acabou de falar
 // (gatilho). Logo depois de uma dica, a fala do vendedor não chama a IA (ele
 // está lendo ou fazendo a pergunta sugerida), e a dica que for só a anterior
-// com outras palavras é descartada. Para responder mais rápido, o modelo não
+// com outras palavras é descartada. O coach vê o resto da reunião em resumo,
+// para não perguntar de novo o que o cliente já respondeu lá no começo. Para responder mais rápido, o modelo não
 // "pensa" antes (com volta ao formato antigo se o gateway recusar) e o contexto
 // da empresa fica guardado alguns minutos. Cada chamada registra o tempo de
 // cada etapa (log "live-coach tempos").
@@ -28,15 +29,16 @@ import {
   logUsage,
 } from "../_shared/tenant.ts";
 import { docMatchesArea, knowledgeAreaFor, loadMeetingTypeContext, loadTemplate, meetingTypeRules } from "../_shared/analysis-template.ts";
-import { dicaRepetida, vaiChamarIa } from "../_shared/liveCoach.ts";
+import { dicaRepetida, historicoAnterior, vaiChamarIa } from "../_shared/liveCoach.ts";
 
 const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 // Mesmo modelo da análise, comprovadamente aceito pelo gateway. LIVE_COACH_MODEL
 // permite trocar sem deploy.
 const LIVE_COACH_MODEL = Deno.env.get("LIVE_COACH_MODEL") ?? "google/gemini-2.5-flash";
 
-const TRANSCRIPT_WINDOW = 24;   // últimos trechos considerados (~2 a 4 minutos)
-const RECENT_TIPS = 6;          // dicas recentes a não repetir
+const TRANSCRIPT_WINDOW = 24;   // conversa recente, em detalhe (~2 a 4 minutos)
+const HISTORY_LIMIT = 400;      // falas da reunião lidas para saber o que já foi respondido
+const RECENT_TIPS = 30;         // dicas da reunião a não repetir
 const KB_DOCS = 4;              // documentos mais relevantes para o momento
 const KB_CHARS_PER_DOC = 900;
 const KB_ITEMS = 30;
@@ -160,7 +162,7 @@ Deno.serve(async (req) => {
         .eq("meeting_id", meetingId)
         .eq("org_id", orgId)
         .order("created_at", { ascending: false })
-        .limit(TRANSCRIPT_WINDOW),
+        .limit(HISTORY_LIMIT),
       admin
         .from("live_tips")
         .select("titulo, categoria, acao, emitted_at")
@@ -177,12 +179,16 @@ Deno.serve(async (req) => {
       return json(req, { emitted: false, reason: "dica recente", tempos });
     }
 
-    const ordered = (segs || []).reverse();
+    const todas = (segs || []).reverse();
+    const ordered = todas.slice(-TRANSCRIPT_WINDOW);
     // A extensão manda as falas em duas trilhas (microfone = vendedor, aba =
     // cliente). Trechos antigos, de uma trilha só, ficam sem rótulo.
     const who = (s: { speaker: string | null }) =>
       s.speaker === "vendedor" ? "Vendedor: " : s.speaker === "cliente" ? "Cliente: " : "";
     const transcript = ordered.map((s) => `- ${who(s)}${s.text}`).join("\n");
+    // O que foi dito antes da janela recente: o coach precisa saber o que o
+    // cliente já respondeu lá no começo para não perguntar de novo.
+    const historico = historicoAnterior(todas.slice(0, -TRANSCRIPT_WINDOW).map((s) => `- ${who(s)}${s.text}`));
     const lastTurn = ordered.slice(-4).map((s) => s.text).join(" ");
     const haQuanto = (iso: string | null) => {
       if (!iso) return "";
@@ -259,7 +265,8 @@ SUA TAREFA A CADA CHAMADA:
 2. Identifique o momento: o cliente acabou de mostrar um sinal de risco, uma insatisfação, uma dúvida, uma oportunidade, ou a conversa está sem direção?
 3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) tratar um sinal de risco ou reclamação que acabou de surgir; (b) responder uma dúvida com a informação certa da base de conhecimento; (c) puxar uma etapa obrigatória que ainda não aconteceu; (d) registrar um compromisso com prazo;${playbook.expansao_comercial ? " (d2) aproveitar uma oportunidade de expansão que o cliente abriu;" : ""} (e) corrigir postura (ouvir mais, confirmar entendimento).
 4. Escreva a frase EXATA que a pessoa deve dizer, em primeira pessoa, natural, como se fosse falada. Use só informações da base de conhecimento; nunca invente prazo, preço, política ou funcionalidade.
-5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
+5. Antes de sugerir uma pergunta, confira na conversa INTEIRA (o histórico anterior e a conversa recente) se o cliente já respondeu aquilo, mesmo de passagem, com outras palavras ou com um número. Se já respondeu, não pergunte de novo: siga para o próximo assunto ou, se valer, aprofunde a partir da resposta dele (ex.: "você comentou que são 1.800 clientes; quantos chegam por indicação?"). Também não sugira de novo uma pergunta que já está na lista de orientações dadas.
+6. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
 
 FORMATO (JSON puro):
 {
@@ -305,14 +312,15 @@ ${levelsStr}
 ${offersStr ? `OFERTAS QUE O VENDEDOR PODE APRESENTAR:\n${offersStr}\n` : ""}
 ${template.extra_instructions ? `REGRAS DESTA OPERAÇÃO:\n${template.extra_instructions}\n` : ""}${roteiroStr ? `ROTEIRO DE PERGUNTAS DESTA REUNIÃO (o vendedor vê a lista inteira na tela):
 ${roteiroStr}
-Quando a melhor orientação for uma pergunta (categoria "proxima_pergunta" ou um critério ainda não coberto), use a PRÓXIMA pergunta do roteiro que ainda não apareceu na conversa, na ordem, com as mesmas palavras ou adaptada ao que o cliente acabou de dizer. Não pule perguntas sem motivo e não sugira pergunta que o vendedor já fez. Objeções e perguntas diretas do cliente continuam tendo prioridade.
+Quando a melhor orientação for uma pergunta (categoria "proxima_pergunta" ou um critério ainda não coberto), use a PRÓXIMA pergunta do roteiro que ainda não foi feita nem respondida na conversa inteira (histórico anterior incluído), na ordem, com as mesmas palavras ou adaptada ao que o cliente acabou de dizer. Não pule perguntas sem motivo e não sugira pergunta que o vendedor já fez. Objeções e perguntas diretas do cliente continuam tendo prioridade.
 ` : ""}
 SUA TAREFA A CADA CHAMADA:
 1. Avalie, pela conversa até agora, quais critérios da metodologia já foram cobertos e quais ainda não.
 2. Identifique o momento: o lead acabou de levantar uma dor, uma objeção, um sinal de compra, ou a conversa está sem direção?
 3. Escolha UMA única orientação, a mais útil para os próximos 30 segundos. Prioridade: (a) responder objeção ou sinal de compra que acabou de surgir; (b) explorar um critério ainda não coberto; (c) conectar uma dor dita pelo lead a algo da base de conhecimento; (d) corrigir postura (falar menos, perguntar mais).
 4. Escreva a frase EXATA que o vendedor deve dizer, em primeira pessoa, natural, como se fosse falada — não uma descrição do que fazer. A frase é dita PARA o cliente: nunca chame o cliente pelo nome do vendedor. Só use o nome do cliente se ele estiver no campo Lead/Cliente ou se o próprio cliente se apresentou na conversa; na dúvida, não use nome nenhum. Se a orientação usar a base de conhecimento, cite o produto/serviço/dado pelo nome que aparece nela e nunca invente número, preço ou funcionalidade que não esteja lá.
-5. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
+5. Antes de sugerir uma pergunta, confira na conversa INTEIRA (o histórico anterior e a conversa recente) se o cliente já respondeu aquilo, mesmo de passagem, com outras palavras ou com um número. Se já respondeu, não pergunte de novo: siga para o próximo assunto ou, se valer, aprofunde a partir da resposta dele (ex.: "você comentou que são 1.800 clientes; quantos chegam por indicação?"). Também não sugira de novo uma pergunta que já está na lista de orientações dadas.
+6. Se nada agregar valor agora, ou se a última orientação ainda estiver sendo executada, retorne {"should_emit": false}. A pessoa lê a orientação e precisa de tempo para falar: se a última saiu há menos de 30 segundos, só emita outra se acabou de surgir algo novo e urgente na fala do cliente. Nunca reescreva com outras palavras uma orientação já dada; se ela está sendo feita agora (aparece na conversa), espere a resposta do cliente.
 
 FORMATO (JSON puro):
 {
@@ -345,7 +353,7 @@ ${playbook ? "Cliente" : "Lead"}: ${leadNome ?? "?"}${meeting.lead_company ? ` (
 ${nomeVendedor ? `Vendedor (quem recebe a orientação): ${nomeVendedor}` : ""}
 Tipo: ${typeRow?.label ?? meeting.meeting_type ?? "não especificado"}
 
-## Conversa recente (do mais antigo ao mais novo; "Vendedor:" e "Cliente:" dizem quem falou quando a gravação separa as vozes; sem rótulo, deduza pelo conteúdo)
+${historico ? `## Antes disso na reunião (o que já foi perguntado e respondido)\n${historico}\n\n` : ""}## Conversa recente (do mais antigo ao mais novo; "Vendedor:" e "Cliente:" dizem quem falou quando a gravação separa as vozes; sem rótulo, deduza pelo conteúdo)
 ${transcript}
 
 ## Orientações já dadas nesta reunião (não repetir)
@@ -416,7 +424,7 @@ ${typeContext.trim() ? `\n## ${meetingTypeRules(typeContext).trim().replace(/^RE
       return json(req, { emitted: false, tempos, traducoes });
     }
     // A mesma orientação com outras palavras troca a dica no meio da leitura.
-    if (dicaRepetida({ acao: String(tip.acao) }, (recent || []).slice(0, 3))) {
+    if (dicaRepetida({ acao: String(tip.acao) }, lingua ? (recent || []).slice(0, 3) : recent || [])) {
       console.log("live-coach tempos", JSON.stringify({ ...tempos, gatilho, emitida: false, motivo: "repetida" }));
       return json(req, { emitted: false, reason: "repetida", tempos, traducoes });
     }

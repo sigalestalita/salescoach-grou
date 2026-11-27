@@ -1590,6 +1590,10 @@
   // mudo por muito tempo, avisa: costuma ser a aba compartilhada sem áudio.
   const CLIENT_SILENCE_MS = 90000;
   const SEM_CHAMADA_MS = 45000;
+  // A chamada tem trilhas, mas nenhum som chegou por elas desde o início,
+  // enquanto o vendedor já falou: o cliente provavelmente está mudo para a
+  // extensão. Avisa em segundos, não depois do minuto e meio de silêncio.
+  const NUNCA_OUVIU_MS = 25000;
   // Microfone que nunca captou som desde o início: provavelmente não é o da chamada.
   const MIC_MUDO_MS = 30000;
   const OUVIR_PELA_ABA = { label: 'Ouvir o cliente pela aba', onClick: () => ouvirPelaAba() };
@@ -1667,13 +1671,16 @@
           const gravando = Date.now() - startTime;
           // Gravando há um tempo e nenhuma trilha da chamada chegou: a
           // extensão não está ouvindo a chamada. Sem esperar o minuto e meio.
-          const semChamada = !st.temAba && st.trilhas === 0 && gravando > SEM_CHAMADA_MS;
+          const semTrilha = !st.temAba && st.trilhas === 0 && gravando > SEM_CHAMADA_MS;
+          // Trilhas ligadas mas caladas desde o começo, com o vendedor já falando.
+          const nuncaOuviu = !st.temAba && st.trilhas > 0 && !st.somChamada && micJaOuviu && gravando > NUNCA_OUVIU_MS;
+          const semChamada = semTrilha || nuncaOuviu;
           const quiet = semChamada || Date.now() - lastClientSound > CLIENT_SILENCE_MS;
           const key = alerts.get('cliente-mudo')?.semChamada;
           if (quiet !== alerts.has('cliente-mudo') || (quiet && key !== semChamada)) {
             setAlert('cliente-mudo', !quiet ? null : semChamada ? {
-              kind: 'warn', semChamada: true, title: 'Ainda não recebi o áudio da chamada',
-              text: 'Se o cliente já entrou, clique abaixo e compartilhe esta aba com "Compartilhar áudio da guia". A gravação continua.',
+              kind: 'warn', semChamada: true, title: 'Ainda não recebi a voz do cliente',
+              text: 'Se o cliente já está falando, clique abaixo e compartilhe esta aba com "Compartilhar áudio da guia". A gravação continua.',
               action: OUVIR_PELA_ABA,
             } : {
               kind: 'warn', semChamada: false, title: 'Não ouço o cliente há mais de 1 minuto',
