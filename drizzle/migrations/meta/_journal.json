@@ -225,6 +225,13 @@
       "when": 1795795540938,
       "tag": "0031_crm_compass",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795801256869,
+      "tag": "0032_multi_empresa",
+      "breakpoints": true
     }
   ]
 }

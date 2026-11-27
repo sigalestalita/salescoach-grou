@@ -2270,18 +2270,21 @@ export type Database = {
           id: string
           org_id: string
           role: Database["public"]["Enums"]["app_role"]
+          team_id: string | null
           user_id: string
         }
         Insert: {
           id?: string
           org_id: string
           role?: Database["public"]["Enums"]["app_role"]
+          team_id?: string | null
           user_id: string
         }
         Update: {
           id?: string
           org_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          team_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2290,6 +2293,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -2328,6 +2338,17 @@ export type Database = {
           category: string
           preview: string
           title: string
+        }[]
+      }
+      membro_da_empresa_atual: { Args: { _user_id: string }; Returns: boolean }
+      minhas_empresas: {
+        Args: never
+        Returns: {
+          ativa: boolean
+          nome: string
+          org_id: string
+          papel: string
+          slug: string
         }[]
       }
       org_is_active: { Args: { _org_id: string }; Returns: boolean }
@@ -2426,6 +2447,7 @@ export type Database = {
       registrar_extensao: { Args: { _versao: string }; Returns: undefined }
       support_org_id: { Args: never; Returns: string }
       support_read_only: { Args: never; Returns: boolean }
+      trocar_empresa: { Args: { _org_id: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "gestor" | "vendedor"
