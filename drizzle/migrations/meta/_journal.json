@@ -211,6 +211,13 @@
       "when": 1795720757071,
       "tag": "0029_crm_provider_lumi",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795790000000,
+      "tag": "0030_crm_provider_compass",
+      "breakpoints": true
     }
   ]
 }

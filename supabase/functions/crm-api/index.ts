@@ -7,7 +7,7 @@
 //   meeting           vínculo da reunião com o negócio e histórico de envios
 //   settings          preferências de envio (admin)
 //   disconnect        desliga o CRM e apaga os tokens (admin)
-//   connect_token     conecta com token colado: Kommo (longa duração), NEXA CRM ou CRM do Lumi (admin)
+//   connect_token     conecta com token colado: Kommo (longa duração), NEXA CRM, CRM do Lumi ou Compass (admin)
 //   search_deals      busca negócio por nome (quem vê a reunião)
 //   suggest_deals     negócios do e-mail do lead da reunião
 //   link_deal         vincula a reunião a um negócio e envia
@@ -22,6 +22,7 @@ import { accountLabel, activeConnection, connectorFor, saveConnection } from "..
 import { kommoAccountName, kommoBase, tokenExpiry } from "../_shared/crm/kommo.ts";
 import { nexaAccountName, nexaBase, nexaDisponivel } from "../_shared/crm/nexa.ts";
 import { lumiAccountName, lumiBase, lumiDisponivel } from "../_shared/crm/lumi.ts";
+import { compassAccountName, compassBase, compassDisponivel } from "../_shared/crm/compass.ts";
 import { healthOptions, type PlaybookCatalog, sourceCatalog } from "../_shared/crm/mapping.ts";
 import { enqueueMeeting, processJob } from "../_shared/crm/sync.ts";
 import { CrmError } from "../_shared/crm/types.ts";
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
         const { catalog } = await orgCatalog(ctx.admin, ctx.orgId);
         return json(req, {
           connection: conn ?? null, mappings: mappings ?? [], catalog,
-          extra_providers: [...(nexaDisponivel(ctx.email) ? ["nexa"] : []), ...(lumiDisponivel(ctx.email) ? ["lumi"] : [])],
+          extra_providers: [...(nexaDisponivel(ctx.email) ? ["nexa"] : []), ...(lumiDisponivel(ctx.email) ? ["lumi"] : []), ...(compassDisponivel(ctx.email) ? ["compass"] : [])],
         });
       }
 
@@ -201,7 +202,22 @@ Deno.serve(async (req) => {
           }).then(() => {}, () => {});
           return json(req, { ok: true });
         }
-        if (body.provider !== "kommo") throw new HttpError(400, "Conexão por token só para o Kommo, o NEXA CRM e o CRM do Lumi.");
+        if (body.provider === "compass") {
+          if (!compassDisponivel(ctx.email)) throw new HttpError(403, "O Compass é só para a equipe da Grou.");
+          const base = compassBase(String(body.subdomain ?? ""));
+          if (!base) throw new HttpError(400, "Cole o endereço que aparece no Compass, em Configurações → Integração com o Sales Coach (https://compass.grougp.com/api/public/integracao).");
+          const token = String(body.token ?? "").trim();
+          if (!/^compass_[A-Za-z0-9]{20,}$/.test(token)) throw new HttpError(400, "Cole o token gerado no Compass (começa com compass_).");
+          const name = await compassAccountName(token, base);
+          await saveConnection(ctx.admin, ctx.orgId, "compass", ctx.userId,
+            { accessToken: token, refreshToken: null, expiresAt: null, apiDomain: base }, accountLabel("compass", null, name));
+          await ctx.admin.from("audit_log").insert({
+            org_id: ctx.orgId, actor_user_id: ctx.userId, action: "crm_conectado", entity: "crm_connections",
+            metadata: { provider: "compass", modo: "token" },
+          }).then(() => {}, () => {});
+          return json(req, { ok: true });
+        }
+        if (body.provider !== "kommo") throw new HttpError(400, "Conexão por token só para o Kommo, o NEXA CRM, o CRM do Lumi e o Compass.");
         const apiDomain = kommoBase(String(body.subdomain ?? ""));
         if (!apiDomain) throw new HttpError(400, "Informe o endereço da conta no Kommo (ex.: suaempresa.kommo.com).");
         const token = String(body.token ?? "").trim();

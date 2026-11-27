@@ -3,7 +3,7 @@
 // O núcleo (fila, mapeamento, histórico) só conversa com esta interface. Cada
 // CRM novo (HubSpot, Pipedrive, Kommo) é um arquivo que a implementa.
 
-export type CrmProvider = "rdstation" | "hubspot" | "pipedrive" | "kommo" | "nexa" | "lumi";
+export type CrmProvider = "rdstation" | "hubspot" | "pipedrive" | "kommo" | "nexa" | "lumi" | "compass";
 
 export interface CrmField {
   /** Chave usada para gravar o valor (slug, id ou hash, conforme o CRM). */
