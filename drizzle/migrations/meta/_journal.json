@@ -218,6 +218,13 @@
       "when": 1795790000000,
       "tag": "0030_crm_provider_compass",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795795540938,
+      "tag": "0031_crm_compass",
+      "breakpoints": true
     }
   ]
 }
