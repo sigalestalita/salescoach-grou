@@ -193,7 +193,8 @@ Deno.serve(async (req) => {
         (orgs ?? []).map(async (org: { id: string }) => {
           const [{ count: users }, { count: meetings }, { data: sub }, { data: quota }] =
             await Promise.all([
-              admin.from("profiles").select("user_id", { count: "exact", head: true }).eq("org_id", org.id),
+              // Membros pelo vínculo: quem é de duas empresas conta nas duas.
+              admin.from("user_roles").select("user_id", { count: "exact", head: true }).eq("org_id", org.id),
               admin.from("meetings").select("id", { count: "exact", head: true }).eq("org_id", org.id),
               admin.from("subscriptions").select("status, plan_id, current_period_end, plans(key, name)").eq("org_id", org.id).maybeSingle(),
               admin.rpc("org_quota_status", { _org_id: org.id }),

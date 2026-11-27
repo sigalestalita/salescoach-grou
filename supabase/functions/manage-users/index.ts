@@ -26,15 +26,35 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action } = body;
 
-    /** O usuário alvo pertence à organização do admin? */
+    /**
+     * O usuário alvo pertence à organização do admin? Vale o vínculo (papel na
+     * empresa), não a empresa ativa: quem é de duas empresas pode estar com a
+     * outra aberta agora.
+     */
     const assertSameOrg = async (userId: string) => {
-      const { data } = await admin
-        .from("profiles")
-        .select("user_id")
-        .eq("user_id", userId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-      if (!data) throw new HttpError(404, "Usuário não encontrado nesta organização");
+      const [{ data: papel }, { data: perfil }] = await Promise.all([
+        admin.from("user_roles").select("user_id").eq("user_id", userId).eq("org_id", orgId).limit(1).maybeSingle(),
+        admin.from("profiles").select("user_id").eq("user_id", userId).eq("org_id", orgId).maybeSingle(),
+      ]);
+      if (!papel && !perfil) throw new HttpError(404, "Usuário não encontrado nesta organização");
+    };
+
+    /** Empresas em que o usuário tem papel, fora a do admin. */
+    const outrasEmpresas = async (userId: string) => {
+      const { data } = await admin.from("user_roles").select("org_id, team_id").eq("user_id", userId).neq("org_id", orgId);
+      return (data ?? []) as { org_id: string; team_id: string | null }[];
+    };
+
+    /**
+     * Tira o usuário só desta empresa (ele continua nas outras). Se esta era a
+     * empresa ativa dele, a ativa passa a ser uma das outras, com a equipe de lá.
+     */
+    const removerDestaEmpresa = async (userId: string, outras: { org_id: string; team_id: string | null }[]) => {
+      await admin.from("user_roles").delete().eq("user_id", userId).eq("org_id", orgId);
+      const { data: perfil } = await admin.from("profiles").select("org_id").eq("user_id", userId).maybeSingle();
+      if (perfil?.org_id === orgId && outras.length) {
+        await admin.from("profiles").update({ org_id: outras[0].org_id, team_id: outras[0].team_id }).eq("user_id", userId);
+      }
     };
 
     const cleanupOrphan = async (userId: string) => {
@@ -95,17 +115,26 @@ Deno.serve(async (req) => {
     };
 
     if (action === "list_users") {
-      const [{ data: profiles, error: profilesError }, { data: roles, error: rolesError }] =
-        await Promise.all([
-          admin
-            .from("profiles")
-            .select("id, user_id, full_name, avatar_url, team_id, created_at")
-            .eq("org_id", orgId),
-          admin.from("user_roles").select("user_id, role").eq("org_id", orgId),
-        ]);
-
-      if (profilesError) throw profilesError;
+      // Membros = quem tem papel nesta empresa (mesmo com outra empresa ativa
+      // agora) + perfis da empresa sem papel (cadastros antigos).
+      const { data: roles, error: rolesError } = await admin
+        .from("user_roles").select("user_id, role, team_id").eq("org_id", orgId);
       if (rolesError) throw rolesError;
+      const idsComPapel = [...new Set((roles || []).map((r: { user_id: string }) => r.user_id))];
+      const [{ data: daEmpresa, error: profilesError }, { data: deFora, error: foraError }] = await Promise.all([
+        admin.from("profiles").select("id, user_id, full_name, avatar_url, team_id, org_id, created_at").eq("org_id", orgId),
+        idsComPapel.length
+          ? admin.from("profiles").select("id, user_id, full_name, avatar_url, team_id, org_id, created_at").in("user_id", idsComPapel).neq("org_id", orgId)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (profilesError) throw profilesError;
+      if (foraError) throw foraError;
+      // Com outra empresa ativa, a equipe daqui é a guardada no papel.
+      const timeGuardado = new Map((roles || []).map((r: { user_id: string; team_id: string | null }) => [r.user_id, r.team_id]));
+      const profiles = [
+        ...(daEmpresa || []),
+        ...(deFora || []).map((p: { user_id: string }) => ({ ...p, team_id: timeGuardado.get(p.user_id) ?? null })),
+      ];
 
       const roleMap = new Map((roles || []).map((r: { user_id: string; role: string }) => [r.user_id, r.role]));
 
@@ -303,6 +332,15 @@ Deno.serve(async (req) => {
 
       await assertSameOrg(user_id);
 
+      // A senha vale para todas as empresas da pessoa: o admin de uma não troca
+      // a senha usada nas outras.
+      if ((await outrasEmpresas(user_id)).length) {
+        return json(req, {
+          error: "Essa pessoa também faz parte de outra empresa. Peça para ela usar \"Esqueci minha senha\" na tela de login.",
+          code: "OUTRA_EMPRESA",
+        }, 400);
+      }
+
       const { data: authUser } = await admin.auth.admin.getUserById(user_id);
       if (!authUser?.user) {
         await cleanupOrphan(user_id);
@@ -332,6 +370,17 @@ Deno.serve(async (req) => {
       }
 
       await assertSameOrg(user_id);
+
+      // Também é de outra empresa: sai só desta, a conta continua.
+      const outras = await outrasEmpresas(user_id);
+      if (outras.length) {
+        await removerDestaEmpresa(user_id, outras);
+        await writeAudit(admin, {
+          orgId, actorUserId: ctx.userId, action: "user.removed_from_org",
+          entity: "user", entityId: user_id,
+        });
+        return json(req, { success: true, removido_so_desta_empresa: true });
+      }
 
       const { data: authUser } = await admin.auth.admin.getUserById(user_id);
       if (authUser?.user) {
