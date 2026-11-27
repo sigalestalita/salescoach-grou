@@ -433,7 +433,7 @@ function SeuTime({ now, weekStart, config }: {
       const [ms, profs, roles] = await Promise.all([
         supabase.from("meetings").select(MEETING_COLS).gte("created_at", desde),
         supabase.from("profiles").select("user_id, full_name, team_id"),
-        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("user_roles").select("user_id, role").eq("org_id", profile?.org_id ?? ""),
       ]);
       const meetings = (ms.data ?? []) as InicioMeeting[];
       // Gestor com equipe acompanha a própria equipe; admin, a empresa toda.
@@ -447,7 +447,7 @@ function SeuTime({ now, weekStart, config }: {
         : { data: [] };
       setDados({ meetings: meetings.filter((m) => ids.has(m.seller_id)), pessoas, vendedores, analyses: (an.data ?? []) as InicioAnalysis[] });
     })();
-  }, [now, role, profile?.team_id, user?.id]);
+  }, [now, role, profile?.team_id, profile?.org_id, user?.id]);
 
   const tempLabels = { ...config.allLevelLabels, ...temperatureLabels(config.temperatureLevels) };
   const quentesKeys = new Set(config.temperatureLevels.slice(Math.ceil(config.temperatureLevels.length / 2)).map((l) => l.key));

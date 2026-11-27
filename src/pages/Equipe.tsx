@@ -38,6 +38,8 @@ interface Member {
   team_id: string | null;
   /** Perfil sem login (cadastros antigos ou de demonstração). */
   noLogin: boolean;
+  /** Também é de outra empresa e está com ela aberta agora: a equipe daqui fica guardada no papel. */
+  outraEmpresaAtiva: boolean;
 }
 
 interface Team { id: string; name: string }
@@ -106,7 +108,7 @@ function TeamSelect({ teams, value, onChange }: { teams: Team[]; value: string; 
 }
 
 const Equipe = () => {
-  const { role, user } = useAuth();
+  const { role, user, orgId } = useAuth();
   const { toast } = useToast();
   const isAdmin = role === "admin";
 
@@ -132,11 +134,13 @@ const Equipe = () => {
 
   const load = useCallback(async () => {
     const [profilesRes, rolesRes, teamsRes] = await Promise.all([
-      supabase.from("profiles").select("user_id, full_name, team_id"),
-      supabase.from("user_roles").select("user_id, role"),
+      // Inclui quem é desta empresa e está com outra aberta agora (perfil visível pelo vínculo).
+      supabase.from("profiles").select("user_id, full_name, team_id, org_id"),
+      supabase.from("user_roles").select("user_id, role, team_id").eq("org_id", orgId ?? ""),
       supabase.from("teams").select("id, name").order("name"),
     ]);
     const roles = new Map((rolesRes.data ?? []).map((r) => [r.user_id, r.role as Role]));
+    const timeGuardado = new Map((rolesRes.data ?? []).map((r) => [r.user_id, r.team_id]));
     let emails = new Map<string, string>();
     if (isAdmin) {
       try {
@@ -157,11 +161,12 @@ const Equipe = () => {
       full_name: p.full_name,
       email: emails.get(p.user_id) ?? null,
       role: roles.get(p.user_id) ?? "vendedor",
-      team_id: p.team_id,
+      team_id: p.org_id === orgId ? p.team_id : timeGuardado.get(p.user_id) ?? null,
       noLogin: isAdmin && !emails.has(p.user_id),
+      outraEmpresaAtiva: p.org_id !== orgId,
     })).sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? "")));
     setLoading(false);
-  }, [isAdmin, toast]);
+  }, [isAdmin, toast, orgId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -242,10 +247,19 @@ const Equipe = () => {
   const saveEdit = async () => {
     if (!edit) return;
     const ok = await run(async () => {
-      const { error } = await supabase.from("profiles")
-        .update({ full_name: editForm.full_name.trim() || null, team_id: teamOrNull(editForm.team_id) })
-        .eq("user_id", edit.user_id);
-      if (error) throw error;
+      if (edit.outraEmpresaAtiva) {
+        // Com outra empresa aberta, o perfil não é desta empresa: a equipe daqui
+        // fica no papel e volta quando a pessoa abrir esta empresa.
+        const { error } = await supabase.from("user_roles")
+          .update({ team_id: teamOrNull(editForm.team_id) })
+          .eq("user_id", edit.user_id).eq("org_id", orgId ?? "");
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("profiles")
+          .update({ full_name: editForm.full_name.trim() || null, team_id: teamOrNull(editForm.team_id) })
+          .eq("user_id", edit.user_id);
+        if (error) throw error;
+      }
       if (!edit.noLogin && editForm.role !== edit.role) {
         await manageUsers({ action: "update_role", user_id: edit.user_id, role: editForm.role });
       }
@@ -385,6 +399,7 @@ const Equipe = () => {
                       </Badge>
                       {team && <Badge variant="outline" className="text-xs">{team}</Badge>}
                       {m.noLogin && <Badge variant="outline" className="text-xs text-muted-foreground" title="Cadastro sem login: aparece nos relatórios, mas não acessa o sistema.">Sem acesso</Badge>}
+                      {m.outraEmpresaAtiva && !m.noLogin && <Badge variant="outline" className="text-xs text-muted-foreground" title="Esta pessoa também faz parte de outra empresa e está com ela aberta agora. Ela continua nesta equipe.">Em outra empresa agora</Badge>}
                     </div>
                   </div>
                   {isAdmin && (

@@ -2270,18 +2270,21 @@ export type Database = {
           id: string
           org_id: string
           role: Database["public"]["Enums"]["app_role"]
+          team_id: string | null
           user_id: string
         }
         Insert: {
           id?: string
           org_id: string
           role?: Database["public"]["Enums"]["app_role"]
+          team_id?: string | null
           user_id: string
         }
         Update: {
           id?: string
           org_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          team_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2312,6 +2315,17 @@ export type Database = {
         Returns: boolean
       }
       current_org_id: { Args: never; Returns: string }
+      minhas_empresas: {
+        Args: never
+        Returns: {
+          ativa: boolean
+          nome: string
+          org_id: string
+          papel: string
+          slug: string
+        }[]
+      }
+      trocar_empresa: { Args: { _org_id: string }; Returns: string }
       get_user_team_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

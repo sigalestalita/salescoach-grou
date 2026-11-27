@@ -36,6 +36,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { EmpresaSwitcher } from "@/components/EmpresaSwitcher";
 
 /**
  * Menu lateral.
@@ -242,6 +243,8 @@ export function AppSidebar() {
             </>
           )}
         </button>
+
+        {!collapsed && <EmpresaSwitcher />}
 
         {showPill && !collapsed && (
           <div className="sidebar-pill mt-3" data-index={tabIndex} role="tablist" aria-label="Área do menu">

@@ -55,13 +55,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const [profileRes, roleRes, supportRes] = await Promise.all([
         supabase.from("profiles").select("full_name, avatar_url, team_id, org_id").eq("user_id", userId).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+        // Quem é de mais de uma empresa tem um papel em cada: vale o da empresa ativa.
+        supabase.from("user_roles").select("role, org_id").eq("user_id", userId),
         supportSession(),
       ]);
       setProfile(profileRes.data ?? null);
       // No modo suporte o banco trata o operador como admin da empresa visitada.
       setSupport(supportRes);
-      setRole(supportRes ? "admin" : (roleRes.data?.role as AppRole) ?? null);
+      const papel = (roleRes.data ?? []).find((r) => r.org_id === profileRes.data?.org_id) ?? null;
+      setRole(supportRes ? "admin" : (papel?.role as AppRole) ?? null);
       loadedForUserId.current = userId;
     } finally {
       setLoading(false);
