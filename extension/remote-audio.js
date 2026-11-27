@@ -35,8 +35,13 @@
     const chamada = new MediaStream();
     const el = document.createElement('audio');
     el.id = 'sc-remote-audio';
-    el.muted = true;  // nunca toca: só guarda as trilhas
+    el.muted = true;  // mudo: nada sai no alto-falante, só segura as trilhas
     el.hidden = true;
+    el.autoplay = true;
+    const tocar = () => { try { const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch {} };
+    // Mudo pode tocar sem clique; se o navegador recusar antes do primeiro
+    // clique na página, tenta de novo no primeiro gesto.
+    document.addEventListener('pointerdown', tocar, { once: true, capture: true });
     const prender = () => { if (!el.isConnected) (document.documentElement || document.body)?.appendChild(el); };
     prender();
     document.addEventListener('DOMContentLoaded', prender);
@@ -48,6 +53,12 @@
       // Só liga o stream ao elemento quando chega a primeira trilha: um
       // <audio> com stream vazio segura o evento "load" da página.
       if (!el.srcObject) el.srcObject = chamada;
+      // O Chrome só entrega o som de uma trilha remota ao Web Audio se ela
+      // estiver tocando num elemento de mídia. Quando o Meet toca a chamada
+      // pelo próprio AudioContext (sem <audio>), a trilha chegava muda no
+      // gravador: "Não ouço o cliente" com o cliente falando. O elemento segue
+      // mudo (nada sai no alto-falante), mas passa a tocar.
+      tocar();
     };
     marcarMic = (id) => { try { document.documentElement.dataset.scMicrofone = id; } catch {} };
     // Para os iframes about:blank (ver acima).

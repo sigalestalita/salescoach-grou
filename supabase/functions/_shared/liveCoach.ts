@@ -55,3 +55,29 @@ export function vaiChamarIa(gatilho: string | null | undefined, ultimaDicaEm: st
   if (gatilho !== "vendedor" || !ultimaDicaEm) return true;
   return agora.getTime() - new Date(ultimaDicaEm).getTime() >= SILENCIO_APOS_DICA_MS;
 }
+
+/**
+ * O que foi dito antes da conversa recente, numa linha por fala, para o coach
+ * saber o que o cliente já respondeu. Sem isso ele só via os últimos minutos e
+ * voltava a sugerir perguntas respondidas lá no começo (tamanho da base, CAC…).
+ * Reunião muito longa: guarda o começo e o fim, onde ficam a maioria das
+ * respostas de qualificação e o que acabou de sair da janela recente.
+ */
+export function historicoAnterior(linhas: string[], maxChars = 9000): string {
+  const tudo = linhas.join("\n");
+  if (tudo.length <= maxChars) return tudo;
+  const inicio: string[] = [];
+  let usadoInicio = 0;
+  for (const l of linhas) {
+    if (usadoInicio + l.length + 1 > maxChars / 3) break;
+    inicio.push(l); usadoInicio += l.length + 1;
+  }
+  const fim: string[] = [];
+  let usadoFim = 0;
+  for (let i = linhas.length - 1; i >= inicio.length; i--) {
+    const l = linhas[i];
+    if (usadoFim + l.length + 1 > maxChars - usadoInicio) break;
+    fim.unshift(l); usadoFim += l.length + 1;
+  }
+  return [...inicio, "- […]", ...fim].join("\n");
+}
