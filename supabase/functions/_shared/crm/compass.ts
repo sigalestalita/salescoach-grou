@@ -23,9 +23,13 @@ export function compassDisponivel(email: string | null | undefined): boolean {
   return !!dom && dominios.includes(dom);
 }
 
-/** Só aceita o endereço /api/public/integracao do Compass (o token vai para este endereço). */
+/**
+ * Só aceita o endereço /api/public/integracao do Compass (o token vai para este endereço). O endereço do Lovable
+ * (sdr-grou.lovable.app) redireciona para compass.grougp.com e o fetch descarta o Authorization no redirecionamento,
+ * por isso fica de fora.
+ */
 export function compassBase(input: string | null | undefined): string | null {
-  const hosts = (Deno.env.get("COMPASS_CRM_HOSTS") ?? "compass.grougp.com,sdr-grou.lovable.app").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  const hosts = (Deno.env.get("COMPASS_CRM_HOSTS") ?? "compass.grougp.com").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
   const s = String(input ?? "").trim().replace(/\/+$/, "");
   try {
     const u = new URL(/^https?:\/\//.test(s) ? s : `https://${s}`);

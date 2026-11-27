@@ -11,6 +11,7 @@ ok(compassBase("https://compass.grougp.com/api/integracao") === null, "recusa ou
 ok(compassBase("https://evil.example.com/api/public/integracao") === null, "recusa outro host (o token não sai do Compass)");
 ok(compassBase("https://compass.grougp.com.evil.com/api/public/integracao") === null, "recusa host parecido");
 ok(compassBase("http://compass.grougp.com/api/public/integracao") === null, "recusa http");
+ok(compassBase("https://sdr-grou.lovable.app/api/public/integracao") === null, "recusa o endereço do Lovable (redireciona e perde o token)");
 ok(compassDisponivel("ana@grougp.com.br") && !compassDisponivel("x@gmail.com") && !compassDisponivel("bruna@applumi.io"), "só aparece para a equipe da Grou");
 
 const chamadas: { action: string; auth: string | null; corpo: Record<string, unknown> }[] = [];

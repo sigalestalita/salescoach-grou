@@ -162,7 +162,8 @@ Conector por token, no mesmo contrato do CRM do Lumi, para o Compass (`compass.g
 `sigalestalita/sdr-grou-9605613b`, endpoint `src/routes/api/public/integracao.ts` com a lógica em
 `src/lib/integracao-sales-coach.server.ts`). Só aparece para quem entra com e-mail dos domínios em `COMPASS_CRM_DOMINIOS`
 (padrão `grougp.com.br,grougp.com`); o endereço só é aceito nos hosts de `COMPASS_CRM_HOSTS` (padrão
-`compass.grougp.com,sdr-grou.lovable.app`) e no caminho `/api/public/integracao`.
+`compass.grougp.com`) e no caminho `/api/public/integracao`. O `sdr-grou.lovable.app` fica de fora: ele redireciona para
+`compass.grougp.com` e o token se perde no redirecionamento.
 
 - **Conectar:** no Compass, Configurações → Integração com o Sales Coach → *Gerar token* (só a gestão; aparece uma vez).
   No Sales Coach, Configurações → Integração com CRM → Compass → cole o endereço
