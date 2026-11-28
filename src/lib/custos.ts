@@ -46,12 +46,12 @@ export const PRECOS_PADRAO: Precos = {
   gemini_pro_entrada: 1.25,
   gemini_pro_saida: 10,
   gateway_fator: 1,
-  // Planos: Lovable Pro e Resend Pro (50 mil e-mails/mês). Lovable Cloud e
-  // ElevenLabs dependem da fatura; ajuste na tela.
+  // Planos em nov/2026: Lovable Pro, Resend Pro (50 mil e-mails/mês) e
+  // ElevenLabs Starter. O Lovable Cloud depende da fatura; ajuste na tela.
   lovable_mes: 25,
   lovable_cloud_mes: 0,
   resend_mes: 20,
-  elevenlabs_mes: 0,
+  elevenlabs_mes: 5,
 };
 
 export const CAMPOS_PRECO: { key: keyof Precos; label: string; unidade: string }[] = [
