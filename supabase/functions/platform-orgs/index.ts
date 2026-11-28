@@ -513,6 +513,40 @@ Deno.serve(async (req) => {
       return json(req, { events: data ?? [] });
     }
 
+    // ── Custos de API (tela Plataforma → Custos de API) ──
+    // Uso agregado das APIs no período e os preços salvos; o custo e a
+    // projeção são calculados na tela (src/lib/custos.ts).
+    if (action === "custos") {
+      const dias = Math.min(Math.max(Math.round(Number(body.dias) || 30), 1), 365);
+      const desde = new Date(Date.now() - dias * 864e5).toISOString();
+      const [{ data: uso, error: usoErr }, { data: precos }] = await Promise.all([
+        admin.rpc("platform_uso_apis", { _desde: desde }),
+        admin.from("platform_custos_precos").select("precos, updated_at").eq("id", 1).maybeSingle(),
+      ]);
+      if (usoErr) return json(req, { error: `Uso das APIs indisponível: ${usoErr.message}` }, 400);
+      return json(req, { dias, uso, precos: precos?.precos ?? null, precos_atualizados_em: precos?.updated_at ?? null });
+    }
+
+    if (action === "salvar_precos") {
+      const entrada = body.precos;
+      if (!entrada || typeof entrada !== "object" || Array.isArray(entrada)) {
+        return json(req, { error: "Preços inválidos" }, 400);
+      }
+      // Só números não negativos, com nomes simples.
+      const precos: Record<string, number> = {};
+      for (const [k, v] of Object.entries(entrada as Record<string, unknown>)) {
+        const n = Number(v);
+        if (!/^[a-z_]{2,40}$/.test(k) || !Number.isFinite(n) || n < 0 || n > 1e6) {
+          return json(req, { error: `Preço inválido: ${k}` }, 400);
+        }
+        precos[k] = n;
+      }
+      const { error } = await admin.from("platform_custos_precos")
+        .upsert({ id: 1, precos, updated_at: new Date().toISOString(), updated_by: user.id });
+      if (error) throw error;
+      return json(req, { success: true });
+    }
+
     if (action === "list_plans") {
       const { data, error } = await admin.from("plans").select("*").order("sort_order");
       if (error) throw error;
