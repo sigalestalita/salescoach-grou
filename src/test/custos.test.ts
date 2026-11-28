@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comPadroes, custoDaLinha, PRECOS_PADRAO, premissasAtuais, projetar, resumir, type Uso } from "@/lib/custos";
+import { comPadroes, custoDaLinha, intervaloDoPeriodo, PRECOS_PADRAO, premissasAtuais, projetar, resumir, type Uso } from "@/lib/custos";
 
 const p = PRECOS_PADRAO;
 const linha = (o: Partial<Uso["uso"][number]>) => ({
@@ -64,5 +64,38 @@ describe("custos de API", () => {
   it("preço salvo inválido volta ao padrão", () => {
     expect(comPadroes({ cambio: 5.1, recall_hora: -1, gemini_flash_saida: "abc" })).toMatchObject({ cambio: 5.1, recall_hora: 0.25, gemini_flash_saida: 2.5 });
     expect(comPadroes(null)).toEqual(PRECOS_PADRAO);
+  });
+});
+
+describe("período", () => {
+  const agora = new Date(2026, 10, 28, 15, 0); // 28/11/2026 15h, fuso local
+  it("últimos N dias terminam agora", () => {
+    const r = intervaloDoPeriodo("30", "", "", agora)!;
+    expect(r.ate).toEqual(agora);
+    expect(r.dias).toBeCloseTo(30);
+  });
+  it("este mês e mês passado", () => {
+    const m = intervaloDoPeriodo("mes", "", "", agora)!;
+    expect(m.desde).toEqual(new Date(2026, 10, 1));
+    expect(m.ate).toEqual(agora);
+    const p = intervaloDoPeriodo("mes_passado", "", "", agora)!;
+    expect(p.desde).toEqual(new Date(2026, 9, 1));
+    expect(p.ate).toEqual(new Date(2026, 10, 1));
+    expect(p.dias).toBeCloseTo(31, 0);
+    // Janeiro: mês passado é dezembro do ano anterior.
+    expect(intervaloDoPeriodo("mes_passado", "", "", new Date(2027, 0, 10))!.desde).toEqual(new Date(2026, 11, 1));
+  });
+  it("personalizado inclui o último dia e não passa de agora", () => {
+    const r = intervaloDoPeriodo("personalizado", "2026-11-01", "2026-11-15", agora)!;
+    expect(r.desde).toEqual(new Date(2026, 10, 1));
+    expect(r.ate).toEqual(new Date(2026, 10, 16));
+    expect(r.dias).toBeCloseTo(15);
+    expect(intervaloDoPeriodo("personalizado", "2026-11-20", "2026-12-31", agora)!.ate).toEqual(agora);
+  });
+  it("recusa datas inválidas, invertidas ou longas demais", () => {
+    expect(intervaloDoPeriodo("personalizado", "", "2026-11-15", agora)).toBeNull();
+    expect(intervaloDoPeriodo("personalizado", "2026-11-15", "2026-11-01", agora)).toBeNull();
+    expect(intervaloDoPeriodo("personalizado", "2024-01-01", "2026-11-01", agora)).toBeNull();
+    expect(intervaloDoPeriodo("personalizado", "2026-12-01", "2026-12-05", agora)).toBeNull();
   });
 });

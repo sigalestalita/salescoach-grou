@@ -517,14 +517,31 @@ Deno.serve(async (req) => {
     // Uso agregado das APIs no período e os preços salvos; o custo e a
     // projeção são calculados na tela (src/lib/custos.ts).
     if (action === "custos") {
-      const dias = Math.min(Math.max(Math.round(Number(body.dias) || 30), 1), 365);
-      const desde = new Date(Date.now() - dias * 864e5).toISOString();
-      const [{ data: uso, error: usoErr }, { data: precos }] = await Promise.all([
-        admin.rpc("platform_uso_apis", { _desde: desde }),
+      // Período: desde/ate (ISO) escolhidos na tela, ou os últimos N dias.
+      const ate = body.ate ? new Date(body.ate) : new Date();
+      const dias = Math.min(Math.max(Math.round(Number(body.dias) || 30), 1), 366);
+      const desde = body.desde ? new Date(body.desde) : new Date(ate.getTime() - dias * 864e5);
+      if (isNaN(ate.getTime()) || isNaN(desde.getTime()) || desde >= ate || ate.getTime() - desde.getTime() > 366 * 864e5) {
+        return json(req, { error: "Período inválido (até 366 dias)." }, 400);
+      }
+      const [usoRes, { data: precos }] = await Promise.all([
+        admin.rpc("platform_uso_apis", { _desde: desde.toISOString(), _ate: ate.toISOString() }),
         admin.from("platform_custos_precos").select("precos, updated_at").eq("id", 1).maybeSingle(),
       ]);
-      if (usoErr) return json(req, { error: `Uso das APIs indisponível: ${usoErr.message}` }, 400);
-      return json(req, { dias, uso, precos: precos?.precos ?? null, precos_atualizados_em: precos?.updated_at ?? null });
+      let { data: uso, error: usoErr } = usoRes;
+      // Sem a migração 20261128120000_custos_api_periodo.sql só existe a versão
+      // com o início; ela serve para períodos que terminam agora.
+      if (usoErr && Date.now() - ate.getTime() < 5 * 60_000) {
+        const antigo = await admin.rpc("platform_uso_apis", { _desde: desde.toISOString() });
+        if (!antigo.error) ({ data: uso, error: usoErr } = antigo);
+      }
+      if (usoErr) {
+        return json(req, { error: `Uso das APIs indisponível para esse período (${usoErr.message}). Aplique a migração 20261128120000_custos_api_periodo.sql.` }, 400);
+      }
+      return json(req, {
+        desde: desde.toISOString(), ate: ate.toISOString(), dias: (ate.getTime() - desde.getTime()) / 864e5,
+        uso, precos: precos?.precos ?? null, precos_atualizados_em: precos?.updated_at ?? null,
+      });
     }
 
     if (action === "salvar_precos") {
