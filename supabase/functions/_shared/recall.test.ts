@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { avisoValido, motivoDaSaida, plataformaDe } from "./recall.ts";
+import { avisoValido, motivoDaSaida, plataformaDe, tempoDoRobo } from "./recall.ts";
 
 const segredo = "whsec_" + btoa("chave-de-teste-com-32-bytes-ok!!");
 async function assinar(id: string, ts: string, corpo: string) {
@@ -39,4 +39,21 @@ Deno.test("motivo da saída do robô", () => {
   assertEquals(motivoDaSaida("timeout_exceeded_waiting_room")?.includes("sala de espera"), true);
   assertEquals(motivoDaSaida("call_ended_by_host"), null);
   assertEquals(motivoDaSaida(undefined), null);
+});
+
+Deno.test("tempo do robô: de joining_call até done, ou a gravação", () => {
+  const bot = {
+    status_changes: [
+      { code: "joining_call", created_at: "2026-11-20T14:00:00Z" },
+      { code: "in_waiting_room", created_at: "2026-11-20T14:01:00Z" },
+      { code: "in_call_recording", created_at: "2026-11-20T14:05:00Z" },
+      { code: "call_ended", created_at: "2026-11-20T14:45:00Z" },
+      { code: "done", created_at: "2026-11-20T14:46:30Z" },
+    ],
+  };
+  assertEquals(tempoDoRobo(bot), 46 * 60 + 30);
+  // Ainda sem done: conta até agora.
+  assertEquals(tempoDoRobo({ status_changes: bot.status_changes.slice(0, 2) }, Date.parse("2026-11-20T14:10:00Z")), 600);
+  assertEquals(tempoDoRobo({ recordings: [{ started_at: "2026-11-20T14:05:00Z", completed_at: "2026-11-20T14:35:00Z" }] }), 1800);
+  assertEquals(tempoDoRobo({}), null);
 });

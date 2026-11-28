@@ -10,6 +10,7 @@ import { adminClient, ANON_KEY, SUPABASE_URL, writeAudit } from "../_shared/tena
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { crmOverview } from "../_shared/crm/overview.ts";
 import { renderDemoWelcome } from "../_shared/demo-email.ts";
+import { recallAtivo, usoDaRecall } from "../_shared/recall.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2.49.1";
 
 const MAX_DEMO_DAYS = 365;
@@ -538,9 +539,19 @@ Deno.serve(async (req) => {
       if (usoErr) {
         return json(req, { error: `Uso das APIs indisponível para esse período (${usoErr.message}). Aplique a migração 20261128120000_custos_api_periodo.sql.` }, 400);
       }
+      // Horas de robô na conta da Recall (o que ela cobra), por dias UTC inteiros.
+      let recall: { segundos: number; desde: string; ate: string } | { erro: string } | null = null;
+      if (recallAtivo()) {
+        const ini = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth(), desde.getUTCDate()));
+        try {
+          recall = { segundos: await usoDaRecall(ini, ate), desde: ini.toISOString(), ate: ate.toISOString() };
+        } catch (e) {
+          recall = { erro: e instanceof Error ? e.message : "A Recall não respondeu." };
+        }
+      }
       return json(req, {
         desde: desde.toISOString(), ate: ate.toISOString(), dias: (ate.getTime() - desde.getTime()) / 864e5,
-        uso, precos: precos?.precos ?? null, precos_atualizados_em: precos?.updated_at ?? null,
+        uso, recall, precos: precos?.precos ?? null, precos_atualizados_em: precos?.updated_at ?? null,
       });
     }
 

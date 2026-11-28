@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import {
-  APIS, CAMPOS_PRECO, comPadroes, dataLocal, intervaloDoPeriodo, MAX_DIAS_PERIODO, PERIODOS, premissasAtuais, projetar, resumir,
+  APIS, CAMPOS_PRECO, PLANOS, comPadroes, dataLocal, intervaloDoPeriodo, MAX_DIAS_PERIODO, PERIODOS, premissasAtuais, projetar, resumir,
   type Api, type PeriodoChave, type Precos, type Premissas, type Uso,
 } from "@/lib/custos";
 
@@ -31,6 +31,8 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
   if (data?.error) throw new Error(data.error);
   return data as T;
 }
+
+type RecallConta = { segundos: number; desde: string; ate: string } | { erro: string } | null;
 
 const diaMes = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
@@ -62,6 +64,7 @@ export function Custos() {
   // Período do último carregamento (o que os números mostram).
   const [carregado, setCarregado] = useState<{ desde: Date; ate: Date; dias: number } | null>(null);
   const [uso, setUso] = useState<Uso | null>(null);
+  const [recall, setRecall] = useState<RecallConta>(null);
   const [precos, setPrecos] = useState<Precos>(comPadroes(null));
   const [precosAtualizados, setPrecosAtualizados] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
@@ -79,10 +82,11 @@ export function Custos() {
     setCarregando(true);
     setErro(null);
     try {
-      const r = await call<{ uso: Uso; precos: Record<string, unknown> | null; precos_atualizados_em: string | null }>({
+      const r = await call<{ uso: Uso; recall?: RecallConta; precos: Record<string, unknown> | null; precos_atualizados_em: string | null }>({
         action: "custos", desde: intervalo.desde.toISOString(), ate: intervalo.ate.toISOString(),
       });
       setUso(r.uso);
+      setRecall(r.recall ?? null);
       setCarregado(intervalo);
       const p = comPadroes(r.precos);
       setPrecos(p);
@@ -99,7 +103,7 @@ export function Custos() {
   useEffect(() => { carregar(); }, [carregar]);
 
   const dias = carregado?.dias ?? 30;
-  const resumo = useMemo(() => (uso ? resumir(uso, precos, dias) : null), [uso, precos, dias]);
+  const resumo = useMemo(() => (uso ? resumir(uso, precos, dias, recall && "segundos" in recall ? recall.segundos : null) : null), [uso, precos, dias, recall]);
   const atuais = useMemo(() => (resumo ? premissasAtuais(resumo.base) : null), [resumo]);
   const pr = premissas ?? atuais;
   const projecao = useMemo(() => (resumo && pr ? projetar(pr, resumo.base, precos) : null), [resumo, pr, precos]);
@@ -148,7 +152,7 @@ export function Custos() {
             <DollarSign className="h-5 w-5" /> Custos de API
           </CardTitle>
           <CardDescription>
-            Sustentação da AssemblyAI, do Gemini e da Recall.ai: o gasto com o uso atual e a projeção pelo número de usuários e pela utilização.
+            Sustentação do Sales Coach: as APIs cobradas por uso (AssemblyAI, Gemini, Recall.ai) e os planos mensais (Lovable, Resend, ElevenLabs), com o gasto atual e a projeção pelo número de usuários e pela utilização.
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -178,13 +182,17 @@ export function Custos() {
         {resumo && (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Tile label={`Gasto no período (${rotuloPeriodo})`} valor={brl(resumo.totalUsd)} detalhe={dolares(resumo.totalUsd)} />
+              <Tile
+                label={`Gasto no período (${rotuloPeriodo})`}
+                valor={brl(resumo.totalComPlanosUsd)}
+                detalhe={`APIs ${brl(resumo.totalUsd)} + planos ${brl(resumo.planosUsd)}`}
+              />
               <Tile
                 label="Por usuário ativo / mês"
-                valor={ativos ? brl((resumo.totalUsd / ativos) * mes) : "—"}
-                detalhe={ativos ? dolares((resumo.totalUsd / ativos) * mes) : "sem usuários ativos no período"}
+                valor={ativos ? brl((resumo.totalComPlanosUsd / ativos) * mes) : "—"}
+                detalhe={ativos ? `só APIs: ${brl((resumo.totalUsd / ativos) * mes)}` : "sem usuários ativos no período"}
               />
-              <Tile label="Usuários ativos" valor={inteiro(ativos)} detalhe={`de ${inteiro(resumo.base.usuarios)} com acesso`} />
+              <Tile label="Usuários ativos" valor={inteiro(ativos)} detalhe={`de ${inteiro(resumo.base.usuarios)} com acesso hoje`} />
               <Tile label="Reuniões" valor={inteiro(resumo.base.reunioes)} detalhe={horas(resumo.base.minutos)} />
             </div>
 
@@ -219,9 +227,57 @@ export function Custos() {
                   </TableRow>
                 </TableBody>
               </Table>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {resumo.recallFonte === "conta" && recall && "segundos" in recall
+                  ? `Recall: horas de robô da conta na Recall de ${diaMes(new Date(recall.desde))} a ${diaMes(new Date(new Date(recall.ate).getTime() - 1))} (dias inteiros, em UTC), divididas entre as empresas pelo tempo dos robôs de cada uma.`
+                  : `Recall: tempo dos robôs registrado no Sales Coach${recall && "erro" in recall ? ` (a conta na Recall não respondeu: ${recall.erro})` : ""}.`}
+              </p>
+              <h3 className="mb-2 mt-6 text-sm font-semibold">Planos mensais</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Serviço</TableHead>
+                    <TableHead className="text-right">Uso no período</TableHead>
+                    <TableHead className="text-right">No período</TableHead>
+                    <TableHead className="text-right">Por usuário ativo / mês</TableHead>
+                    <TableHead className="text-right">Por mês</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {PLANOS.map((x) => {
+                    const porMes = precos[x.preco];
+                    const usoTexto =
+                      x.key === "elevenlabs" ? `${inteiro(resumo.voz.elevenlabs)} caracteres`
+                      : x.key === "resend" ? (resumo.emails != null ? `${inteiro(resumo.emails)} e-mails` : "—")
+                      : "—";
+                    return (
+                      <TableRow key={x.key}>
+                        <TableCell className="font-medium">{x.nome}</TableCell>
+                        <TableCell className="text-right">{usoTexto}</TableCell>
+                        <TableCell className="text-right">{brl(porMes * (dias / 30))}</TableCell>
+                        <TableCell className="text-right">{ativos ? brl(porMes / ativos) : "—"}</TableCell>
+                        <TableCell className="text-right font-medium">{porMes > 0 ? brl(porMes) : <span className="text-muted-foreground">preencha</span>}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  <TableRow>
+                    <TableCell className="font-semibold">Total com planos</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right font-semibold">{brl(resumo.totalComPlanosUsd)}</TableCell>
+                    <TableCell className="text-right font-semibold">{ativos ? brl((resumo.totalComPlanosUsd / ativos) * mes) : "—"}</TableCell>
+                    <TableCell className="text-right font-semibold">{projecao ? brl(projecao.totalComPlanosUsd) : "—"}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Valor mensal de cada plano em "Preços usados no cálculo", só a parte que cabe ao Sales Coach (a assinatura da Lovable e a
+                conta da Resend são divididas com outros produtos). O Gemini passa pelo gateway da Lovable e já está em "Por API"; não some de
+                novo no Lovable Cloud. E-mails: os registrados pelo Sales Coach (novidades); convites e troca de senha não entram.
+                {resumo.voz.outras > 0 && ` Vozes de reserva (fora da ElevenLabs): ${inteiro(resumo.voz.outras)} caracteres.`}
+              </p>
               {resumo.outrosChamadas > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {inteiro(resumo.outrosChamadas)} chamadas de outros serviços (CRMs, voz dos treinos, armazenamento) ficam fora desta conta.
+                  {inteiro(resumo.outrosChamadas)} chamadas de outros serviços (CRMs, voz, armazenamento) não têm custo por uso nesta tabela; a voz entra nos planos.
                 </p>
               )}
             </div>
@@ -252,9 +308,17 @@ export function Custos() {
                   ))}
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Tile label="Custo por mês" valor={brl(projecao.totalUsd)} detalhe={dolares(projecao.totalUsd)} />
-                  <Tile label="Por usuário / mês" valor={brl(projecao.porUsuarioUsd)} detalhe={dolares(projecao.porUsuarioUsd)} />
-                  <Tile label="Por ano" valor={brl(projecao.totalUsd * 12)} />
+                  <Tile
+                    label="Custo por mês"
+                    valor={brl(projecao.totalComPlanosUsd)}
+                    detalhe={`APIs ${brl(projecao.totalUsd)} + planos ${brl(projecao.planosUsd)}`}
+                  />
+                  <Tile
+                    label="Por usuário / mês"
+                    valor={brl(projecao.porUsuarioComPlanosUsd)}
+                    detalhe={`só APIs: ${brl(projecao.porUsuarioUsd)}`}
+                  />
+                  <Tile label="Por ano" valor={brl(projecao.totalComPlanosUsd * 12)} />
                   <Tile label="Horas de reunião / mês" valor={inteiro(projecao.minutosMes / 60)} />
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground">

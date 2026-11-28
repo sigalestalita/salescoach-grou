@@ -26,6 +26,11 @@ export interface Precos {
   gemini_pro_saida: number;
   /** Multiplicador do gateway da Lovable sobre o preço do Google (1 = mesmo preço). */
   gateway_fator: number;
+  /** Planos mensais, US$ por mês (só a parte que cabe ao Sales Coach). */
+  lovable_mes: number;
+  lovable_cloud_mes: number;
+  resend_mes: number;
+  elevenlabs_mes: number;
 }
 
 /** Preços de tabela em nov/2026 (Recall no plano Startup). Editáveis na tela; confira nas faturas. */
@@ -41,6 +46,12 @@ export const PRECOS_PADRAO: Precos = {
   gemini_pro_entrada: 1.25,
   gemini_pro_saida: 10,
   gateway_fator: 1,
+  // Planos em nov/2026: Lovable Pro, Resend Pro (50 mil e-mails/mês) e
+  // ElevenLabs Starter. O Lovable Cloud depende da fatura; ajuste na tela.
+  lovable_mes: 25,
+  lovable_cloud_mes: 0,
+  resend_mes: 20,
+  elevenlabs_mes: 5,
 };
 
 export const CAMPOS_PRECO: { key: keyof Precos; label: string; unidade: string }[] = [
@@ -55,7 +66,23 @@ export const CAMPOS_PRECO: { key: keyof Precos; label: string; unidade: string }
   { key: "gemini_pro_entrada", label: "Gemini Pro, entrada", unidade: "US$ / milhão de tokens" },
   { key: "gemini_pro_saida", label: "Gemini Pro, saída", unidade: "US$ / milhão de tokens" },
   { key: "gateway_fator", label: "Fator do gateway Lovable", unidade: "× preço do Google" },
+  { key: "lovable_mes", label: "Lovable (assinatura)", unidade: "US$ / mês, parte do Sales Coach" },
+  { key: "lovable_cloud_mes", label: "Lovable Cloud (banco e funções)", unidade: "US$ / mês além do incluso, sem a IA" },
+  { key: "resend_mes", label: "Resend (e-mails)", unidade: "US$ / mês, parte do Sales Coach" },
+  { key: "elevenlabs_mes", label: "ElevenLabs (vozes)", unidade: "US$ / mês" },
 ];
+
+/** Serviços cobrados por plano mensal, não por uso. */
+export type Plano = "lovable" | "lovable_cloud" | "resend" | "elevenlabs";
+export const PLANOS: { key: Plano; nome: string; preco: keyof Precos }[] = [
+  { key: "lovable", nome: "Lovable (sistema e publicação)", preco: "lovable_mes" },
+  { key: "lovable_cloud", nome: "Lovable Cloud (banco, login, arquivos, funções)", preco: "lovable_cloud_mes" },
+  { key: "resend", nome: "Resend (e-mails)", preco: "resend_mes" },
+  { key: "elevenlabs", nome: "ElevenLabs (vozes dos treinos)", preco: "elevenlabs_mes" },
+];
+
+/** Soma dos planos mensais, US$. */
+export const planosMes = (p: Precos) => PLANOS.reduce((s, x) => s + num(p[x.preco]), 0);
 
 /** Junta os preços salvos aos padrões (campo ausente ou inválido fica no padrão). */
 export function comPadroes(salvos: Partial<Record<keyof Precos, unknown>> | null | undefined): Precos {
@@ -79,6 +106,9 @@ export interface EmpresaUso {
   minutos_robo: number;
   reunioes_ao_vivo: number;
   minutos_ao_vivo: number;
+  /** Robôs da Recall que entraram numa chamada e o tempo deles (migração 20261128150000). */
+  robos?: number;
+  minutos_robos?: number;
 }
 
 export interface LinhaUso {
@@ -97,6 +127,10 @@ export interface Uso {
   desde: string;
   empresas: EmpresaUso[];
   uso: LinhaUso[];
+  /** Pessoas distintas (quem está em mais de uma empresa conta uma vez). */
+  usuarios_total?: number;
+  usuarios_ativos_total?: number;
+  emails_enviados?: number;
 }
 
 export type Api = "recall" | "assembly_gravacao" | "assembly_ao_vivo" | "gemini";
@@ -171,6 +205,16 @@ export interface Resumo {
   outrosChamadas: number;
   porEmpresa: (EmpresaUso & { usd: number; porApi: Record<Api, number> })[];
   base: Base;
+  /** De onde vem o custo da Recall: a conta na Recall ou o tempo registrado dos robôs. */
+  recallFonte: "conta" | "registro";
+  /** Caracteres de voz (TTS) no período: ElevenLabs e as vozes de reserva. */
+  voz: { elevenlabs: number; outras: number };
+  /** E-mails enviados registrados (null sem a migração). */
+  emails: number | null;
+  /** Planos mensais levados ao período (US$). */
+  planosUsd: number;
+  /** APIs + planos no período (US$). */
+  totalComPlanosUsd: number;
 }
 
 const ESTIMATIVAS = {
@@ -183,7 +227,11 @@ const ESTIMATIVAS = {
   iaPorMinuto: 0.004,
 };
 
-export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
+/**
+ * recallSegundos: horas de robô da própria conta na Recall no período (o que
+ * ela cobra); sem elas, a soma do tempo dos robôs registrada no Sales Coach.
+ */
+export function resumir(uso: Uso, p: Precos, dias: number, recallSegundos: number | null = null): Resumo {
   const porApi = zeros();
   const usoPorApi = zeros();
   const porOrg = new Map<string, Record<Api, number>>();
@@ -192,7 +240,9 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
   let gravacaoReuniao = 0;
   const foraReuniao = zeros();
 
+  const voz = { elevenlabs: 0, outras: 0 };
   for (const l of uso.uso ?? []) {
+    if (l.operacao === "tts") voz[l.provedor === "elevenlabs" ? "elevenlabs" : "outras"] += num(l.quantidade);
     const { api, usd } = custoDaLinha(l, p);
     if (!api) { outrosChamadas += num(l.chamadas); continue; }
     porApi[api] += usd;
@@ -210,17 +260,25 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
   const empresas = uso.empresas ?? [];
   const soma = (k: keyof EmpresaUso) => empresas.reduce((s, e) => s + num(e[k]), 0);
   const minutos = soma("minutos");
-  const minutosRobo = soma("minutos_robo");
   const minutosAoVivo = soma("minutos_ao_vivo");
   const reunioes = soma("reunioes");
-  const usuariosAtivos = soma("usuarios_ativos");
+  const usuariosAtivos = uso.usuarios_ativos_total != null ? num(uso.usuarios_ativos_total) : soma("usuarios_ativos");
 
-  // Recall: cobra a hora gravada pelo robô, que vem da duração das reuniões.
-  porApi.recall = (minutosRobo / 60) * p.recall_hora;
-  usoPorApi.recall = minutosRobo;
+  // Recall: cobra a hora de robô (de quando entra na chamada até sair, com a
+  // sala de espera). O total vem da conta na Recall quando a tela consegue;
+  // a divisão por empresa segue o tempo (ou o número) de robôs de cada uma.
+  const minRobosOrg = (e: EmpresaUso) => num(e.minutos_robos ?? e.minutos_robo);
+  const minRobos = empresas.reduce((s, e) => s + minRobosOrg(e), 0);
+  const nRobos = empresas.reduce((s, e) => s + num(e.robos ?? e.reunioes_robo), 0);
+  const recallFonte: "conta" | "registro" = recallSegundos != null ? "conta" : "registro";
+  const recallMin = recallSegundos != null ? Math.max(0, recallSegundos) / 60 : minRobos;
+  porApi.recall = (recallMin / 60) * p.recall_hora;
+  usoPorApi.recall = recallMin;
   for (const e of empresas) {
+    const parte = minRobos > 0 ? minRobosOrg(e) / minRobos : nRobos > 0 ? num(e.robos ?? e.reunioes_robo) / nRobos : 0;
+    if (!parte) continue;
     const o = porOrg.get(e.org_id) ?? zeros();
-    o.recall = (num(e.minutos_robo) / 60) * p.recall_hora;
+    o.recall = porApi.recall * parte;
     porOrg.set(e.org_id, o);
   }
 
@@ -229,7 +287,7 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
   const liveMin = usoPorApi.assembly_ao_vivo;
   const base: Base = {
     dias,
-    usuarios: soma("usuarios"),
+    usuarios: uso.usuarios_total != null ? num(uso.usuarios_total) : soma("usuarios"),
     usuariosAtivos,
     reunioes,
     minutos,
@@ -256,7 +314,12 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
     })
     .sort((a, b) => b.usd - a.usd);
 
-  return { dias, porApi, usoPorApi, totalUsd, outrosChamadas, porEmpresa, base };
+  const planosUsd = planosMes(p) * (dias / 30);
+  return {
+    dias, porApi, usoPorApi, totalUsd, outrosChamadas, porEmpresa, base, recallFonte,
+    voz, emails: uso.emails_enviados != null ? num(uso.emails_enviados) : null,
+    planosUsd, totalComPlanosUsd: totalUsd + planosUsd,
+  };
 }
 
 export interface Premissas {
@@ -281,9 +344,14 @@ export function premissasAtuais(b: Base): Premissas {
 
 export interface Projecao {
   porApi: Record<Api, number>;
+  /** Só as APIs cobradas por uso. */
   totalUsd: number;
   porUsuarioUsd: number;
   minutosMes: number;
+  /** Planos mensais (não crescem com o uso até trocar de plano). */
+  planosUsd: number;
+  totalComPlanosUsd: number;
+  porUsuarioComPlanosUsd: number;
 }
 
 /** Custo mensal (US$) com as premissas. */
@@ -300,7 +368,12 @@ export function projetar(pr: Premissas, b: Base, p: Precos): Projecao {
     gemini: minutosMes * b.iaPorMinuto + u * b.porUsuarioMes.gemini,
   };
   const totalUsd = Object.values(porApi).reduce((s, v) => s + v, 0);
-  return { porApi, totalUsd, porUsuarioUsd: u > 0 ? totalUsd / u : 0, minutosMes };
+  const planosUsd = planosMes(p);
+  const totalComPlanosUsd = totalUsd + planosUsd;
+  return {
+    porApi, totalUsd, porUsuarioUsd: u > 0 ? totalUsd / u : 0, minutosMes,
+    planosUsd, totalComPlanosUsd, porUsuarioComPlanosUsd: u > 0 ? totalComPlanosUsd / u : 0,
+  };
 }
 
 // ── Período da tela ─────────────────────────────────────────────────────────

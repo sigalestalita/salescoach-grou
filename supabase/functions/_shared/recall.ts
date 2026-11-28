@@ -88,12 +88,52 @@ export function motivoDaSaida(subCode: string | null | undefined): string | null
 }
 
 /** Endereços temporários da gravação (vídeo e áudio), depois que o robô termina. */
-export async function gravacaoDoRobo(id: string): Promise<{ video: string | null; audio: string | null }> {
+export async function gravacaoDoRobo(id: string): Promise<{ video: string | null; audio: string | null; segundos: number | null }> {
   const bot = await recall(`/bot/${id}/`);
   // deno-lint-ignore no-explicit-any
   const rec = (bot?.recordings ?? []).find((r: any) => r?.media_shortcuts) ?? bot?.recordings?.[0];
   const m = rec?.media_shortcuts ?? {};
-  return { video: m.video_mixed?.data?.download_url ?? null, audio: m.audio_mixed?.data?.download_url ?? null };
+  return {
+    video: m.video_mixed?.data?.download_url ?? null,
+    audio: m.audio_mixed?.data?.download_url ?? null,
+    segundos: tempoDoRobo(bot),
+  };
+}
+
+const ms = (v: unknown) => (typeof v === "string" ? Date.parse(v) : NaN);
+
+/**
+ * Tempo que a Recall cobra do robô: de joining_call até done (inclui sala de
+ * espera), em segundos. Sem o histórico de estados, usa a gravação.
+ */
+// deno-lint-ignore no-explicit-any
+export function tempoDoRobo(bot: any, agora = Date.now()): number | null {
+  // deno-lint-ignore no-explicit-any
+  const estados: any[] = Array.isArray(bot?.status_changes) ? bot.status_changes : [];
+  const quando = (codigo: string) => estados.filter((e) => e?.code === codigo).map((e) => ms(e?.created_at)).filter(Number.isFinite);
+  const entrou = Math.min(...quando("joining_call"));
+  if (Number.isFinite(entrou)) {
+    const saiu = Math.max(...quando("done"), ...quando("call_ended"));
+    const fim = Number.isFinite(saiu) && saiu > entrou ? saiu : agora;
+    return Math.round((fim - entrou) / 1000);
+  }
+  // deno-lint-ignore no-explicit-any
+  const rec = (bot?.recordings ?? []).find((r: any) => r?.started_at && r?.completed_at);
+  const dur = rec ? (ms(rec.completed_at) - ms(rec.started_at)) / 1000 : NaN;
+  return Number.isFinite(dur) && dur > 0 ? Math.round(dur) : null;
+}
+
+/**
+ * Uso de robôs da conta na Recall entre duas datas, em segundos (o que ela
+ * cobra). A Recall arredonda as datas para a meia-noite UTC e conta cada dia
+ * por inteiro. Limite: 5 pedidos por minuto.
+ */
+export async function usoDaRecall(inicio: Date, fim: Date): Promise<number> {
+  const q = new URLSearchParams({ start: inicio.toISOString(), end: fim.toISOString() });
+  const r = await recall(`/billing/usage/?${q}`);
+  const segundos = Number(r?.bot_total);
+  if (!Number.isFinite(segundos)) throw new RecallError("A Recall não devolveu o uso.");
+  return segundos;
 }
 
 const b64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
