@@ -99,3 +99,33 @@ describe("período", () => {
     expect(intervaloDoPeriodo("personalizado", "2026-12-01", "2026-12-05", agora)).toBeNull();
   });
 });
+
+describe("Recall e usuários", () => {
+  const empresa = (o: Partial<Uso["empresas"][number]>) => ({
+    org_id: "a", nome: "A", usuarios: 5, usuarios_ativos: 4, reunioes: 10, minutos: 400,
+    reunioes_robo: 2, minutos_robo: 80, reunioes_ao_vivo: 0, minutos_ao_vivo: 0, ...o,
+  });
+  const uso: Uso = {
+    desde: "", uso: [],
+    empresas: [empresa({ org_id: "a", robos: 3, minutos_robos: 90 }), empresa({ org_id: "b", nome: "B", robos: 1, minutos_robos: 30 })],
+    usuarios_total: 7, usuarios_ativos_total: 6,
+  };
+  it("usa as horas da conta na Recall e divide pelo tempo dos robôs", () => {
+    const r = resumir(uso, p, 30, 4 * 3600); // 4 h na conta, a 0,25
+    expect(r.recallFonte).toBe("conta");
+    expect(r.porApi.recall).toBeCloseTo(1);
+    expect(r.usoPorApi.recall).toBe(240);
+    expect(r.porEmpresa.find((e) => e.org_id === "a")!.porApi.recall).toBeCloseTo(0.75);
+    expect(r.porEmpresa.find((e) => e.org_id === "b")!.porApi.recall).toBeCloseTo(0.25);
+  });
+  it("sem a conta, soma o tempo registrado dos robôs", () => {
+    const r = resumir(uso, p, 30);
+    expect(r.recallFonte).toBe("registro");
+    expect(r.porApi.recall).toBeCloseTo(0.5); // 120 min
+  });
+  it("conta cada pessoa uma vez, mesmo em duas empresas", () => {
+    const r = resumir(uso, p, 30);
+    expect(r.base.usuariosAtivos).toBe(6);
+    expect(r.base.usuarios).toBe(7);
+  });
+});

@@ -32,6 +32,8 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
+type RecallConta = { segundos: number; desde: string; ate: string } | { erro: string } | null;
+
 const diaMes = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
 const reais = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
@@ -62,6 +64,7 @@ export function Custos() {
   // Período do último carregamento (o que os números mostram).
   const [carregado, setCarregado] = useState<{ desde: Date; ate: Date; dias: number } | null>(null);
   const [uso, setUso] = useState<Uso | null>(null);
+  const [recall, setRecall] = useState<RecallConta>(null);
   const [precos, setPrecos] = useState<Precos>(comPadroes(null));
   const [precosAtualizados, setPrecosAtualizados] = useState<string | null>(null);
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
@@ -79,10 +82,11 @@ export function Custos() {
     setCarregando(true);
     setErro(null);
     try {
-      const r = await call<{ uso: Uso; precos: Record<string, unknown> | null; precos_atualizados_em: string | null }>({
+      const r = await call<{ uso: Uso; recall?: RecallConta; precos: Record<string, unknown> | null; precos_atualizados_em: string | null }>({
         action: "custos", desde: intervalo.desde.toISOString(), ate: intervalo.ate.toISOString(),
       });
       setUso(r.uso);
+      setRecall(r.recall ?? null);
       setCarregado(intervalo);
       const p = comPadroes(r.precos);
       setPrecos(p);
@@ -99,7 +103,7 @@ export function Custos() {
   useEffect(() => { carregar(); }, [carregar]);
 
   const dias = carregado?.dias ?? 30;
-  const resumo = useMemo(() => (uso ? resumir(uso, precos, dias) : null), [uso, precos, dias]);
+  const resumo = useMemo(() => (uso ? resumir(uso, precos, dias, recall && "segundos" in recall ? recall.segundos : null) : null), [uso, precos, dias, recall]);
   const atuais = useMemo(() => (resumo ? premissasAtuais(resumo.base) : null), [resumo]);
   const pr = premissas ?? atuais;
   const projecao = useMemo(() => (resumo && pr ? projetar(pr, resumo.base, precos) : null), [resumo, pr, precos]);
@@ -184,7 +188,7 @@ export function Custos() {
                 valor={ativos ? brl((resumo.totalUsd / ativos) * mes) : "—"}
                 detalhe={ativos ? dolares((resumo.totalUsd / ativos) * mes) : "sem usuários ativos no período"}
               />
-              <Tile label="Usuários ativos" valor={inteiro(ativos)} detalhe={`de ${inteiro(resumo.base.usuarios)} com acesso`} />
+              <Tile label="Usuários ativos" valor={inteiro(ativos)} detalhe={`de ${inteiro(resumo.base.usuarios)} com acesso hoje`} />
               <Tile label="Reuniões" valor={inteiro(resumo.base.reunioes)} detalhe={horas(resumo.base.minutos)} />
             </div>
 
@@ -219,6 +223,11 @@ export function Custos() {
                   </TableRow>
                 </TableBody>
               </Table>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {resumo.recallFonte === "conta" && recall && "segundos" in recall
+                  ? `Recall: horas de robô da conta na Recall de ${diaMes(new Date(recall.desde))} a ${diaMes(new Date(new Date(recall.ate).getTime() - 1))} (dias inteiros, em UTC), divididas entre as empresas pelo tempo dos robôs de cada uma.`
+                  : `Recall: tempo dos robôs registrado no Sales Coach${recall && "erro" in recall ? ` (a conta na Recall não respondeu: ${recall.erro})` : ""}.`}
+              </p>
               {resumo.outrosChamadas > 0 && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   {inteiro(resumo.outrosChamadas)} chamadas de outros serviços (CRMs, voz dos treinos, armazenamento) ficam fora desta conta.

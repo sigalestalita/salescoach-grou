@@ -139,7 +139,7 @@ async function downloadFromGoogleDrive(fileId: string): Promise<Blob> {
 
 // ── Transcription providers ──
 
-async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: string; speakers: any[] | null }> {
+async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: string; speakers: any[] | null; segundos: number | null }> {
   const apiKey = Deno.env.get("ASSEMBLYAI_API_KEY")!;
   const headers = { Authorization: apiKey, "Content-Type": "application/json" };
 
@@ -181,7 +181,7 @@ async function transcribeWithAssemblyAI(audioUrl: string): Promise<{ text: strin
         start: u.start,
         end: u.end,
       })) || null;
-      return { text: data.text, speakers };
+      return { text: data.text, speakers, segundos: Number(data.audio_duration) || null };
     }
 
     if (data.status === "error") {
@@ -327,6 +327,14 @@ const ROBO_ATIVO = ["agendado", "entrando", "sala_de_espera", "na_chamada", "gra
  * robô não gravou e a extensão estava só com as dicas.
  */
 // deno-lint-ignore no-explicit-any
+/** Segundos até o fim da última fala (start/end em milissegundos). */
+// deno-lint-ignore no-explicit-any
+function duracaoDasFalas(speakers: any[] | null): number | null {
+  let ms = 0;
+  for (const f of speakers ?? []) ms = Math.max(ms, Number(f?.end) || 0, Number(f?.start) || 0);
+  return ms > 0 ? ms / 1000 : null;
+}
+
 async function transcricaoAoVivo(supabase: any, meetingId: string) {
   const { data } = await supabase.from("transcription_segments")
     .select("speaker, text, created_at").eq("meeting_id", meetingId).eq("is_final", true)
@@ -336,7 +344,9 @@ async function transcricaoAoVivo(supabase: any, meetingId: string) {
   if (!falas.length) return null;
   const quem = (s: string | null) => s === "vendedor" ? "Vendedor" : s === "cliente" ? "Cliente" : "Participante";
   const inicio = new Date(falas[0].created_at).getTime();
+  const fim = new Date(falas[falas.length - 1].created_at).getTime();
   return {
+    segundos: (fim - inicio) / 1000 || null,
     text: falas.map((f) => `${quem(f.speaker)}: ${f.text.trim()}`).join("\n"),
     speakers: falas.map((f) => ({
       speaker: quem(f.speaker), text: f.text.trim(),
@@ -360,6 +370,8 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
   const orgId: string = meeting.org_id;
   let transcript = "";
   let speakers: any[] | null = null;
+  // Duração do áudio em segundos (AssemblyAI ou falas), para meetings.duration_seconds.
+  let segundos: number | null = null;
   let usouAoVivo = false;
 
   try {
@@ -387,6 +399,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       const result = await transcribeWithAssemblyAI(assemblyAudioUrl);
       transcript = result.text;
       speakers = result.speakers;
+      segundos = result.segundos;
     } else if (meeting.file_url && await arquivoGrande(supabase, meeting.file_url)) {
       // Vídeo longo: baixar aqui estoura a memória da função. A AssemblyAI
       // baixa direto do Storage por um link assinado (como no Google Drive).
@@ -401,6 +414,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       const result = await transcribeWithAssemblyAI(assinado.signedUrl);
       transcript = result.text;
       speakers = result.speakers;
+      segundos = result.segundos;
     } else if (meeting.file_url) {
       await supabase.from("meetings").update({ status: "baixando" }).eq("id", meetingId);
 
@@ -434,6 +448,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         const result = await transcribeWithAssemblyAI(uploadUrl);
         transcript = result.text;
         speakers = result.speakers;
+        segundos = result.segundos;
       } else {
         const fileName = meeting.file_url.split("/").pop() || "audio.mp3";
         transcript = await transcribeWithGroq(audio, fileName);
@@ -459,7 +474,16 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
       }
       transcript = aoVivo.text;
       speakers = aoVivo.speakers;
+      segundos = aoVivo.segundos;
       usouAoVivo = true;
+    }
+
+    // Duração da reunião (custos da plataforma e minutos por reunião): a do
+    // áudio, ou a última fala quando o provedor não informa.
+    segundos ??= duracaoDasFalas(speakers);
+    const duracao = meeting.duration_seconds || (segundos ? Math.round(segundos) : null);
+    if (!meeting.duration_seconds && duracao) {
+      await supabase.from("meetings").update({ duration_seconds: duracao }).eq("id", meetingId);
     }
 
     // Consumo de transcrição, em minutos (a do coach ao vivo já foi contada).
@@ -471,7 +495,7 @@ async function processMeeting(meetingId: string, manualTranscript: string | null
         operation: "transcricao",
         provider: Deno.env.get("ASSEMBLYAI_API_KEY") ? "assemblyai" : "groq/openai",
         model: Deno.env.get("ASSEMBLYAI_API_KEY") ? "universal-2" : "whisper",
-        quantity: meeting.duration_seconds ? Math.ceil(meeting.duration_seconds / 60) : 0,
+        quantity: duracao ? Math.ceil(duracao / 60) : 0,
         unit: "minutos",
       });
     }

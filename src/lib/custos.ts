@@ -79,6 +79,9 @@ export interface EmpresaUso {
   minutos_robo: number;
   reunioes_ao_vivo: number;
   minutos_ao_vivo: number;
+  /** Robôs da Recall que entraram numa chamada e o tempo deles (migração 20261128150000). */
+  robos?: number;
+  minutos_robos?: number;
 }
 
 export interface LinhaUso {
@@ -97,6 +100,9 @@ export interface Uso {
   desde: string;
   empresas: EmpresaUso[];
   uso: LinhaUso[];
+  /** Pessoas distintas (quem está em mais de uma empresa conta uma vez). */
+  usuarios_total?: number;
+  usuarios_ativos_total?: number;
 }
 
 export type Api = "recall" | "assembly_gravacao" | "assembly_ao_vivo" | "gemini";
@@ -171,6 +177,8 @@ export interface Resumo {
   outrosChamadas: number;
   porEmpresa: (EmpresaUso & { usd: number; porApi: Record<Api, number> })[];
   base: Base;
+  /** De onde vem o custo da Recall: a conta na Recall ou o tempo registrado dos robôs. */
+  recallFonte: "conta" | "registro";
 }
 
 const ESTIMATIVAS = {
@@ -183,7 +191,11 @@ const ESTIMATIVAS = {
   iaPorMinuto: 0.004,
 };
 
-export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
+/**
+ * recallSegundos: horas de robô da própria conta na Recall no período (o que
+ * ela cobra); sem elas, a soma do tempo dos robôs registrada no Sales Coach.
+ */
+export function resumir(uso: Uso, p: Precos, dias: number, recallSegundos: number | null = null): Resumo {
   const porApi = zeros();
   const usoPorApi = zeros();
   const porOrg = new Map<string, Record<Api, number>>();
@@ -210,17 +222,25 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
   const empresas = uso.empresas ?? [];
   const soma = (k: keyof EmpresaUso) => empresas.reduce((s, e) => s + num(e[k]), 0);
   const minutos = soma("minutos");
-  const minutosRobo = soma("minutos_robo");
   const minutosAoVivo = soma("minutos_ao_vivo");
   const reunioes = soma("reunioes");
-  const usuariosAtivos = soma("usuarios_ativos");
+  const usuariosAtivos = uso.usuarios_ativos_total != null ? num(uso.usuarios_ativos_total) : soma("usuarios_ativos");
 
-  // Recall: cobra a hora gravada pelo robô, que vem da duração das reuniões.
-  porApi.recall = (minutosRobo / 60) * p.recall_hora;
-  usoPorApi.recall = minutosRobo;
+  // Recall: cobra a hora de robô (de quando entra na chamada até sair, com a
+  // sala de espera). O total vem da conta na Recall quando a tela consegue;
+  // a divisão por empresa segue o tempo (ou o número) de robôs de cada uma.
+  const minRobosOrg = (e: EmpresaUso) => num(e.minutos_robos ?? e.minutos_robo);
+  const minRobos = empresas.reduce((s, e) => s + minRobosOrg(e), 0);
+  const nRobos = empresas.reduce((s, e) => s + num(e.robos ?? e.reunioes_robo), 0);
+  const recallFonte: "conta" | "registro" = recallSegundos != null ? "conta" : "registro";
+  const recallMin = recallSegundos != null ? Math.max(0, recallSegundos) / 60 : minRobos;
+  porApi.recall = (recallMin / 60) * p.recall_hora;
+  usoPorApi.recall = recallMin;
   for (const e of empresas) {
+    const parte = minRobos > 0 ? minRobosOrg(e) / minRobos : nRobos > 0 ? num(e.robos ?? e.reunioes_robo) / nRobos : 0;
+    if (!parte) continue;
     const o = porOrg.get(e.org_id) ?? zeros();
-    o.recall = (num(e.minutos_robo) / 60) * p.recall_hora;
+    o.recall = porApi.recall * parte;
     porOrg.set(e.org_id, o);
   }
 
@@ -229,7 +249,7 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
   const liveMin = usoPorApi.assembly_ao_vivo;
   const base: Base = {
     dias,
-    usuarios: soma("usuarios"),
+    usuarios: uso.usuarios_total != null ? num(uso.usuarios_total) : soma("usuarios"),
     usuariosAtivos,
     reunioes,
     minutos,
@@ -256,7 +276,7 @@ export function resumir(uso: Uso, p: Precos, dias: number): Resumo {
     })
     .sort((a, b) => b.usd - a.usd);
 
-  return { dias, porApi, usoPorApi, totalUsd, outrosChamadas, porEmpresa, base };
+  return { dias, porApi, usoPorApi, totalUsd, outrosChamadas, porEmpresa, base, recallFonte };
 }
 
 export interface Premissas {

@@ -86,7 +86,9 @@ async function finalizar(admin: any, robo: any, botId: string) {
   const atualizar = (campos: Record<string, unknown>) =>
     admin.from("meeting_bots").update({ ...campos, updated_at: agora() }).eq("id", robo.id);
   try {
-    const { video, audio } = await gravacaoDoRobo(botId);
+    const { video, audio, segundos } = await gravacaoDoRobo(botId);
+    // Tempo cobrado pela Recall (custos da plataforma), com ou sem gravação.
+    if (segundos) await atualizar({ duracao_segundos: segundos });
     if (!video && !audio) {
       // robo.status_detail traz o motivo da saída, guardado no bot.call_ended.
       const motivo = robo.status_detail ? `O robô saiu sem gravar: ${robo.status_detail}.` : "A Recall não devolveu a gravação.";
