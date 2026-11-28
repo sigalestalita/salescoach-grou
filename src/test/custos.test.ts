@@ -129,3 +129,30 @@ describe("Recall e usuários", () => {
     expect(r.base.usuarios).toBe(7);
   });
 });
+
+describe("planos mensais", () => {
+  const p2 = comPadroes({ lovable_mes: 25, lovable_cloud_mes: 10, resend_mes: 20, elevenlabs_mes: 5 });
+  const uso: Uso = {
+    desde: "", empresas: [], emails_enviados: 27,
+    uso: [
+      { org_id: "a", provedor: "elevenlabs", operacao: "tts", modelo: "elevenlabs", chamadas: 3, tokens_entrada: 0, tokens_saida: 0, quantidade: 1200, unidade: "caracteres" },
+      { org_id: "a", provedor: "lovable-gateway", operacao: "tts", modelo: "openai/gpt-4o-mini-tts", chamadas: 1, tokens_entrada: 0, tokens_saida: 0, quantidade: 300, unidade: "caracteres" },
+    ],
+  };
+  it("leva os planos ao período e soma no total", () => {
+    const r = resumir(uso, p2, 15);
+    expect(r.planosUsd).toBeCloseTo(30); // 60 por mês, meio mês
+    expect(r.totalComPlanosUsd).toBeCloseTo(r.totalUsd + 30);
+    expect(r.voz).toEqual({ elevenlabs: 1200, outras: 300 });
+    expect(r.emails).toBe(27);
+  });
+  it("a projeção soma os planos sem multiplicar por usuário", () => {
+    const r = resumir(uso, p2, 30);
+    const pr = { usuarios: 10, reunioesPorUsuarioMes: 20, minutosPorReuniao: 40, pctRobo: 0.5, pctAoVivo: 0.5 };
+    const a = projetar(pr, r.base, p2);
+    const b = projetar({ ...pr, usuarios: 20 }, r.base, p2);
+    expect(a.planosUsd).toBe(60);
+    expect(b.planosUsd).toBe(60);
+    expect(a.totalComPlanosUsd).toBeCloseTo(a.totalUsd + 60);
+  });
+});

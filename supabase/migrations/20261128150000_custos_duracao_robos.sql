@@ -10,6 +10,9 @@
 -- O robô passa a guardar o tempo que a Recall cobra (meeting_bots.duracao_segundos,
 -- de joining_call até done). A tela usa o total da própria conta na Recall
 -- quando consegue (platform-orgs) e esta soma para dividir por empresa.
+--
+-- Também devolve os e-mails enviados (email_sends), para a parte de planos
+-- mensais da tela (Resend).
 
 ALTER TABLE public.meeting_bots ADD COLUMN IF NOT EXISTS duracao_segundos INTEGER;
 
@@ -137,6 +140,11 @@ AS $$
     ), '[]'::jsonb),
     -- Pessoas distintas: quem está em mais de uma empresa conta uma vez só.
     'usuarios_total', (SELECT count(DISTINCT user_id) FROM public.user_roles),
+    -- E-mails enviados pela Resend que o Sales Coach registra (novidades).
+    'emails_enviados', (
+      SELECT count(*) FROM public.email_sends
+      WHERE status = 'enviado' AND created_at >= _desde AND created_at < _ate
+    ),
     'usuarios_ativos_total', (
       SELECT count(DISTINCT u) FROM (
         SELECT user_id AS u FROM public.api_usage_logs WHERE created_at >= _desde AND created_at < _ate AND user_id IS NOT NULL
