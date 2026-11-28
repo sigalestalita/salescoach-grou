@@ -1695,6 +1695,27 @@ export type Database = {
           },
         ]
       }
+      platform_custos_precos: {
+        Row: {
+          id: number
+          precos: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: number
+          precos?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: number
+          precos?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       platform_settings: {
         Row: {
           key: string
@@ -2435,6 +2456,7 @@ export type Database = {
         }[]
       }
       platform_user_id_by_email: { Args: { _email: string }; Returns: string }
+      platform_uso_apis: { Args: { _desde: string }; Returns: Json }
       provision_organization: {
         Args: {
           _name: string
