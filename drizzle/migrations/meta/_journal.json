@@ -253,6 +253,13 @@
       "when": 1795839806705,
       "tag": "0035_custos_api_periodo",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795841511469,
+      "tag": "0036_custos_duracao_robos",
+      "breakpoints": true
     }
   ]
 }

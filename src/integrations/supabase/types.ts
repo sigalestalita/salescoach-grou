@@ -999,6 +999,7 @@ export type Database = {
           copia_tentativas: number
           copia_upload_url: string | null
           created_at: string
+          duracao_segundos: number | null
           escolha: string | null
           id: string
           lead_company: string | null
@@ -1030,6 +1031,7 @@ export type Database = {
           copia_tentativas?: number
           copia_upload_url?: string | null
           created_at?: string
+          duracao_segundos?: number | null
           escolha?: string | null
           id?: string
           lead_company?: string | null
@@ -1061,6 +1063,7 @@ export type Database = {
           copia_tentativas?: number
           copia_upload_url?: string | null
           created_at?: string
+          duracao_segundos?: number | null
           escolha?: string | null
           id?: string
           lead_company?: string | null
