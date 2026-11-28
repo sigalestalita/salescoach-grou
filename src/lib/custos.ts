@@ -302,3 +302,54 @@ export function projetar(pr: Premissas, b: Base, p: Precos): Projecao {
   const totalUsd = Object.values(porApi).reduce((s, v) => s + v, 0);
   return { porApi, totalUsd, porUsuarioUsd: u > 0 ? totalUsd / u : 0, minutosMes };
 }
+
+// ── Período da tela ─────────────────────────────────────────────────────────
+export type PeriodoChave = "7" | "30" | "60" | "90" | "mes" | "mes_passado" | "personalizado";
+
+export const PERIODOS: { key: PeriodoChave; label: string }[] = [
+  { key: "7", label: "Últimos 7 dias" },
+  { key: "30", label: "Últimos 30 dias" },
+  { key: "60", label: "Últimos 60 dias" },
+  { key: "90", label: "Últimos 90 dias" },
+  { key: "mes", label: "Este mês" },
+  { key: "mes_passado", label: "Mês passado" },
+  { key: "personalizado", label: "Personalizado" },
+];
+
+export const MAX_DIAS_PERIODO = 366;
+
+/** "2026-11-28" no fuso local, para os campos de data. */
+export const dataLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/**
+ * Início e fim (exclusivo) do período escolhido. No personalizado, "de" e
+ * "até" são dias inteiros no fuso local: até 15/11 inclui o dia 15 todo.
+ * Devolve null quando as datas não formam um período válido.
+ */
+export function intervaloDoPeriodo(
+  chave: PeriodoChave, de: string, ate: string, agora = new Date(),
+): { desde: Date; ate: Date; dias: number } | null {
+  let ini: Date;
+  let fim: Date;
+  if (chave === "mes") {
+    ini = new Date(agora.getFullYear(), agora.getMonth(), 1);
+    fim = agora;
+  } else if (chave === "mes_passado") {
+    ini = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+    fim = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  } else if (chave === "personalizado") {
+    const [a, b] = [de, ate].map((s) => /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.split("-").map(Number) : null);
+    if (!a || !b) return null;
+    ini = new Date(a[0], a[1] - 1, a[2]);
+    fim = new Date(b[0], b[1] - 1, b[2] + 1);
+    if (fim > agora) fim = agora;
+  } else {
+    fim = agora;
+    ini = new Date(agora.getTime() - Number(chave) * 864e5);
+  }
+  if (isNaN(ini.getTime()) || isNaN(fim.getTime()) || ini >= fim) return null;
+  const dias = (fim.getTime() - ini.getTime()) / 864e5;
+  if (dias > MAX_DIAS_PERIODO) return null;
+  return { desde: ini, ate: fim, dias };
+}

@@ -11,8 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import {
-  APIS, CAMPOS_PRECO, comPadroes, premissasAtuais, projetar, resumir,
-  type Api, type Precos, type Premissas, type Uso,
+  APIS, CAMPOS_PRECO, comPadroes, dataLocal, intervaloDoPeriodo, MAX_DIAS_PERIODO, PERIODOS, premissasAtuais, projetar, resumir,
+  type Api, type PeriodoChave, type Precos, type Premissas, type Uso,
 } from "@/lib/custos";
 
 /**
@@ -32,11 +32,7 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-const PERIODOS = [
-  { key: "30", label: "Últimos 30 dias" },
-  { key: "60", label: "Últimos 60 dias" },
-  { key: "90", label: "Últimos 90 dias" },
-];
+const diaMes = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
 const reais = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 const dolares = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
@@ -60,7 +56,11 @@ function Tile({ label, valor, detalhe }: { label: string; valor: string; detalhe
 
 export function Custos() {
   const { toast } = useToast();
-  const [dias, setDias] = useState("30");
+  const [periodo, setPeriodo] = useState<PeriodoChave>("30");
+  const [de, setDe] = useState(() => dataLocal(new Date(Date.now() - 30 * 864e5)));
+  const [ate, setAte] = useState(() => dataLocal(new Date()));
+  // Período do último carregamento (o que os números mostram).
+  const [carregado, setCarregado] = useState<{ desde: Date; ate: Date; dias: number } | null>(null);
   const [uso, setUso] = useState<Uso | null>(null);
   const [precos, setPrecos] = useState<Precos>(comPadroes(null));
   const [precosAtualizados, setPrecosAtualizados] = useState<string | null>(null);
@@ -71,13 +71,19 @@ export function Custos() {
   const [erro, setErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
+    const intervalo = intervaloDoPeriodo(periodo, de, ate);
+    if (!intervalo) {
+      setErro(`Escolha um período válido: a data inicial antes da final, sem datas futuras e com até ${MAX_DIAS_PERIODO} dias.`);
+      return;
+    }
     setCarregando(true);
     setErro(null);
     try {
       const r = await call<{ uso: Uso; precos: Record<string, unknown> | null; precos_atualizados_em: string | null }>({
-        action: "custos", dias: Number(dias),
+        action: "custos", desde: intervalo.desde.toISOString(), ate: intervalo.ate.toISOString(),
       });
       setUso(r.uso);
+      setCarregado(intervalo);
       const p = comPadroes(r.precos);
       setPrecos(p);
       setRascunho(Object.fromEntries(Object.entries(p).map(([k, v]) => [k, String(v)])));
@@ -88,16 +94,20 @@ export function Custos() {
     } finally {
       setCarregando(false);
     }
-  }, [dias]);
+  }, [periodo, de, ate]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const resumo = useMemo(() => (uso ? resumir(uso, precos, Number(dias)) : null), [uso, precos, dias]);
+  const dias = carregado?.dias ?? 30;
+  const resumo = useMemo(() => (uso ? resumir(uso, precos, dias) : null), [uso, precos, dias]);
   const atuais = useMemo(() => (resumo ? premissasAtuais(resumo.base) : null), [resumo]);
   const pr = premissas ?? atuais;
   const projecao = useMemo(() => (resumo && pr ? projetar(pr, resumo.base, precos) : null), [resumo, pr, precos]);
 
-  const mes = 30 / Number(dias);
+  const mes = 30 / Math.max(dias, 1);
+  const rotuloPeriodo = carregado
+    ? `${diaMes(carregado.desde)} a ${diaMes(new Date(carregado.ate.getTime() - 1))}`
+    : "";
   const brl = (usd: number) => reais(usd * precos.cambio);
   const ativos = resumo?.base.usuariosAtivos ?? 0;
 
@@ -141,8 +151,15 @@ export function Custos() {
             Sustentação da AssemblyAI, do Gemini e da Recall.ai: o gasto com o uso atual e a projeção pelo número de usuários e pela utilização.
           </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={dias} onValueChange={setDias}>
+        <div className="flex flex-wrap items-center gap-2">
+          {periodo === "personalizado" && (
+            <div className="flex items-center gap-1.5">
+              <Input type="date" aria-label="De" className="w-[150px]" value={de} max={ate || undefined} onChange={(e) => setDe(e.target.value)} />
+              <span className="text-sm text-muted-foreground">até</span>
+              <Input type="date" aria-label="Até" className="w-[150px]" value={ate} min={de || undefined} max={dataLocal(new Date())} onChange={(e) => setAte(e.target.value)} />
+            </div>
+          )}
+          <Select value={periodo} onValueChange={(v) => setPeriodo(v as PeriodoChave)}>
             <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               {PERIODOS.map((p) => <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>)}
@@ -161,7 +178,7 @@ export function Custos() {
         {resumo && (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Tile label={`Gasto no período (${dias} dias)`} valor={brl(resumo.totalUsd)} detalhe={dolares(resumo.totalUsd)} />
+              <Tile label={`Gasto no período (${rotuloPeriodo})`} valor={brl(resumo.totalUsd)} detalhe={dolares(resumo.totalUsd)} />
               <Tile
                 label="Por usuário ativo / mês"
                 valor={ativos ? brl((resumo.totalUsd / ativos) * mes) : "—"}
