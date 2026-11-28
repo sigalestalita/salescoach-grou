@@ -239,6 +239,13 @@
       "when": 1795839310624,
       "tag": "0033_custos_api",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795839361763,
+      "tag": "0034_custos_api_acesso_servidor",
+      "breakpoints": true
     }
   ]
 }
