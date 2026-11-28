@@ -22,6 +22,7 @@ import { Building2, Copy, Plus, RefreshCw, LogOut, Check, Plug, Eye, Pencil, Mor
 import { enterSupport } from "@/lib/support";
 import { Novidades } from "@/components/plataforma/Novidades";
 import { Atividade } from "@/components/plataforma/Atividade";
+import { Custos } from "@/components/plataforma/Custos";
 import { CRM_NAME, type CrmProvider } from "@/lib/crm";
 
 /**
@@ -1095,6 +1096,8 @@ const Plataforma = () => {
         </Dialog>
 
         <Atividade orgs={orgs} />
+
+        <Custos />
 
         <Novidades />
 
