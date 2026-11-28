@@ -2456,7 +2456,10 @@ export type Database = {
         }[]
       }
       platform_user_id_by_email: { Args: { _email: string }; Returns: string }
-      platform_uso_apis: { Args: { _desde: string }; Returns: Json }
+      platform_uso_apis: {
+        Args: { _ate: string; _desde: string }
+        Returns: Json
+      }
       provision_organization: {
         Args: {
           _name: string
